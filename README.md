@@ -29,6 +29,18 @@ the pictures held in layers (collection cards' mosaics) out; the window shows th
 
     swift test
 
+## Installation
+
+```swift
+dependencies: [
+    .package(url: "https://github.com/ampire5/HomeScreenKit.git", from: "0.1.0"),
+],
+// in your target:
+dependencies: [.product(name: "HomeScreenKit", package: "HomeScreenKit"), .product(name: "HomeScreenModel", package: "HomeScreenKit")]
+```
+
+Used by [Loupe](https://github.com/ampire5/Loupe) and [FrameScrub](https://github.com/ampire5/FrameScrub).
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
