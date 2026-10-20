@@ -164,18 +164,22 @@ enum BrowserFixtures {
     }
 }
 
-/// Lets the main actor run the tasks the view started until `condition` holds (or gives up after many turns).
-/// Waits up to `seconds` for work off the main actor (a big folder's order) to come back.
+/// Waits until `condition` holds. `seconds` is a floor: a loaded machine (a 3-core CI runner running the suites in
+/// parallel) gets at least 30 s, and the passing path returns as soon as the condition holds.
 @MainActor func settle(seconds: Double, _ condition: () -> Bool) async {
-    let deadline = Date().addingTimeInterval(seconds)
+    let deadline = Date().addingTimeInterval(max(seconds, 30))
     while !condition(), Date() < deadline { try? await Task.sleep(for: .milliseconds(5)) }
 }
 
-@MainActor func settle(_ condition: () -> Bool = { false }) async {
+/// Without a condition: lets queued main-actor work run (200 yields). With one: yields until it holds, then keeps
+/// polling for up to 30 s, so a slow machine is not taken for a failure.
+@MainActor func settle(_ condition: (() -> Bool)? = nil) async {
     for _ in 0..<200 {
-        if condition() { return }
+        if condition?() == true { return }
         await Task.yield()
     }
+    guard let condition else { return }
+    await settle(seconds: 30, condition)
 }
 
 extension BrowserFixtures {
