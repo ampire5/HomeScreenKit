@@ -232,7 +232,8 @@ import Testing
         source.yield(x, Array(all.prefix(3_000)), complete: false)
         source.yield(x, all, complete: false)
         var seen: Set<Int> = []
-        let deadline = Date().addingTimeInterval(10)
+        // Up to 30 s, as `settle`: ordering 50 000 entries alongside the other suites on a CI machine took over 10.
+        let deadline = Date().addingTimeInterval(30)
         while view.entries.count != 50_000, Date() < deadline {
             seen.insert(view.entries.count)
             try? await Task.sleep(for: .milliseconds(1))
