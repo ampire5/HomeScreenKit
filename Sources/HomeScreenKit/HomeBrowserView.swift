@@ -368,12 +368,43 @@ public final class HomeBrowserView: NSView {
             }
         }
         updateBar()
+        if !keepingFilter { takeKeysBack() }
         if location != lastLoaded {
             source?.moved(from: lastLoaded, to: location)
             lastLoaded = location
         }
         onLocation?(location)
         onMoved?(location)
+    }
+
+    /// A move gives the keys back to the grid when they were left with something of the browser's that no longer
+    /// has a use for them: the filter field (its text just went), a page now hidden, or nothing at all. The sidebar,
+    /// reached by Tab, keeps them; so does a page shown now (`showPage`).
+    private func takeKeysBack() {
+        guard let window, page == nil, renameField == nil else { return }
+        switch window.firstResponder {
+        case nil, is NSWindow: break
+        case let text as NSText:   // a field's editor: the filter's, which is ours
+            guard let field = text.delegate as? NSView, field.isDescendant(of: self) else { return }
+        case let view as NSView:
+            guard view !== self, view.isDescendant(of: self) else { return }
+        default: return
+        }
+        window.makeFirstResponder(self)
+    }
+
+    /// The keys to the browser's content: the page when one is shown, else the grid (a click in the sidebar, Tab).
+    public func takeFocus() {
+        window?.makeFirstResponder(page ?? self)
+    }
+
+    /// A name is being typed in the grid (`BrowserTypeSelect.isTyping`): a key the app would take for itself while
+    /// the browser has the keys (F for full screen) goes to the name instead.
+    public func isTypingName(at time: TimeInterval) -> Bool { typeSelect.isTyping(at: time) }
+
+    /// A click on the grid's empty space takes the keys from the filter or the sidebar, as in Finder.
+    public override func mouseDown(with event: NSEvent) {
+        if page == nil { window?.makeFirstResponder(self) }
     }
 
     /// The location the last load was for: a reload is no move.

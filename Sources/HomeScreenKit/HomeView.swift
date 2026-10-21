@@ -181,10 +181,8 @@ public final class HomeView: NSView {
             self?.tree.toggleSection(id)
             self?.showTree()
         }
-        sidebarView.onEndKeys = { [weak self] in
-            guard let self else { return }
-            self.window?.makeFirstResponder(self.browser)
-        }
+        sidebarView.onEndKeys = { [weak self] in self?.browser.takeFocus() }
+        sidebarView.onClickKeys = { [weak self] in self?.browser.takeFocus() }
         reloadSidebar()
     }
 

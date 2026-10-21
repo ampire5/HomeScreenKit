@@ -46,7 +46,12 @@ class GridCard: NSView {
 
     override func mouseEntered(with event: NSEvent) { onHover?() }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-    override func mouseDown(with event: NSEvent) {}
+    /// The press gives the grid the keys (from the filter or the sidebar); the click itself is on the release.
+    override func mouseDown(with event: NSEvent) {
+        if let browser = sequence(first: self as NSView, next: { $0.superview }).lazy.compactMap({ $0 as? HomeBrowserView }).first {
+            window?.makeFirstResponder(browser)
+        }
+    }
     override func mouseUp(with event: NSEvent) {
         guard bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
         onClick?(false, event.modifierFlags)
