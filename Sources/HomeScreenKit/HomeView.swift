@@ -95,6 +95,12 @@ public final class HomeView: NSView {
         set { setTreeOptions { $0.rerootDepth = newValue } }
     }
 
+    /// A folder's subfolders before its archives in the tree (`home-sidebar-folders-first`).
+    public var sidebarFoldersFirst: Bool {
+        get { tree.options.foldersFirst }
+        set { setTreeOptions { $0.foldersFirst = newValue } }
+    }
+
     /// Levels past the third step less, with guides (`home-sidebar-indent=compact`).
     public var sidebarCompactIndent: Bool {
         get { sidebarView.compactIndent }
