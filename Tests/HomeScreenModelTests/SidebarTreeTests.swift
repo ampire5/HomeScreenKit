@@ -69,6 +69,18 @@ import Testing
         #expect(shape(t).contains("  a"))
     }
 
+    /// Subfolders before archives by default, each run by name; off, one run by name.
+    @Test func foldersFirstPutsArchivesAfter() {
+        var t = tree
+        _ = t.expand(url("/Volumes/T"))
+        t.setChildren([folder("b", in: "/Volumes/T"), folder("A.zip", in: "/Volumes/T", kind: .archive),
+                       folder("c.cbz", in: "/Volumes/T", kind: .archive), folder("D", in: "/Volumes/T")],
+                      of: url("/Volumes/T"))
+        #expect(Array(shape(t)[5...8]) == ["  b", "  D", "  A.zip", "  c.cbz"])
+        t.options.foldersFirst = false
+        #expect(Array(shape(t)[5...8]) == ["  A.zip", "  b", "  c.cbz", "  D"])
+    }
+
     @Test func followPicksLongestRoot() {
         var t = tree
         let unknown = t.follow(.folder(url("/Volumes/T/Photos/Best/2026")))

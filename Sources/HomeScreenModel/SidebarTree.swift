@@ -59,7 +59,7 @@ public struct SidebarTree: Sendable {
         case select(Int), expand(URL), collapse(URL), open(BrowserLocation), none
     }
 
-    /// How deep trees are fitted into the sidebar's width.
+    /// How the folders under a place are ordered, and how deep trees are fitted into the sidebar's width.
     public struct Options: Equatable, Sendable {
         /// A folder whose only subfolder is a folder shows with it on one row, `a › b › c`, as in VS Code (the
         /// deepest one is the row: it opens, closes and lights). The current folder always ends its row.
@@ -67,10 +67,13 @@ public struct SidebarTree: Sendable {
         /// The current folder this many levels under its root or deeper (0: never; 3 or more): the tree starts again
         /// further down, under one row of the folders left out, which opens the last of them.
         public var rerootDepth: Int
+        /// A folder's subfolders before its archives, each run by name; off, they go by name together.
+        public var foldersFirst: Bool
 
-        public init(compactChains: Bool = true, rerootDepth: Int = 0) {
+        public init(compactChains: Bool = true, rerootDepth: Int = 0, foldersFirst: Bool = true) {
             self.compactChains = compactChains
             self.rerootDepth = rerootDepth
+            self.foldersFirst = foldersFirst
         }
     }
 
@@ -147,7 +150,7 @@ public struct SidebarTree: Sendable {
                 add(start, depth: 1, root: root)
                 return
             }
-            for child in children[path] ?? [] { add(child, depth: depth + 1, root: root) }
+            for child in ordered(children[path] ?? []) { add(child, depth: depth + 1, root: root) }
         }
         for section in sections {
             let folded = collapsed.contains(section.id)
@@ -159,6 +162,12 @@ public struct SidebarTree: Sendable {
             for row in section.rows { add(row, depth: 0, root: Self.path(row.location)) }
         }
         return (lines, roots)
+    }
+
+    /// A folder's rows (kept by name) in the order shown: `Options.foldersFirst` puts the archives after.
+    private func ordered(_ rows: [HomeSidebarRow]) -> [HomeSidebarRow] {
+        guard options.foldersFirst else { return rows }
+        return rows.filter(\.expandable) + rows.filter { !$0.expandable }
     }
 
     // MARK: Changes
