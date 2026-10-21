@@ -16,6 +16,10 @@ public struct BrowserTypeSelect: Sendable {
         return buffer
     }
 
+    /// A name is being typed at `time`: a letter came within the last second, so the next one adds to it (an app's
+    /// single-letter shortcut gives way to it then, as F does in Finder's type-to-select).
+    public func isTyping(at time: TimeInterval) -> Bool { !buffer.isEmpty && time - last <= 1 }
+
     /// The first name from `start` on (wrapping round) that begins with `prefix`.
     public static func match(_ prefix: String, in names: [String], from start: Int) -> Int? {
         guard !names.isEmpty else { return nil }

@@ -37,6 +37,8 @@ final class HomeSidebar: NSView {
     var onToggleSection: ((String) -> Void)?
     /// Tab: the keys go back to the grid.
     var onEndKeys: (() -> Void)?
+    /// A click on a row: the keys stay with (or go to) the browser.
+    var onClickKeys: (() -> Void)?
     /// How long a row lists before its spinner shows.
     var slowAfter: Duration = .milliseconds(300)
 
@@ -190,7 +192,8 @@ final class HomeSidebar: NSView {
     override func mouseDown(with event: NSEvent) {
         let point = document.convert(event.locationInWindow, from: nil)
         guard let view = lineViews.first(where: { $0.frame.contains(point) }) else { return }
-        window?.makeFirstResponder(self)
+        // As in Finder, a click leaves the keys with the browser (letters pick a name there); Tab brings them here.
+        onClickKeys?()
         let x = point.x - view.frame.minX
         if view.disclosureFrame.insetBy(dx: -4, dy: -4).contains(CGPoint(x: x, y: view.bounds.midY)) {
             clickDisclosure(line: view.tag)
