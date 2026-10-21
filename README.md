@@ -165,7 +165,8 @@ slow listings in parts.
   `handleKey(_:)` for keys the app forwards; `location`, `lastBrowsed` and `onLocation` to remember where it was.
 - **Toasts**: `showToast(_:)` shows a short line at the bottom for 3 s (an action that failed).
 - Style and names (`style`, `names`, `onStyle`, `onNames`: ⌥T / ⌥N), the sort capsule (⌥1…⌥3), a mouse's other buttons
-  (`onOtherMouse`), drops on Home (`HomeView.onDrop`), the sidebar's width and tree options.
+  (`onOtherMouse`), drops on Home (`HomeView.onDrop`), the sidebar's width and tree options (one-folder chains on one
+  row, restarting deep trees, subfolders before archives).
 
 ## Tests
 
