@@ -66,6 +66,8 @@ public struct GridMetrics: Equatable, Sendable {
     public var bandFactsLine: CGFloat = 15
     /// A poster narrower than this has the name line only.
     public var bandTwoLinesFrom: CGFloat = 200
+    /// A poster at least this wide adds the progress as text ("137 / 248") to the facts line.
+    public var bandProgressFrom: CGFloat = 280
     /// A column narrower than this shows posters whatever the style.
     public var minStyled: CGFloat = 320
     /// A compact card: the cover is a square of `cardHeight` at its left. The columns are at least `cardWidth` wide

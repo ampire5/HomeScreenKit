@@ -340,3 +340,113 @@ import Testing
     }
 }
 
+
+@MainActor @Suite struct HomeBrowserCardsTests {
+    let x = URL(fileURLWithPath: "/Volumes/T/x")
+
+    func make(_ source: FakeHomeSource, at location: BrowserLocation? = nil) -> HomeBrowserView {
+        let view = HomeBrowserView(source: source)
+        view.frame = CGRect(x: 0, y: 0, width: 1200, height: 800)
+        view.show(location ?? .folder(x), selecting: nil)
+        view.layoutSubtreeIfNeeded()
+        return view
+    }
+
+    func shown(_ source: FakeHomeSource, _ entries: [BrowserEntry]) async -> HomeBrowserView {
+        let view = make(source)
+        source.yield(x, entries)
+        await settle(seconds: 5) { !view.entries.isEmpty }
+        view.layoutSubtreeIfNeeded()
+        return view
+    }
+
+    private let summary = CardSummary(photos: 248, folders: 3, bytes: 4_200_000_000)
+
+    @Test func summaryArrivesWithoutRelisting() async {
+        let source = FakeHomeSource()
+        let folders = (0..<3).map { BrowserFixtures.folder("f\($0)") }
+        let view = await shown(source, folders)
+        let ids = view.entries.map(\.id)
+        let id = ids[1]
+        let image = CGContext(data: nil, width: 4, height: 4, bitsPerComponent: 8, bytesPerRow: 0,
+                              space: CGColorSpaceCreateDeviceRGB(),
+                              bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!.makeImage()!
+        view.setImage(image, for: id)
+        let listed = source.listed.count
+        let before = (view.card(for: ids[0]) as? PosterCard)?.insideLabel.stringValue
+        view.setSummary(summary, for: id)
+        let card = view.card(for: id) as? PosterCard
+        #expect(card?.insideLabel.stringValue == "248 · 3 folders")
+        #expect(card?.image != nil)                                       // the picture stays
+        #expect(view.entries.map(\.id) == ids)                            // no reorder
+        #expect(source.listed.count == listed)                            // no relisting
+        #expect((view.card(for: ids[0]) as? PosterCard)?.insideLabel.stringValue == before)   // the others untouched
+        // a later listing of the same folder keeps the facts that arrived
+        source.yield(x, folders)
+        await settle()
+        #expect((view.card(for: id) as? PosterCard)?.insideLabel.stringValue == "248 · 3 folders")
+        view.setSummary(nil, for: id)
+        #expect((view.card(for: id) as? PosterCard)?.insideLabel.isHidden == true)
+    }
+
+    @Test func cardStyleComesFromTheSource() async {
+        let source = FakeHomeSource()
+        source.cardStyles[.folder(x)] = .cards
+        let view = await shown(source, [BrowserFixtures.folder("a"), BrowserFixtures.file("p.jpg")])
+        #expect(view.card(for: view.entries[0].id) is CompactCard)
+        #expect(view.card(for: view.entries[0].id)!.frame.width >= 300)
+        #expect(view.card(for: view.entries[0].id)?.frame.height == 92)
+        view.chooseCardStyle(.list)
+        #expect(source.setCardStyles.count == 1)
+        #expect(source.setCardStyles[0].0 == .list && source.setCardStyles[0].1 == .folder(x))
+        view.chooseCardStyle(.posters)
+        await settle()
+        #expect(view.card(for: view.entries[0].id) is PosterCard)
+    }
+
+    @Test func posterIsTheDefaultAndFollowsTheGridsBand() async {
+        let source = FakeHomeSource()
+        let view = await shown(source, [BrowserFixtures.folder("a"), BrowserFixtures.folder("z.zip")])
+        let card = view.card(for: view.entries[0].id)
+        #expect(card is PosterCard)
+        #expect(card!.frame.height == card!.frame.width + GridLayout.bandHeight(width: card!.frame.width))
+    }
+
+    @Test func narrowColumnKeepsPosters() async {
+        let source = FakeHomeSource()
+        source.cardStyles[.folder(x)] = .cards
+        let view = HomeBrowserView(source: source)
+        view.frame = CGRect(x: 0, y: 0, width: 300, height: 800)
+        view.show(.folder(x), selecting: nil)
+        source.yield(x, [BrowserFixtures.folder("a")])
+        await settle(seconds: 5) { !view.entries.isEmpty }
+        view.layoutSubtreeIfNeeded()
+        #expect(view.card(for: view.entries[0].id) is PosterCard)
+    }
+
+    @Test func collectionsStayCollectionCards() async {
+        let source = FakeHomeSource()
+        source.cardStyles[.source("recent")] = .cards
+        let view = make(source, at: .source("recent"))
+        source.yieldSource("recent", [BrowserFixtures.collection("a")])
+        await settle(seconds: 5) { !view.entries.isEmpty }
+        view.layoutSubtreeIfNeeded()
+        #expect(view.card(for: view.entries[0].id) is CollectionCard)
+    }
+
+    @Test func brokenAndOffline() async {
+        let source = FakeHomeSource()
+        let view = await shown(source, ["a", "b", "c"].map { BrowserFixtures.folder($0) })
+        view.setSummary(CardSummary(photos: 1, problem: .offline), for: view.entries[0].id)
+        view.setSummary(CardSummary(photos: 1, problem: .broken), for: view.entries[1].id)
+        view.setSummary(CardSummary(photos: 1), for: view.entries[2].id)
+        let cards = view.entries.map { view.card(for: $0.id) as? PosterCard }
+        #expect(cards[0]?.alphaValue == 0.45)
+        #expect(cards[1]?.alphaValue == 1)
+        #expect(cards[2]?.alphaValue == 1)
+        #expect(cards[0]?.problemIcon.isHidden == false && cards[1]?.problemIcon.isHidden == false)
+        #expect(cards[2]?.problemIcon.isHidden == true)
+        view.setSummary(CardSummary(photos: 1), for: view.entries[0].id)   // reachable again
+        #expect((view.card(for: view.entries[0].id) as? PosterCard)?.alphaValue == 1)
+    }
+}

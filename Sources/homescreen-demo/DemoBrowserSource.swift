@@ -17,6 +17,9 @@ import HomeScreenKit
     static var slowStart = Double(ProcessInfo.processInfo.environment["HOMESCREEN_SLOW_START"] ?? "") ?? 1
     private var tree: [String: [BrowserEntry]] = [:]
     private var sorts: [String: BrowserSort] = [:]
+    private var cardStyles: [BrowserLocation: CardStyle] = [:]
+    /// The style the demo starts with (`HOMESCREEN_CARDS`: posters, cards or list).
+    static var startStyle = ProcessInfo.processInfo.environment["HOMESCREEN_CARDS"].flatMap(CardStyle.init) ?? .posters
     private let root = URL(fileURLWithPath: "/Demo")
 
     init() {
@@ -24,7 +27,9 @@ import HomeScreenKit
         tree[root.path] = ["Huge", "Mixed", "Small", "Broken"].map { folder($0, in: root) }
         // Photos and Aspect's bands: 12 folders and 2 000 photos, landscape, portrait and square.
         let mixed = root.appendingPathComponent("Mixed")
-        tree[mixed.path] = (0..<12).map { folder("Album \($0)", in: mixed) } + (0..<2_000).map { file("DSC_\($0).jpg", in: mixed, $0) }
+        let scans = BrowserEntry(url: mixed.appendingPathComponent("Scans.zip"), name: "Scans.zip", kind: .archive, count: 64,
+                                 canRename: true, canTrash: true)
+        tree[mixed.path] = (0..<12).map { folder("Album \($0)", in: mixed) } + [scans] + (0..<2_000).map { file("DSC_\($0).jpg", in: mixed, $0) }
         tree[huge.path] = (0..<30).map { folder("Set \($0)", in: huge) } + (0..<10_000).map { file("IMG_\($0).jpg", in: huge, $0) }
         let small = root.appendingPathComponent("Small")
         tree[small.path] = (0..<12).map { file("photo \($0).jxl", in: small, $0) }
@@ -127,7 +132,35 @@ import HomeScreenKit
         }
     }
 
+    /// Made-up facts for a folder card, varied by its name: all the fields and flags the cards draw.
+    private func summary(for id: String) -> CardSummary {
+        let seed = abs(id.hashValue)
+        if id.hasSuffix("Broken") || id.hasSuffix("Album 7") { return CardSummary(photos: 12, problem: .broken) }
+        if id.hasSuffix("Album 9") { return CardSummary(photos: 5_120, folders: 2, bytes: 31_000_000_000, problem: .offline) }
+        if id.hasSuffix(".zip") {
+            return CardSummary(photos: 64, bytes: 812_000_000, first: Date(timeIntervalSinceReferenceDate: 600_000_000),
+                               last: Date(timeIntervalSinceReferenceDate: 600_000_000))
+        }
+        let photos = 20 + seed % 900
+        let spread = (0..<12).map { UInt8(max(0, 120 - abs($0 - seed % 12) * 22 + seed % 7)) }
+        let viewed = seed % 3 == 0 ? nil : Double(seed % 100) / 100
+        return CardSummary(photos: photos, folders: seed % 4, insidePhotos: seed % 5 == 0 ? 1_204 : nil,
+                           insideIncomplete: seed % 10 == 0, bytes: Int64(photos) * 7_300_000,
+                           first: Date(timeIntervalSinceReferenceDate: 560_000_000 + Double(seed % 50) * 1_000_000),
+                           last: Date(timeIntervalSinceReferenceDate: 700_000_000), histogram: spread,
+                           viewed: seed % 7 == 0 ? 1 : viewed, done: seed % 7 == 0, new: seed % 4 == 1 ? 12 : 0,
+                           twoPages: seed % 3 == 1, rightToLeft: seed % 5 == 2)
+    }
+
     func wantImages(_ ids: [String], width: CGFloat) {
+        // The facts come after the listing, like the pictures.
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(300))
+            for id in ids where !id.contains("DSC_") && !id.contains("IMG_") && !id.contains("photo ")
+                && !id.hasPrefix("recent:") && !id.hasPrefix("session:") {
+                view?.setSummary(summary(for: id), for: id)
+            }
+        }
         Task { @MainActor in
             for id in ids {
                 let seed = abs(id.hashValue)
@@ -191,6 +224,9 @@ import HomeScreenKit
     func setSort(_ sort: BrowserSort, for location: BrowserLocation) {
         if case .folder(let folder) = location { sorts[folder.standardizedFileURL.path] = sort }
     }
+
+    func cardStyle(for location: BrowserLocation) -> CardStyle { cardStyles[location] ?? Self.startStyle }
+    func setCardStyle(_ style: CardStyle, for location: BrowserLocation) { cardStyles[location] = style }
 
     func info(for source: String) -> HomeSourceInfo {
         switch source {

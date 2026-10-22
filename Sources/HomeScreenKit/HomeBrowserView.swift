@@ -148,6 +148,13 @@ public final class HomeBrowserView: NSView {
     private var live: [Int: GridCard] = [:]
     private var photoPool: [PhotoCard] = []
     private var collectionPool: [CollectionCard] = []
+    private var posterPool: [PosterCard] = []
+    private var compactPool: [CompactCard] = []
+    /// How the folders and archives of this location are drawn, from the source; a narrow column shows posters anyway.
+    private var cardStyle = CardStyle.posters
+    /// The facts that came after the listing, by id: they outlive a new listing of the same place, which may not carry
+    /// them yet. Cleared on a move.
+    private var summaries: [String: CardSummary] = [:]
     private var headers: [GridHeader] = []
     private let footer = GridFooter()
     private var lastWanted: [String] = []
@@ -345,6 +352,8 @@ public final class HomeBrowserView: NSView {
         }
         if case .source(let id) = location { info = source?.info(for: id) } else { info = nil; lastBrowsed = location }
         sortChoice = BrowserSortChoice(current: source?.sort(for: location) ?? .standard)
+        cardStyle = source?.cardStyle(for: location) ?? .posters
+        summaries = [:]
         showPage(info?.page)
         if page != nil {
             // A page lists nothing: it is complete as it is.
@@ -654,6 +663,12 @@ public final class HomeBrowserView: NSView {
         guard let field = renameField, let i = indexByID[field.entryID] else { return }
         let slot = grid.frame(of: i)
         let y: CGFloat
+        if let card = live[indexByID[field.entryID] ?? -1], card.nameFrame != .zero {
+            let name = card.nameFrame
+            field.place(over: CGRect(x: slot.minX + name.minX, y: slot.minY + name.minY, width: name.width,
+                                     height: name.height))
+            return
+        }
         if names == .below {
             y = slot.minY + slot.width + 1   // on the name line
         } else if isCollection(i) {
@@ -977,7 +992,8 @@ public final class HomeBrowserView: NSView {
         sections = makeSections()
         var metrics = GridMetrics()
         metrics.top = HomeToolbar.height
-        grid = GridLayout(sections: sections, width: width, target: cardSize, names: names, metrics: metrics)
+        grid = GridLayout(sections: sections, width: width, target: cardSize, names: names, style: shownCardStyle(width: width),
+                          metrics: metrics)
         let height = max(grid.contentHeight, scroll.contentSize.height)
         if document.frame.size != CGSize(width: width, height: height) {
             document.frame = CGRect(x: 0, y: 0, width: width, height: height)
@@ -989,7 +1005,7 @@ public final class HomeBrowserView: NSView {
         var kept: [Int: GridCard] = [:]
         for card in live.values {
             if let i = indexByID[card.item.id], range.contains(i), kept[i] == nil,
-               isCollection(i) == (card is CollectionCard) {
+               kind(of: i) == kind(of: card) {
                 kept[i] = card
             } else {
                 putAside(card)
@@ -1002,8 +1018,13 @@ public final class HomeBrowserView: NSView {
                 let item = item(for: entry)   // a count, a date, dimming or a menu changed: the picture stays
                 if card.item != item { card.show(item) }
             } else {
-                let card: GridCard = isCollection(i) ? collectionPool.popLast() ?? makeCollection()
-                                                     : photoPool.popLast() ?? makePhoto()
+                let card: GridCard
+                switch kind(of: i) {
+                case .poster: card = posterPool.popLast() ?? makePoster()
+                case .compact: card = compactPool.popLast() ?? makeCompact()
+                case .collection: card = collectionPool.popLast() ?? makeCollection()
+                case .photo: card = photoPool.popLast() ?? makePhoto()
+                }
                 configure(card, entry)
                 card.isHidden = false
                 live[i] = card
@@ -1030,11 +1051,41 @@ public final class HomeBrowserView: NSView {
 
     private func isCollection(_ i: Int) -> Bool { !entries[i].isFile }
 
+    private enum CardKind { case poster, compact, collection, photo }
+
+    /// A folder or archive in a folder is a poster or a compact card; the rest of the containers (places, the app's
+    /// collections) keep the collection card; files are photos.
+    private func kind(of i: Int) -> CardKind {
+        let entry = entries[i]
+        guard !entry.isFile else { return .photo }
+        guard entry.kind == .folder || entry.kind == .archive else { return .collection }
+        return shownCardStyle(width: gridWidth) == .cards ? .compact : .poster
+    }
+
+    private func kind(of card: GridCard) -> CardKind {
+        switch card {
+        case is PosterCard: .poster
+        case is CompactCard: .compact
+        case is CollectionCard: .collection
+        default: .photo
+        }
+    }
+
+    /// The style the layout is given: only a folder's own cards have one (Recent, Sessions and the places are
+    /// collections), and a column narrower than `minStyled` shows posters. The list is the next step: until its rows
+    /// exist, it draws posters.
+    private func shownCardStyle(width: CGFloat) -> CardStyle {
+        guard case .folder = location, width >= GridMetrics().minStyled else { return .posters }
+        return cardStyle == .cards ? .cards : .posters
+    }
+
     private func putAside(_ card: GridCard) {
         card.isHidden = true
         card.image = nil
         if let photo = card as? PhotoCard { photoPool.append(photo) }
         if let collection = card as? CollectionCard { collectionPool.append(collection) }
+        if let poster = card as? PosterCard { posterPool.append(poster) }
+        if let compact = card as? CompactCard { compactPool.append(compact) }
     }
 
     private func placeHeaders() {
@@ -1060,6 +1111,18 @@ public final class HomeBrowserView: NSView {
 
     private func makeCollection() -> CollectionCard {
         let card = CollectionCard(item: HomeCardItem(id: "", title: "", tooltip: "", symbol: "folder"))
+        document.addSubview(card)
+        return card
+    }
+
+    private func makePoster() -> PosterCard {
+        let card = PosterCard(item: HomeCardItem(id: "", title: "", tooltip: "", symbol: "folder"))
+        document.addSubview(card)
+        return card
+    }
+
+    private func makeCompact() -> CompactCard {
+        let card = CompactCard(item: HomeCardItem(id: "", title: "", tooltip: "", symbol: "folder"))
         document.addSubview(card)
         return card
     }
@@ -1103,11 +1166,14 @@ public final class HomeBrowserView: NSView {
         case .place, .collection:
             subtitle = nil
         }
+        let summary = entry.summary ?? summaries[entry.id]
         return HomeCardItem(id: entry.id, title: entry.name, subtitle: entry.subtitle ?? subtitle,
                             tooltip: entry.kind == .collection ? entry.name : entry.url.path,
                             symbol: source?.symbol(for: entry) ?? "doc", progress: entry.progress,
-                            badge: entry.badge ?? (entry.kind == .archive ? "ZIP" : nil), isDimmed: entry.isDimmed,
-                            menu: source?.menu(for: entry, in: location) ?? [], glassSymbol: entry.kind == .place)
+                            badge: entry.badge ?? (entry.kind == .archive ? "ZIP" : nil),
+                            isDimmed: entry.isDimmed || summary?.problem == .offline,
+                            menu: source?.menu(for: entry, in: location) ?? [], glassSymbol: entry.kind == .place,
+                            summary: summary, count: entry.count)
     }
 
     /// The live cards without a picture, those in view first. The visible ones go to the source at once; the margin
@@ -1153,6 +1219,26 @@ public final class HomeBrowserView: NSView {
 
     /// Size steps from a wheel the app hears itself (a mouse's thumb wheel): positive larger; a step a whole notch.
     public func resize(notches: Double) { scroll.resize(notches: notches) }
+
+    /// A folder's or archive's facts, which come after the listing like the pictures: the card on screen shows them at
+    /// once, the grid keeps its order, its pictures and its listing; nil takes them back. One not in the listing is
+    /// ignored.
+    public func setSummary(_ summary: CardSummary?, for id: String) {
+        guard let i = indexByID[id] else { return }
+        summaries[id] = summary
+        entries[i].summary = summary
+        guard let card = live[i], card.item.id == id else { return }
+        let item = item(for: entries[i])
+        if card.item != item { card.show(item) }
+    }
+
+    /// The user chose how folders are drawn (the app's menu, the switch): the source saves it, the grid re-tiles.
+    public func chooseCardStyle(_ style: CardStyle) {
+        source?.setCardStyle(style, for: location)
+        guard style != cardStyle else { return }
+        cardStyle = style
+        tile()
+    }
 
     /// A card's picture; one not on screen now is ignored.
     public func setImage(_ image: CGImage?, for id: String) {

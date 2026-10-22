@@ -32,7 +32,7 @@ import Testing
     @Test func mixedFolderHasTwoSections() async {
         let view = await shown(FakeHomeSource(), mixed)
         #expect(view.headerTitles == ["Folders", "Photos · 20"])
-        #expect(view.card(for: view.entries[0].id) is CollectionCard)
+        #expect(view.card(for: view.entries[0].id) is PosterCard)
         #expect(view.card(for: view.entries[3].id) is PhotoCard)
     }
 

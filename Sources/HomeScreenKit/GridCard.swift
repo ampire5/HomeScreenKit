@@ -42,6 +42,8 @@ class GridCard: NSView {
     /// Overridden to draw `item`, `isSelected` and `image`.
     func itemChanged() {}
     func selectionChanged() {}
+    /// Where the rename field goes over the name, in the card's coordinates; zero: the browser's own guess.
+    var nameFrame: CGRect { .zero }
     func imageChanged() {}
 
     override var isFlipped: Bool { true }

@@ -60,6 +60,10 @@ public struct HomeSourceInfo {
     func trash(_ entry: BrowserEntry) async throws
     func sort(for location: BrowserLocation) -> BrowserSort
     func setSort(_ sort: BrowserSort, for location: BrowserLocation)
+    /// How the folders and archives of `location` are drawn (posters, cards, list); like the sort, a folder's own or
+    /// the one it inherits.
+    func cardStyle(for location: BrowserLocation) -> CardStyle
+    func setCardStyle(_ style: CardStyle, for location: BrowserLocation)
     func info(for source: String) -> HomeSourceInfo
     /// The sidebar's sections: the sources, the places, the app's others.
     func sidebar() async -> [HomeSidebarSection]
@@ -70,6 +74,8 @@ public struct HomeSourceInfo {
 }
 
 public extension HomeSource {
+    func cardStyle(for location: BrowserLocation) -> CardStyle { .posters }
+    func setCardStyle(_ style: CardStyle, for location: BrowserLocation) {}
     func wantImages(_ ids: [String], visible: Int, width: CGFloat) { wantImages(ids, width: width) }
     func moved(from old: BrowserLocation?, to new: BrowserLocation) {}
 }

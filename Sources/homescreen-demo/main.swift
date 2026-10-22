@@ -161,6 +161,14 @@ import HomeScreenKit
             item.target = self
         }
         view.addItem(.separator())
+        for (i, style) in CardStyle.allCases.enumerated() {
+            let item = view.addItem(withTitle: "Folders as \(style.rawValue)", action: #selector(cardStyle(_:)),
+                                    keyEquivalent: "\(i + 1)")
+            item.keyEquivalentModifierMask = [.command, .option]
+            item.representedObject = style.rawValue
+            item.target = self
+        }
+        view.addItem(.separator())
         for (title, key, action) in [("Photo 3:2", "p", #selector(photo)), ("Video 16:9", "v", #selector(video)),
                                      ("Tabs on/off", "t", #selector(toggleTabs)), ("Message on/off", "m", #selector(toggleMessage))] {
             view.addItem(withTitle: title, action: action, keyEquivalent: key).target = self
@@ -177,6 +185,11 @@ import HomeScreenKit
     }
 
     @objc func layout(_ sender: NSMenuItem) { home.layoutMode = HomeLayoutMode(rawValue: sender.representedObject as! String)! }
+    @objc func cardStyle(_ sender: NSMenuItem) {
+        guard let style = (sender.representedObject as? String).flatMap(CardStyle.init) else { return }
+        homeView.browser.chooseCardStyle(style)
+        browser.chooseCardStyle(style)
+    }
     @objc func showFilmstrip() {
         let demo = filmstrip ?? FilmstripDemo()
         filmstrip = demo

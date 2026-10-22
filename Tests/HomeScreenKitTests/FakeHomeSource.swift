@@ -139,6 +139,14 @@ import AppKit
         }
     }
 
+    var cardStyles: [BrowserLocation: CardStyle] = [:]
+    private(set) var setCardStyles: [(CardStyle, BrowserLocation)] = []
+    func cardStyle(for location: BrowserLocation) -> CardStyle { cardStyles[location] ?? .posters }
+    func setCardStyle(_ style: CardStyle, for location: BrowserLocation) {
+        cardStyles[location] = style
+        setCardStyles.append((style, location))
+    }
+
     func setSort(_ sort: BrowserSort, for location: BrowserLocation) {
         switch location {
         case .places: break

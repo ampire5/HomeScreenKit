@@ -29,10 +29,16 @@ public struct HomeCardItem: Equatable, Sendable {
     /// The symbol on a glass tile in place of a picture (a place: a volume, the home folder); no picture is asked.
     /// Only the browser's collection cards draw it.
     public var glassSymbol: Bool
+    /// The facts of a folder or archive card; nil draws the subtitle and `count` as before.
+    public var summary: CardSummary?
+    /// Photos in a folder, when the app knows it (the narrow poster's number).
+    public var count: Int?
 
     public init(id: String, title: String, subtitle: String? = nil, tooltip: String, symbol: String,
                 progress: Double? = nil, badge: String? = nil, isDimmed: Bool = false, menu: [HomeMenuItem] = [],
-                glassSymbol: Bool = false) {
+                glassSymbol: Bool = false, summary: CardSummary? = nil, count: Int? = nil) {
+        self.summary = summary
+        self.count = count
         self.glassSymbol = glassSymbol
         self.id = id
         self.title = title
