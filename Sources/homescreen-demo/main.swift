@@ -11,6 +11,7 @@ import HomeScreenKit
     let source = DemoBrowserSource()
     lazy var browser = HomeBrowserView(source: source)
     lazy var homeView = HomeView(source: source)
+    var filmstrip: FilmstripDemo?
     static let tabs = ["Recent", "Folders", "Stash"]
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -164,10 +165,20 @@ import HomeScreenKit
         }
         viewItem.submenu = view
         main.addItem(viewItem)
+        let windowItem = NSMenuItem()
+        let windowMenu = NSMenu(title: "Window")
+        windowMenu.addItem(withTitle: "Filmstrip Demo", action: #selector(showFilmstrip), keyEquivalent: "f").target = self
+        windowItem.submenu = windowMenu
+        main.addItem(windowItem)
         NSApp.mainMenu = main
     }
 
     @objc func layout(_ sender: NSMenuItem) { home.layoutMode = HomeLayoutMode(rawValue: sender.representedObject as! String)! }
+    @objc func showFilmstrip() {
+        let demo = filmstrip ?? FilmstripDemo()
+        filmstrip = demo
+        demo.show()
+    }
     @objc func photo() { home.aspect = 2.0 / 3 }
     @objc func video() { home.aspect = 9.0 / 16 }
     @objc func toggleTabs() { home.tabs = home.tabs.isEmpty ? Self.tabs : [] }
