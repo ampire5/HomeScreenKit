@@ -19,7 +19,9 @@ public struct FilmstripCell: Equatable, Sendable {
 /// (`narrowLength(of:)`). The base line lays the narrow cells out with a `gapRatio` gap from 0; an offset is the base
 /// position under the strip's centre. At rest the current cell expands (`expansion` 0 → 1) to its item's proportions
 /// with `currentPaddingRatio` on each side, around its own centre, pushing its neighbours apart; the base line, and so
-/// the item under a point, ignores that expansion.
+/// the item under a point, ignores that expansion. A run of current items (two pages shown side by side) expands
+/// together: each to its own proportions, with the plain gap between them and the padding outside the run, around the
+/// run's centre (`centre(of:)` of the range), the whole never longer than the strip.
 ///
 /// While no known item is narrower than `cellLength` the base line is a formula; otherwise its cell starts are
 /// prefix sums made once here (O(n)) and searched by bisection. A window of cells costs O(visible cells) either way.
@@ -98,6 +100,14 @@ public struct FilmstripLayout: Equatable, Sendable {
         start(of: item) + narrowLength(of: item) / 2
     }
 
+    /// The base position of the middle of a run of items (`items` clamped to the list; empty: 0): from the first one's
+    /// leading edge to the last one's trailing edge, every cell narrow. One item's is `centre(of:)` that item.
+    public func centre(of items: Range<Int>) -> Double {
+        let run = items.clamped(to: 0..<itemCount)
+        guard let first = run.first, let last = run.last else { return 0 }
+        return (start(of: first) + start(of: last) + narrowLength(of: last)) / 2
+    }
+
     /// The item whose cell, with half a gap on each side, holds base position `position`; the first or last beyond
     /// the ends; nil for no items.
     public func item(atBase position: Double) -> Int? {
@@ -129,12 +139,18 @@ public struct FilmstripLayout: Equatable, Sendable {
     /// strip goes on past that edge, so it shows there is more, 0 where it ends inside the view; never over the
     /// current cell.
     public func fades(cells: [FilmstripCell], current: Int) -> (start: Double, end: Double) {
+        fades(cells: cells, current: current..<(current + 1))
+    }
+
+    /// `fades(cells:current:)` for a run of current items: never over any of them.
+    public func fades(cells: [FilmstripCell], current: Range<Int>) -> (start: Double, end: Double) {
         guard let first = cells.first, let last = cells.last else { return (0, 0) }
         var start = first.start < 0 ? fadeLength : 0
         var end = last.start + last.length > length ? fadeLength : 0
-        if let shown = cells.first(where: { $0.item == current }) {
-            start = min(start, max(0, shown.start))
-            end = min(end, max(0, length - shown.start - shown.length))
+        if let lead = cells.first(where: { current.contains($0.item) }),
+           let trail = cells.last(where: { current.contains($0.item) }) {
+            start = min(start, max(0, lead.start))
+            end = min(end, max(0, length - trail.start - trail.length))
         }
         return (start, end)
     }
@@ -142,29 +158,52 @@ public struct FilmstripLayout: Equatable, Sendable {
     /// The cells on screen, plus one beyond each edge, in order, in view positions: base position `offset` at the
     /// strip's centre, `current` expanded by `expansion` (0 narrow … 1 its item's proportions, padded).
     public func cells(offset: Double, current: Int, expansion: Double) -> [FilmstripCell] {
+        cells(offset: offset, current: current..<(current + 1), expansion: expansion)
+    }
+
+    /// `cells(offset:current:expansion:)` with a run of current items expanded together (two pages side by side):
+    /// each grows to its own proportions, the run around its own centre (`centre(of:)` of `current`), with the plain gap
+    /// inside and the current padding outside; scaled back so the run is never longer than the strip. Items of
+    /// `current` outside the list are ignored; an empty run expands nothing.
+    public func cells(offset: Double, current: Range<Int>, expansion: Double) -> [FilmstripCell] {
         guard itemCount > 0, let middle = item(atBase: offset) else { return [] }
         let e = min(max(expansion, 0), 1)
-        var grown = 0.0, padding = gap
-        if e > 0, current >= 0, current < itemCount {
-            let narrow = narrowLength(of: current)
-            let aspect = (current < aspects.count ? aspects[current] : nil) ?? Self.unknownCurrentAspect
-            let full = min(max(aspect * thickness, narrow), length)
-            grown = (full - narrow) * e
+        let run = current.clamped(to: 0..<itemCount)
+        // How much each item of the run grows, and the padding outside it.
+        var grown: [Double] = []
+        var padding = gap
+        if e > 0, !run.isEmpty {
+            let narrow = run.map(narrowLength(of:))
+            let full = run.map { item in
+                let aspect = (item < aspects.count ? aspects[item] : nil) ?? Self.unknownCurrentAspect
+                return min(max(aspect * thickness, narrowLength(of: item)), length)
+            }
+            let gaps = gap * Double(run.count - 1)
+            let narrowRun = narrow.reduce(0, +) + gaps, fullRun = full.reduce(0, +) + gaps
+            // A run longer than the strip grows only as far as the strip allows.
+            let fit = fullRun > length && fullRun > narrowRun ? max(0, length - narrowRun) / (fullRun - narrowRun) : 1
+            grown = zip(full, narrow).map { ($0 - $1) * fit * e }
             padding = gap + (Self.currentPaddingRatio * thickness - gap) * e
         }
-        // The current cell grows around its centre; every cell beyond it moves out by half of that and the
-        // padding's extra.
-        let shift = grown / 2 + (padding - gap)
+        let total = grown.reduce(0, +)
+        // The run grows around its centre; every cell beyond it moves out by half of that and the padding's extra.
+        let shift = total / 2 + (padding - gap)
         let origin = length / 2 - offset
+        // The run's cells: their own growth, plus all that of the cells before them in the run.
+        var grownBefore = [Double](repeating: 0, count: grown.count)
+        for i in grown.indices.dropFirst() { grownBefore[i] = grownBefore[i - 1] + grown[i - 1] }
+        let runStart = run.isEmpty ? 0 : origin + start(of: run.lowerBound) - total / 2
         func cell(_ item: Int) -> FilmstripCell {
             let narrow = narrowLength(of: item)
             let start: Double, extent: Double
-            if item == current && grown > 0 {
-                extent = narrow + grown
-                start = origin + centre(of: item) - extent / 2
+            if !grown.isEmpty, run.contains(item) {
+                let i = item - run.lowerBound
+                extent = narrow + grown[i]
+                start = runStart + (self.start(of: item) - self.start(of: run.lowerBound)) + grownBefore[i]
             } else {
                 extent = narrow
-                start = origin + self.start(of: item) + (item < current ? -shift : item > current ? shift : 0)
+                start = origin + self.start(of: item)
+                    + (item < run.lowerBound ? -shift : item >= run.upperBound ? shift : 0)
             }
             return FilmstripCell(range: item..<(item + 1), item: item, start: start, length: extent)
         }

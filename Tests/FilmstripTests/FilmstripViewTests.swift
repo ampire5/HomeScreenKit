@@ -38,6 +38,15 @@ import FilmstripModel
     #expect(!view.visibleItems.isEmpty && view.visibleItems.count <= 49 && view.visibleItems.contains(5_000))
 }
 
+/// Two current items (two pages side by side): both on screen first, then the rest from the pair outwards.
+@MainActor @Test func showsARunOfCurrentItems() {
+    let view = FilmstripView(frame: NSRect(x: 0, y: 0, width: 400, height: 80))
+    view.setLayout(FilmstripLayout(itemCount: 100, length: 400, thickness: 68, maxAspect: 1.5, aspects: []), animated: false)
+    view.show(offset: view.layout.centre(of: 40..<42), current: 40..<42, expansion: 1, animated: false)
+    #expect(Set(view.visibleItems.prefix(2)) == [40, 41])
+    #expect(Set(view.visibleItems.dropFirst(2).prefix(2)) == [39, 42])
+}
+
 @MainActor @Test func hoverLabelKeepsClearOfTheTrailingInset() {
     let view = FilmstripView(frame: NSRect(x: 0, y: 0, width: 400, height: 80))
     view.setLayout(FilmstripLayout(itemCount: 10, length: 400, thickness: 68, maxAspect: 1.5, aspects: []), animated: false)
