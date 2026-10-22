@@ -240,19 +240,21 @@ import Testing
         let source = FakeHomeSource()
         let view = await shown(source, BrowserFixtures.files(200))
         await settle { source.wanted.count >= 2 }
+        view.marginDelay = .seconds(3600)                   // the margin is sent only by `sendMarginNow`
         let before = source.wanted.count
         view.scrollGrid(to: 600)
         #expect(source.wanted.count == before + 1)          // the visible ones, at once
         #expect(source.wanted.last?.count == source.visibleCounts.last!)
-        try? await Task.sleep(for: .milliseconds(50))       // still scrolling: no margin yet
+        await Task.yield()                                  // still scrolling: no margin yet
         #expect(source.wanted.count == before + 1)
         view.scrollGrid(to: 700)
         #expect(source.wanted.count == before + 2)
         let visible = view.visibleIDs.filter { view.card(for: $0)?.image == nil }
         #expect(source.wanted.last == visible)
-        await settle { source.wanted.count >= before + 3 }
-        try? await Task.sleep(for: .milliseconds(300))
+        view.sendMarginNow()
         #expect(source.wanted.count == before + 3)          // exactly one margin send
+        view.sendMarginNow()
+        #expect(source.wanted.count == before + 3)          // nothing more waits
         let margin = source.wanted.last ?? []
         #expect(Array(margin.prefix(visible.count)) == visible && margin.count > visible.count)
         #expect(source.visibleCounts.last == visible.count)
