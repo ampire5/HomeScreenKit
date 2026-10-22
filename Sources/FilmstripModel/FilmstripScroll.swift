@@ -6,8 +6,9 @@
 /// `settled(layout:)` and ends the scrub).
 ///
 /// `offset` is the base x (`FilmstripLayout`) under the strip's centre while the strip moves, nil while it follows
-/// the current item. It starts at the current item's centre — again whenever the current item is not the one reached
-/// last (a key or the wheel moved it) — and moves point for point with the fingers or the cursor. Past the first or
+/// the current item. It starts at the current item's centre, or at the caller's `anchor` (where the strip rests: the
+/// middle of a run of current items, `FilmstripLayout.centre(of:)` of a range) — again whenever the current item is not
+/// the one reached last (a key or the wheel moved it) — and moves point for point with the fingers or the cursor. Past the first or
 /// last item a trackpad pulls it on at `rubberBand` of the travel (and back the same way); a mouse stops there, so
 /// turning back moves at once.
 ///
@@ -80,16 +81,16 @@ public struct FilmstripScroll: Sendable {
 
     /// One precise scroll event over the strip. `fingerDelta`: the fingers' horizontal movement in points (negative =
     /// left); `crossDelta`: the vertical delta (only its size matters). `current`: the session's current item; `now`: the
-    /// event's time.
+    /// event's time; `anchor`: where the motion starts when it (re)starts on `current` (nil: `current`'s centre).
     public mutating func event(fingerDelta: Double, crossDelta: Double, phase: ScrollPhase, momentum: ScrollPhase,
-                               layout: FilmstripLayout, current: Int, now: Double) -> Outcome {
+                               layout: FilmstripLayout, current: Int, now: Double, anchor: Double? = nil) -> Outcome {
         let ends = momentum.contains(.ended) || momentum.contains(.cancelled) || phase.contains(.cancelled)
         if momentum.isEmpty, phase.contains(.began) || phase.contains(.mayBegin) { ignoresMomentum = false }
         if ignoresMomentum, !momentum.isEmpty { return Outcome(item: nil, commit: false) }
         var outcome = Outcome(item: nil, commit: false)
         if let travel = travel(fingerDelta: fingerDelta, crossDelta: crossDelta, phase: phase, momentum: momentum), travel != 0 {
             outcome.item = move(by: direction == .natural ? -travel : travel, rubber: true, layout: layout,
-                                current: current)
+                                current: current, anchor: anchor)
         }
         guard isMoving else { return outcome }
         if ends {
@@ -101,9 +102,10 @@ public struct FilmstripScroll: Sendable {
         return outcome
     }
 
-    /// A mouse drag over the strip moved by `dx` points: the strip follows the cursor, up to its ends.
-    public mutating func drag(by dx: Double, layout: FilmstripLayout, current: Int) -> Outcome {
-        Outcome(item: move(by: -dx, rubber: false, layout: layout, current: current), commit: false)
+    /// A mouse drag over the strip moved by `dx` points: the strip follows the cursor, up to its ends. `anchor` as for
+    /// `event`.
+    public mutating func drag(by dx: Double, layout: FilmstripLayout, current: Int, anchor: Double? = nil) -> Outcome {
+        Outcome(item: move(by: -dx, rubber: false, layout: layout, current: current, anchor: anchor), commit: false)
     }
 
     /// Where the strip comes to rest: the item nearest the centre and the offset that centres it; nil while it
@@ -181,12 +183,12 @@ public struct FilmstripScroll: Sendable {
     }
 
     /// Moves the strip's offset by `dx` points; the new item at the centre, if it is one.
-    private mutating func move(by dx: Double, rubber: Bool, layout: FilmstripLayout, current: Int) -> Int? {
+    private mutating func move(by dx: Double, rubber: Bool, layout: FilmstripLayout, current: Int, anchor: Double?) -> Int? {
         guard layout.itemCount > 1, (0..<layout.itemCount).contains(current) else { return nil }
         range = layout.offsetRange
         // Anchored on the current item, again whenever it is not the one reached last (a key or the wheel moved it).
         if raw == nil || item != current {
-            raw = layout.centre(of: current)
+            raw = anchor ?? layout.centre(of: current)
             item = current
         }
         var moved = raw! + dx

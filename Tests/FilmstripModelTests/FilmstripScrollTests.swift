@@ -237,3 +237,26 @@ private func near(_ a: Double?, _ b: Double, _ tolerance: Double = 0.5) -> Bool 
     #expect(items == Array(11...15))
     #expect(commits == 1)
 }
+
+/// A motion that starts from two current items at rest (two pages side by side) starts from the middle of the run,
+/// where the strip rests, not from the current item's centre: no jump. The middle is in the gap between the two cells,
+/// so the item at the centre is the run's other one (the caller has it on screen already); once the caller takes that
+/// as current, the strip goes on from where it is and the anchor no longer applies.
+@Test func motionStartsFromARunAnchor() {
+    let run = strip.centre(of: 10..<12)
+    var scroll = FilmstripScroll()
+    let first = scroll.drag(by: 0, layout: strip, current: 10, anchor: run)
+    #expect(scroll.offset == run)
+    #expect(first.item.map { (10..<12).contains($0) } ?? true)
+    #expect(scroll.drag(by: -1, layout: strip, current: 11, anchor: strip.centre(of: 40)).item == nil)
+    #expect(near(scroll.offset, run + 1, 1e-9))
+    var swipe = FilmstripScroll()
+    _ = step(&swipe, -0.5 * FilmstripScroll.lockDistance, phase: .began, current: 10)
+    _ = swipe.event(fingerDelta: -FilmstripScroll.lockDistance, crossDelta: 0, phase: .changed, momentum: [],
+                    layout: strip, current: 10, now: 0, anchor: run)
+    #expect(near(swipe.offset, run + 1.5 * FilmstripScroll.lockDistance))
+    // Without an anchor: the current item's centre, as before.
+    var plain = FilmstripScroll()
+    _ = plain.drag(by: 0, layout: strip, current: 10)
+    #expect(plain.offset == strip.centre(of: 10))
+}
