@@ -2,9 +2,6 @@ import AppKit
 import FilmstripModel
 import QuartzCore
 
-/// Where a scroll event over the strip goes.
-public enum FilmstripScrollRoute: Sendable { case strip, owner, ignore }
-
 /// The thumbnail strip's surface (spec 2026-10-21, Photos' filmstrip): narrow cells on one line that moves under the
 /// strip's fixed centre, the current photo there in its own proportions, the edges fading out. No band, border or
 /// glass behind the cells: the strip lies on the owner's background (a bar) or the photo (the overlay); only the
