@@ -19,11 +19,11 @@ final class HomeMessageView: NSStackView {
         arrangedSubviews.forEach { $0.removeFromSuperview() }
         let title = NSTextField(labelWithString: text)
         title.font = Chrome.Text.font(.heading)
-        title.textColor = .white
+        title.textColor = Chrome.Palette.window.label
         title.lineBreakMode = .byTruncatingMiddle
         title.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         let why = NSTextField(wrappingLabelWithString: reason)
-        why.textColor = .white
+        why.textColor = Chrome.Palette.window.label
         why.alignment = .center
         let more = NSTextField(wrappingLabelWithString: detail)
         more.font = Chrome.Text.font(.small)

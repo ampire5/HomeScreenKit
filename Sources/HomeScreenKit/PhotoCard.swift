@@ -21,12 +21,11 @@ final class PhotoCard: GridCard {
 
     override init(item: HomeCardItem) {
         super.init(item: item)
-        picture.backgroundColor = NSColor(white: 0.14, alpha: 1).cgColor
         picture.masksToBounds = true
         layer?.addSublayer(picture)
         layer?.addSublayer(shade)
-        ring.borderColor = NSColor.controlAccentColor.cgColor
         ring.isHidden = true
+        // Inside the ring, on the photo's own pixels: dark whatever the window is.
         hairline.borderColor = NSColor(white: 0, alpha: 0.35).cgColor
         hairline.borderWidth = 1
         ring.addSublayer(hairline)
@@ -34,6 +33,15 @@ final class PhotoCard: GridCard {
         nameLabel.lineBreakMode = .byTruncatingMiddle
         addSubview(nameLabel)
         show(item)
+        appearanceChanged()
+    }
+
+    override func appearanceChanged() {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        picture.backgroundColor = Chrome.resolve(Chrome.Palette.window.fill, in: self)
+        ring.borderColor = Chrome.resolve(Chrome.Palette.window.accent, in: self)
+        CATransaction.commit()
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
@@ -101,7 +109,7 @@ final class PhotoCard: GridCard {
             nameLabel.frame = CGRect(x: rect.minX + 6, y: rect.maxY - 20, width: max(0, rect.width - 12), height: 16)
         } else {
             nameLabel.font = Chrome.Text.font(.label)
-            nameLabel.textColor = .secondaryLabelColor
+            nameLabel.textColor = Chrome.Palette.window.secondaryLabel
             nameLabel.shadow = nil
             nameLabel.frame = CGRect(x: 0, y: side + 3, width: side, height: 16)
         }

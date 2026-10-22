@@ -1,4 +1,5 @@
 import AppKit
+import HomeChrome
 import HomeScreenModel
 
 /// What every card shares: the whole card is one button, the middle button is a click, a mouse's back and forward go
@@ -29,6 +30,13 @@ class GridCard: NSView {
         alphaValue = item.isDimmed ? 0.45 : 1
         itemChanged()
         needsLayout = true
+    }
+
+    /// The appearance changed: layer colours are CGColors, so subclasses recompute them (`Chrome.resolve`).
+    func appearanceChanged() {}
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        appearanceChanged()
     }
 
     /// Overridden to draw `item`, `isSelected` and `image`.
@@ -85,7 +93,7 @@ class GridCard: NSView {
     /// A bottom band from clear to black 0.55, under names drawn on a picture.
     static func shade() -> CAGradientLayer {
         let g = CAGradientLayer()
-        g.colors = [NSColor(white: 0, alpha: 0).cgColor, NSColor(white: 0, alpha: 0.55).cgColor]
+        g.colors = [NSColor(white: 0, alpha: 0).cgColor, Chrome.Palette.overMedia.mediaShadow.cgColor]
         g.startPoint = CGPoint(x: 0.5, y: 1)
         g.endPoint = CGPoint(x: 0.5, y: 0)
         return g

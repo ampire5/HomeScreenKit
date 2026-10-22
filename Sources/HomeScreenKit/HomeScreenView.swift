@@ -81,7 +81,6 @@ public final class HomeScreenView: NSView {
     public init(background: CGColor?) {
         transparent = background == nil
         super.init(frame: .zero)
-        appearance = NSAppearance(named: .darkAqua)   // the window is dark whatever the system appearance
         if let background {
             wantsLayer = true
             layer?.backgroundColor = background
@@ -189,7 +188,7 @@ public final class HomeScreenView: NSView {
             if let title = section.title {
                 let heading = NSTextField(labelWithString: title)
                 heading.font = Chrome.Text.font(.hero)
-                heading.textColor = .white
+                heading.textColor = Chrome.Palette.window.label
                 document.addSubview(heading)
                 headings.append(heading)
             } else {
