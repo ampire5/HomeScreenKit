@@ -243,12 +243,19 @@ import Testing
         let before = source.wanted.count
         view.scrollGrid(to: 600)
         #expect(source.wanted.count == before + 1)          // the visible ones, at once
-        let visible = source.visibleCounts.last!
-        #expect(source.wanted.last?.count == visible)       // without the margin
-        view.scrollGrid(to: 700)
         #expect(source.wanted.last?.count == source.visibleCounts.last!)
-        await settle { source.wanted.last.map { $0.count > source.visibleCounts.last! } == true }
-        #expect((source.wanted.last?.count ?? 0) > source.visibleCounts.last!)
+        try? await Task.sleep(for: .milliseconds(50))       // still scrolling: no margin yet
+        #expect(source.wanted.count == before + 1)
+        view.scrollGrid(to: 700)
+        #expect(source.wanted.count == before + 2)
+        let visible = view.visibleIDs.filter { view.card(for: $0)?.image == nil }
+        #expect(source.wanted.last == visible)
+        await settle { source.wanted.count >= before + 3 }
+        try? await Task.sleep(for: .milliseconds(300))
+        #expect(source.wanted.count == before + 3)          // exactly one margin send
+        let margin = source.wanted.last ?? []
+        #expect(Array(margin.prefix(visible.count)) == visible && margin.count > visible.count)
+        #expect(source.visibleCounts.last == visible.count)
     }
 
     @Test func imagesOnlyForLiveCards() async {
