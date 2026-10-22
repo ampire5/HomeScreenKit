@@ -58,7 +58,13 @@ import Testing
         toast.show("a", for: 5)
         #expect(!toast.isHidden)
         toast.hide()
-        for _ in 0..<40 where !toast.isHidden { try await Task.sleep(for: .milliseconds(50)) }
+        // The fade's completion is delivered by the main run loop. In a full run the other main-actor suites
+        // keep that thread busy for seconds at a time, so wait on the condition with a generous deadline
+        // (it returns as soon as the toast is hidden) instead of a fixed number of short sleeps.
+        let deadline = Date(timeIntervalSinceNow: 60)
+        while !toast.isHidden, Date() < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
         #expect(toast.isHidden)
         toast.show("b", for: 5)
         #expect(!toast.isHidden)
