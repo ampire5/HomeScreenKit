@@ -47,18 +47,37 @@ import FilmstripModel
     #expect(Set(view.visibleItems.dropFirst(2).prefix(2)) == [39, 42])
 }
 
-@MainActor @Test func hoverLabelKeepsClearOfTheTrailingInset() {
+@MainActor private func labelledStrip() -> FilmstripView {
     let view = FilmstripView(frame: NSRect(x: 0, y: 0, width: 400, height: 80))
     view.setLayout(FilmstripLayout(itemCount: 10, length: 400, thickness: 68, maxAspect: 1.5, aspects: []), animated: false)
-    view.show(offset: view.layout.centre(of: 9), current: 9, expansion: 1, animated: false)
-    view.labelTrailingInset = 100
-    view.showLabel(item: 9, text: "10 / 10 · a rather long photo name.jpg")
-    let label = view.labelFrame
-    #expect(!label.isEmpty)
-    #expect(label.maxX <= 400 - 100)
-    #expect(!label.intersects(CGRect(x: 300, y: 0, width: 100, height: 200)))
-    view.labelTrailingInset = 0
-    #expect(view.labelFrame.maxX > 300)
+    view.show(offset: view.layout.centre(of: 4), current: 4, expansion: 1, animated: false)
+    return view
+}
+
+/// The capsule stands where the pointer entered the strip: the label over a cell under it goes beside it, on the
+/// side its cell is on.
+@MainActor @Test func hoverLabelStepsAsideFromTheAvoidedSpan() {
+    let view = labelledStrip()
+    view.showLabel(item: 4, text: "5 / 10 · a.jpg")
+    let free = view.labelFrame, centre = free.midX
+    #expect(!free.isEmpty)
+    view.labelAvoid = (centre - 10)...(centre + 60)        // most of it to the right of the cell: the label goes left
+    #expect(view.labelFrame.maxX <= centre - 10)
+    #expect(view.labelFrame.width == free.width)
+    view.labelAvoid = (centre - 60)...(centre + 10)        // to the left: the label goes right
+    #expect(view.labelFrame.minX >= centre + 10)
+    view.labelAvoid = 0...(centre + 10)                    // no room on the left: the right whatever the side
+    #expect(view.labelFrame.minX >= centre + 10)
+    view.labelAvoid = nil
+    #expect(view.labelFrame == free)
+}
+
+@MainActor @Test func hoverLabelAwayFromTheSpanStaysOverItsCell() {
+    let view = labelledStrip()
+    view.showLabel(item: 4, text: "5 / 10 · a.jpg")
+    let free = view.labelFrame
+    view.labelAvoid = (free.maxX + 40)...(free.maxX + 120)
+    #expect(view.labelFrame == free)
 }
 
 @MainActor @Test func revealAndToolsAreDarkChrome() {

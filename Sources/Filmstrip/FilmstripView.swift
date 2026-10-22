@@ -125,10 +125,11 @@ import QuartzCore
     private let label = FilmstripLabelView()
     /// The item whose label is up, and the point last hovered (view coordinates), for `refreshHover`.
     private var labelItem: Int?
-    /// Width at the trailing end the hover label keeps clear of (the owner's tool capsule floats there above the
-    /// strip); 0: none.
-    public var labelTrailingInset: CGFloat = 0 {
-        didSet { if labelTrailingInset != oldValue { placeLabel() } }
+    /// The span (this view's x) the hover label keeps clear of: the owner's tool capsule, which floats above the strip
+    /// where the pointer entered it. The label goes beside it, on its cell's side when there is room there, else on
+    /// the other; nil: none.
+    public var labelAvoid: ClosedRange<CGFloat>? {
+        didSet { if labelAvoid != oldValue { placeLabel() } }
     }
     /// The hover label's frame, in this view's coordinates.
     var labelFrame: CGRect { label.frame }
@@ -419,9 +420,20 @@ import QuartzCore
         }
         label.isHidden = false
         let gap = Self.labelGap, size = label.fittingSize
-        let room = bounds.width - gap - max(gap, labelTrailingInset)
+        let room = bounds.width - 2 * gap
         let width = min(size.width, max(40, room - gap))
-        let left = min(max(CGFloat(c.start + c.length / 2) - width / 2, gap), max(gap, room - width))
+        let centre = CGFloat(c.start + c.length / 2), maxLeft = max(gap, room - width)
+        var left = min(max(centre - width / 2, gap), maxLeft)
+        if let avoid = labelAvoid, left < avoid.upperBound + gap, left + width > avoid.lowerBound - gap {
+            let before = avoid.lowerBound - gap - width, after = avoid.upperBound + gap
+            let fitsBefore = before >= gap, fitsAfter = after <= maxLeft
+            if centre < (avoid.lowerBound + avoid.upperBound) / 2 {
+                left = fitsBefore || !fitsAfter ? before : after
+            } else {
+                left = fitsAfter || !fitsBefore ? after : before
+            }
+            left = min(max(left, gap), maxLeft)   // no room on either side: as near as the view allows
+        }
         var bottom = Self.padding + CGFloat(layout.thickness) + gap
         if let superview { bottom = min(bottom, convert(superview.bounds, from: superview).maxY - gap - size.height) }
         label.frame = CGRect(x: left, y: bottom, width: width, height: size.height)
