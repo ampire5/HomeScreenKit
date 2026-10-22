@@ -9,11 +9,12 @@ import Foundation
 public enum HomeMosaic {
     public static let gap: CGFloat = 2
     /// How far a picture's shape may be from its cell's for it to fill the cell, cropped: the larger of the two
-    /// aspect ratios over the smaller. Past it, filling would throw away more than half of the picture (a 2880 × 810
-    /// panorama is 3.6 times as wide as a square cell), so it is fitted whole instead. Enlargement alone never
+    /// aspect ratios over the smaller. Past it, filling would throw away most of the picture (a 2880 × 810 panorama
+    /// is 3.6 times as wide as a square cell), so it is fitted whole instead. 2.5 lets a portrait photo (3:4 is
+    /// 2.0, 2:3 is 2.3 from it) fill the default hero cover's large cell (about 1.5:1). Enlargement alone never
     /// decides: a 512 px thumbnail of an ordinary 3:2 photo needs about 2 × to fill a poster's 704 px cell on a
     /// Retina screen, and it fills it as photos always did.
-    public static let shapeLimit: CGFloat = 2
+    public static let shapeLimit: CGFloat = 2.5
 
     /// Whether a picture of `size` fills a cell of `cell` (cropped) rather than being fitted in it: by their shapes,
     /// so the units do not matter.

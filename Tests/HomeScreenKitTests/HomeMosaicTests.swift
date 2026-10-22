@@ -139,4 +139,13 @@ import Testing
                                                   layout: .single, scale: 2))
         #expect(alpha(mosaic, 352, 2) == 255 && alpha(mosaic, 352, 701) == 255)
     }
+
+    /// The default hero cover's large cell is about 1.5:1: a portrait photo (3:4, 2:3) fills it, cropped, as photos
+    /// always did; a panorama in a square cell is still fitted.
+    @Test func portraitsFillTheHeroCell() {
+        let hero = HomeMosaic.cells(count: 4, layout: .hero, in: CGRect(x: 0, y: 0, width: 232, height: 232))[0]
+        #expect(HomeMosaic.fills(CGSize(width: 384, height: 512), cell: hero.size))
+        #expect(HomeMosaic.fills(CGSize(width: 341, height: 512), cell: hero.size))
+        #expect(!HomeMosaic.fills(CGSize(width: 2880, height: 810), cell: CGSize(width: 232, height: 232)))
+    }
 }
