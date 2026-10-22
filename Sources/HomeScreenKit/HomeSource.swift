@@ -49,6 +49,9 @@ public struct HomeSourceInfo {
     func symbol(for entry: BrowserEntry) -> String
     /// The cards on screen want pictures, those in view first; they come back through `HomeBrowserView.setImage`.
     func wantImages(_ ids: [String], width: CGFloat)
+    /// The same, told how many of `ids` (the first `visible`) are in view now; the rest is the margin around the view,
+    /// sent once scrolling has stopped. The default forwards to `wantImages(_:width:)`.
+    func wantImages(_ ids: [String], visible: Int, width: CGFloat)
     func menu(for entry: BrowserEntry, in location: BrowserLocation) -> [HomeMenuItem]
     func perform(_ item: String, on entry: BrowserEntry, in location: BrowserLocation)
     /// A file or a collection opened (a folder or an archive is entered by the browser itself).
@@ -67,5 +70,6 @@ public struct HomeSourceInfo {
 }
 
 public extension HomeSource {
+    func wantImages(_ ids: [String], visible: Int, width: CGFloat) { wantImages(ids, width: width) }
     func moved(from old: BrowserLocation?, to new: BrowserLocation) {}
 }

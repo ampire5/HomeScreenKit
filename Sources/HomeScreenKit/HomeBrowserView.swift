@@ -151,6 +151,11 @@ public final class HomeBrowserView: NSView {
     private var headers: [GridHeader] = []
     private let footer = GridFooter()
     private var lastWanted: [String] = []
+    /// The visible ids last sent, and the send of the margin that waits for scrolling to stop.
+    private var lastVisibleSent: [String] = []
+    private var marginTask: Task<Void, Never>?
+    /// Scrolling must pause this long before the margin around the view is asked for.
+    static let marginDelay: Duration = .milliseconds(150)
 
     public init(source: HomeSource) {
         self.source = source
@@ -446,6 +451,7 @@ public final class HomeBrowserView: NSView {
             // Pictures asked with names only are asked again: the app makes thumbnails of files whose date and size
             // it knows.
             lastWanted = []
+            lastVisibleSent = []
             onListingComplete?(location)
         }
         defer { updateLoading() }
@@ -1102,15 +1108,33 @@ public final class HomeBrowserView: NSView {
                             menu: source?.menu(for: entry, in: location) ?? [], glassSymbol: entry.kind == .place)
     }
 
-    /// The live cards without a picture, those in view first; asked again only when the set changes.
+    /// The live cards without a picture, those in view first. The visible ones go to the source at once; the margin
+    /// around them only after 150 ms without a bounds change, so a fast scroll does not queue what it passes.
     private func askImages() {
         let visible = visibleIDs
         let shown = Set(visible)
         let rest = live.keys.sorted().map { entries[$0].id }.filter { !shown.contains($0) }
-        let wanted = (visible + rest).filter { id in indexByID[id].flatMap { live[$0] }?.image == nil }
-        guard wanted != lastWanted else { return }
-        lastWanted = wanted
-        if !wanted.isEmpty { source?.wantImages(wanted, width: slotWidth) }
+        func lacksImage(_ id: String) -> Bool { indexByID[id].flatMap { live[$0] }?.image == nil }
+        let visibleWanted = visible.filter(lacksImage)
+        let marginWanted = rest.filter(lacksImage)
+        marginTask?.cancel()
+        marginTask = nil
+        if visibleWanted != lastVisibleSent {
+            lastVisibleSent = visibleWanted
+            if !visibleWanted.isEmpty, visibleWanted + marginWanted != lastWanted {
+                lastWanted = visibleWanted
+                source?.wantImages(visibleWanted, visible: visibleWanted.count, width: slotWidth)
+            }
+        }
+        guard !marginWanted.isEmpty, visibleWanted + marginWanted != lastWanted else { return }
+        marginTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: Self.marginDelay)
+            guard !Task.isCancelled, let self else { return }
+            let all = visibleWanted + marginWanted
+            guard all != self.lastWanted else { return }
+            self.lastWanted = all
+            self.source?.wantImages(all, visible: visibleWanted.count, width: self.slotWidth)
+        }
     }
 
     /// Size steps from a wheel the app hears itself (a mouse's thumb wheel): positive larger; a step a whole notch.
