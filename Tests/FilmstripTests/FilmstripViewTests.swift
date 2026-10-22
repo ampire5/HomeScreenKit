@@ -80,6 +80,19 @@ import FilmstripModel
     #expect(view.labelFrame == free)
 }
 
+/// A capsule on the strip that stays under the label's bottom (the label sits above the cells) does not push it
+/// aside; one reaching up to it does.
+@MainActor @Test func hoverLabelStepsAsideOnlyFromWhatReachesIt() {
+    let view = labelledStrip()
+    view.showLabel(item: 4, text: "5 / 10 · a.jpg")
+    let free = view.labelFrame, centre = free.midX
+    view.labelAvoid = (centre - 10)...(centre + 60)
+    view.labelAvoidTop = free.minY - 1                      // below the label: it stays over its cell
+    #expect(view.labelFrame == free)
+    view.labelAvoidTop = free.minY + 1                      // up into it: aside
+    #expect(view.labelFrame.maxX <= centre - 10)
+}
+
 @MainActor @Test func revealAndToolsAreDarkChrome() {
     #expect(FilmstripRevealView(frame: .zero).appearance?.name == .darkAqua)
     #expect(FilmstripToolsView(frame: .zero).appearance?.name == .darkAqua)

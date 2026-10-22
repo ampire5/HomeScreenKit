@@ -131,6 +131,11 @@ import QuartzCore
     public var labelAvoid: ClosedRange<CGFloat>? {
         didSet { if labelAvoid != oldValue { placeLabel() } }
     }
+    /// How high (this view's y, up) what `labelAvoid` spans reaches: the label steps aside only when its bottom is
+    /// under this. The default: all the way up.
+    public var labelAvoidTop: CGFloat = .infinity {
+        didSet { if labelAvoidTop != oldValue { placeLabel() } }
+    }
     /// The hover label's frame, in this view's coordinates.
     var labelFrame: CGRect { label.frame }
     private var hoverPoint: NSPoint?
@@ -424,7 +429,9 @@ import QuartzCore
         let width = min(size.width, max(40, room - gap))
         let centre = CGFloat(c.start + c.length / 2), maxLeft = max(gap, room - width)
         var left = min(max(centre - width / 2, gap), maxLeft)
-        if let avoid = labelAvoid, left < avoid.upperBound + gap, left + width > avoid.lowerBound - gap {
+        var bottom = Self.padding + CGFloat(layout.thickness) + gap
+        if let superview { bottom = min(bottom, convert(superview.bounds, from: superview).maxY - gap - size.height) }
+        if let avoid = labelAvoid, bottom < labelAvoidTop, left < avoid.upperBound + gap, left + width > avoid.lowerBound - gap {
             let before = avoid.lowerBound - gap - width, after = avoid.upperBound + gap
             let fitsBefore = before >= gap, fitsAfter = after <= maxLeft
             if centre < (avoid.lowerBound + avoid.upperBound) / 2 {
@@ -434,8 +441,6 @@ import QuartzCore
             }
             left = min(max(left, gap), maxLeft)   // no room on either side: as near as the view allows
         }
-        var bottom = Self.padding + CGFloat(layout.thickness) + gap
-        if let superview { bottom = min(bottom, convert(superview.bounds, from: superview).maxY - gap - size.height) }
         label.frame = CGRect(x: left, y: bottom, width: width, height: size.height)
     }
 

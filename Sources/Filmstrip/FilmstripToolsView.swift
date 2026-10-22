@@ -160,7 +160,12 @@ public enum FilmstripGlyph: String, CaseIterable, Sendable {
     /// Fades the capsule in (`Chrome.Motion.show`) or out (`Chrome.Motion.hide`); hidden, it takes no clicks.
     public func setShown(_ shown: Bool, animated: Bool) {
         self.shown = shown
-        if !shown { setHovered(false) }
+        // Shown right under the pointer, no "entered" comes: lit at once, as if it had.
+        if let window, shown {
+            setHovered(bounds.contains(convert(window.mouseLocationOutsideOfEventStream, from: nil)))
+        } else if !shown {
+            setHovered(false)
+        }
         let alpha: CGFloat = shown ? 1 : 0
         let duration = Chrome.Motion.duration(shown ? Chrome.Motion.show : Chrome.Motion.hide)
         if animated, duration > 0 {
