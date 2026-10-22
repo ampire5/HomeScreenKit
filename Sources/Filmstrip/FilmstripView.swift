@@ -125,9 +125,9 @@ import QuartzCore
     private let label = FilmstripLabelView()
     /// The item whose label is up, and the point last hovered (view coordinates), for `refreshHover`.
     private var labelItem: Int?
-    /// The span (this view's x) the hover label keeps clear of: the owner's tool capsule, which floats above the strip
-    /// where the pointer entered it. The label goes beside it, on its cell's side when there is room there, else on
-    /// the other; nil: none.
+    /// The span (this view's x) the hover label keeps clear of: the owner's tool capsule, which sits on the strip at
+    /// its right end. The label goes beside it, on its cell's side when there is room there, else on the other; nil:
+    /// none.
     public var labelAvoid: ClosedRange<CGFloat>? {
         didSet { if labelAvoid != oldValue { placeLabel() } }
     }

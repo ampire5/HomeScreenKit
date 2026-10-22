@@ -25,7 +25,9 @@ import Testing
     #expect(view.buttons.map(\.toolTip) == ["Hide", "Pin"])
     #expect(view.buttons.map(\.state) == [.off, .on])
     #expect(view.buttons.allSatisfy { $0.frame.size == NSSize(width: 28, height: 24) })
-    #expect(view.intrinsicContentSize.width == 2 * 28 + 1 + 6 && view.intrinsicContentSize.height == 30)
+    // 3 pt padding inside a 1 pt border, buttons 2 pt apart: the sketch's `.cap`
+    let width: CGFloat = 2 * 28 + 2 + 2 * (3 + 1), height: CGFloat = 32
+    #expect(view.intrinsicContentSize == NSSize(width: width, height: height))
 }
 
 @MainActor @Test func toolActionRuns() {
@@ -75,18 +77,38 @@ import Testing
 
 @MainActor @Test func onButtonIsANeutralPillNotAccent() {
     let view = toolsView([
-        FilmstripTool(symbol: "eye", help: "a", isOn: false, action: {}),
+        FilmstripTool(symbol: "strip.beside", help: "a", isOn: false, action: {}),
         FilmstripTool(symbol: "pin", help: "b", isOn: true, action: {}),
     ])
     let off = view.buttons[0], on = view.buttons[1]
-    #expect(off.pillAlpha == 0 && off.symbolAlpha == 0.7)
-    #expect(on.pillAlpha == 0.2 && on.symbolAlpha == 1)
-    #expect(on.contentTintColor != .controlAccentColor && off.contentTintColor == on.contentTintColor)
-    #expect(off.pillColor == nil && on.pillColor == Chrome.Palette.overMedia.pressed)
-    off.setHovered(true)
-    #expect(off.pillAlpha == 0.1 && off.symbolAlpha == 1 && off.pillColor == Chrome.Palette.overMedia.hover)
+    #expect(off.pillAlpha == 0 && off.symbolAlpha == 0.6)
+    #expect(on.pillAlpha == 0.22 && on.symbolAlpha == 1)
+    #expect(off.pillColor == nil && on.pillColor == FilmstripToolsView.pressed)
+    off.setHovered(true)   // brighter glyph, no pill
+    #expect(off.pillAlpha == 0 && off.symbolAlpha == 1 && off.pillColor == nil)
     off.setHovered(false)
-    #expect(off.pillAlpha == 0 && off.symbolAlpha == 0.7 && off.pillColor == nil)
+    #expect(off.symbolAlpha == 0.6)
+}
+
+/// The capsule's own glyphs are drawn from the sketch's paths, the others are SF Symbols.
+@MainActor @Test func capsuleGlyphsAreTheSketchs() {
+    let view = toolsView([FilmstripTool(symbol: "strip.over", help: "a", action: {}),
+                          FilmstripTool(symbol: "eye", help: "b", action: {})])
+    let glyph = view.buttons[0].subviews.compactMap { $0 as? GlyphView }.first
+    #expect(glyph != nil && glyph!.frame.size == NSSize(width: 16, height: 14))
+    #expect(view.buttons[1].image != nil)
+    #expect(view.buttons[0].hitTest(NSPoint(x: view.buttons[0].frame.midX, y: view.buttons[0].frame.midY)) === view.buttons[0])
+    #expect(FilmstripGlyph.allCases.map(\.rawValue) == ["strip.beside", "strip.over", "pin", "pin.fill", "chevron.down"])
+}
+
+/// Muted at rest, at full strength under the pointer.
+@MainActor @Test func capsuleIsMutedAtRest() {
+    let view = toolsView([FilmstripTool(symbol: "pin", help: "a", action: {})])
+    #expect(view.subviews.first?.alphaValue == FilmstripToolsView.restAlpha && FilmstripToolsView.restAlpha == 0.7)
+    view.setHovered(true)
+    #expect(view.subviews.first?.alphaValue == 1)
+    view.setShown(false, animated: false)
+    #expect(view.subviews.first?.alphaValue == 0.7)
 }
 
 @MainActor @Test func separatorSpacesTheGroups() {
@@ -106,15 +128,15 @@ import Testing
     view.subviews.compactMap { $0 as? ChromeGlass }
 }
 
-@MainActor @Test func filmstripChromeUsesOneGlass() {
+/// The reveal chevron keeps its light glass; the capsule is the sketch's flat dark plate with its border.
+@MainActor @Test func filmstripChromeSurfaces() {
     let tools = toolsView([FilmstripTool(symbol: "eye", help: "a", action: {})])
     let reveal = FilmstripRevealView(frame: NSRect(x: 0, y: 0, width: 40, height: 18))
-    for view in [tools, reveal] {
-        let found = glasses(in: view)
-        #expect(found.count == 1)
-        let expected: ChromeGlass.Style = view === tools ? .overMedia(.regular) : .overMedia(.light)
-        #expect(found.first?.style == expected)
-    }
+    #expect(glasses(in: tools).isEmpty)
+    let plate = tools.subviews.first?.layer
+    #expect(plate?.borderWidth == 1 && plate?.backgroundColor == FilmstripToolsView.plate.cgColor)
+    #expect(plate?.cornerRadius == 16)
+    #expect(glasses(in: reveal).count == 1 && glasses(in: reveal).first?.style == .overMedia(.light))
 }
 
 @MainActor @Test func revealChevronIsLaidOutOnTheFirstPass() {
