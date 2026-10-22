@@ -37,3 +37,22 @@ import FilmstripModel
     view.show(offset: view.layout.centre(of: 5_000), current: 5_000, expansion: 1, animated: false)
     #expect(!view.visibleItems.isEmpty && view.visibleItems.count <= 49 && view.visibleItems.contains(5_000))
 }
+
+@MainActor @Test func hoverLabelKeepsClearOfTheTrailingInset() {
+    let view = FilmstripView(frame: NSRect(x: 0, y: 0, width: 400, height: 80))
+    view.setLayout(FilmstripLayout(itemCount: 10, length: 400, thickness: 68, maxAspect: 1.5, aspects: []), animated: false)
+    view.show(offset: view.layout.centre(of: 9), current: 9, expansion: 1, animated: false)
+    view.labelTrailingInset = 100
+    view.showLabel(item: 9, text: "10 / 10 · a rather long photo name.jpg")
+    let label = view.labelFrame
+    #expect(!label.isEmpty)
+    #expect(label.maxX <= 400 - 100)
+    #expect(!label.intersects(CGRect(x: 300, y: 0, width: 100, height: 200)))
+    view.labelTrailingInset = 0
+    #expect(view.labelFrame.maxX > 300)
+}
+
+@MainActor @Test func revealAndToolsAreDarkChrome() {
+    #expect(FilmstripRevealView(frame: .zero).appearance?.name == .darkAqua)
+    #expect(FilmstripToolsView(frame: .zero).appearance?.name == .darkAqua)
+}

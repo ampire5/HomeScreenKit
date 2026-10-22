@@ -123,6 +123,13 @@ import QuartzCore
     private let label = FilmstripLabelView()
     /// The item whose label is up, and the point last hovered (view coordinates), for `refreshHover`.
     private var labelItem: Int?
+    /// Width at the trailing end the hover label keeps clear of (the owner's tool capsule floats there above the
+    /// strip); 0: none.
+    public var labelTrailingInset: CGFloat = 0 {
+        didSet { if labelTrailingInset != oldValue { placeLabel() } }
+    }
+    /// The hover label's frame, in this view's coordinates.
+    var labelFrame: CGRect { label.frame }
     private var hoverPoint: NSPoint?
     /// A press on the cells: where it began in the window, the x of the last drag event, the item under it and
     /// whether it moved far enough to be a drag.
@@ -398,8 +405,9 @@ import QuartzCore
         }
         label.isHidden = false
         let gap = Self.labelGap, size = label.fittingSize
-        let width = min(size.width, max(40, bounds.width - 2 * gap))
-        let left = min(max(CGFloat(c.start + c.length / 2) - width / 2, gap), max(gap, bounds.width - gap - width))
+        let room = bounds.width - gap - max(gap, labelTrailingInset)
+        let width = min(size.width, max(40, room - gap))
+        let left = min(max(CGFloat(c.start + c.length / 2) - width / 2, gap), max(gap, room - width))
         var bottom = Self.padding + CGFloat(layout.thickness) + gap
         if let superview { bottom = min(bottom, convert(superview.bounds, from: superview).maxY - gap - size.height) }
         label.frame = CGRect(x: left, y: bottom, width: width, height: size.height)
