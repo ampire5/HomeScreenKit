@@ -226,6 +226,31 @@ import Testing
         #expect(Array(asked.prefix(visible.count)) == visible)
     }
 
+    @Test func wantImagesTellsVisible() async {
+        let source = FakeHomeSource()
+        let view = await shown(source, BrowserFixtures.files(200))
+        await settle { source.visibleCounts.count >= 2 }
+        let visible = view.visibleIDs
+        #expect(source.visibleCounts.first == visible.count)
+        #expect(source.visibleCounts.last == visible.count && (source.wanted.last?.count ?? 0) > visible.count)
+        #expect(Array((source.wanted.last ?? []).prefix(visible.count)) == visible)
+    }
+
+    @Test func marginAfterScrollStops() async {
+        let source = FakeHomeSource()
+        let view = await shown(source, BrowserFixtures.files(200))
+        await settle { source.wanted.count >= 2 }
+        let before = source.wanted.count
+        view.scrollGrid(to: 600)
+        #expect(source.wanted.count == before + 1)          // the visible ones, at once
+        let visible = source.visibleCounts.last!
+        #expect(source.wanted.last?.count == visible)       // without the margin
+        view.scrollGrid(to: 700)
+        #expect(source.wanted.last?.count == source.visibleCounts.last!)
+        await settle { source.wanted.last.map { $0.count > source.visibleCounts.last! } == true }
+        #expect((source.wanted.last?.count ?? 0) > source.visibleCounts.last!)
+    }
+
     @Test func imagesOnlyForLiveCards() async {
         let source = FakeHomeSource()
         let view = await shown(source, BrowserFixtures.files(2000))

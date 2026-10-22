@@ -103,7 +103,12 @@ import AppKit
     }
 
     func symbol(for entry: BrowserEntry) -> String { entry.isContainer ? "folder" : "photo" }
+    private(set) var visibleCounts: [Int] = []
     func wantImages(_ ids: [String], width: CGFloat) { wanted.append(ids) }
+    func wantImages(_ ids: [String], visible: Int, width: CGFloat) {
+        visibleCounts.append(visible)
+        wanted.append(ids)
+    }
     func menu(for entry: BrowserEntry, in location: BrowserLocation) -> [HomeMenuItem] { menuItems }
     func perform(_ item: String, on entry: BrowserEntry, in location: BrowserLocation) {
         performed.append((item, entry.id))
