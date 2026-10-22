@@ -68,9 +68,9 @@ import Testing
         return c.makeImage()!
     }
 
-    static func cover(_ s: Sample, side: CGFloat, layout: HomeMosaic.Layout) -> CGImage? {
+    static func cover(_ s: Sample, side: CGFloat, layout: HomeMosaic.Layout, compact: Bool = false) -> CGImage? {
         let images = [picture(s.colors[0], hill: s.colors[3])] + s.colors.dropFirst().map { picture($0, size: CGSize(width: 300, height: 300)) }
-        return HomeMosaic.make(images, size: CGSize(width: side, height: side), layout: layout, scale: 2)
+        return HomeMosaic.make(images, size: CGSize(width: side, height: side), layout: layout, scale: 2, compact: compact)
     }
 
     static func item(_ s: Sample) -> HomeCardItem {
@@ -150,7 +150,7 @@ import Testing
                 for (i, s) in Self.samples.enumerated() {
                     let card = CompactCard(item: Self.item(s))
                     card.frame = CGRect(x: 20 + CGFloat(i % 2) * 312, y: 20 + CGFloat(i / 2) * 104, width: 300, height: 92)
-                    card.image = Self.cover(s, side: 76, layout: .hero)
+                    card.image = Self.cover(s, side: 76, layout: .hero, compact: true)
                     host.addSubview(card)
                 }
             }

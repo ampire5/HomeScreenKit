@@ -36,9 +36,13 @@ public enum HomeMosaic {
     /// A card narrower than this (points) shows one picture in any layout: smaller cells do not read.
     public static let narrowWidth: CGFloat = 110
 
-    /// `size` is in points, the image is `size × scale` pixels.
+    /// A compact card's 76 pt cover (mockup B): its layout whatever its width, with these gaps.
+    public static let compactGap: CGFloat = 1.5
+
+    /// `size` is in points, the image is `size × scale` pixels. `compact`: a compact card's cover (`compactGap`,
+    /// the layout kept below `narrowWidth`).
     public static func make(_ images: [CGImage], size: CGSize = CGSize(width: 600, height: 400),
-                            layout: Layout = .grid, scale: CGFloat = 1) -> CGImage? {
+                            layout: Layout = .grid, scale: CGFloat = 1, compact: Bool = false) -> CGImage? {
         guard !images.isEmpty, size.width >= 1, size.height >= 1, scale > 0 else { return nil }
         let w = Int((size.width * scale).rounded()), h = Int((size.height * scale).rounded())
         guard w >= 1, h >= 1,
@@ -50,9 +54,9 @@ public enum HomeMosaic {
         context.translateBy(x: 0, y: size.height)
         context.scaleBy(x: 1, y: -1)
         let bounds = CGRect(origin: .zero, size: size)
-        let cells = cells(count: images.count, layout: layout, in: bounds)
+        let cells = cells(count: images.count, layout: layout, in: bounds, compact: compact)
         let pixelsPerPoint = CGFloat(w) / size.width
-        if effective(layout, width: size.width) == .stack, cells.count > 1 {
+        if effective(layout, width: size.width, compact: compact) == .stack, cells.count > 1 {
             drawStack(Array(images.prefix(cells.count)), cells: cells, pixelsPerPoint: pixelsPerPoint, in: context)
         } else {
             for (image, cell) in zip(images, cells) { draw(image, in: cell, context) }
@@ -112,19 +116,20 @@ public enum HomeMosaic {
         }
     }
 
-    private static func effective(_ layout: Layout, width: CGFloat) -> Layout {
-        layout == .quad || width >= narrowWidth ? layout : .single
+    private static func effective(_ layout: Layout, width: CGFloat, compact: Bool = false) -> Layout {
+        compact || layout == .quad || width >= narrowWidth ? layout : .single
     }
 
     /// The cells for `count` pictures in `rect` (a grid takes four at most, a stack three), top-down, left to right.
-    /// For a stack these are the prints before the turn.
-    public static func cells(count: Int, layout: Layout, in rect: CGRect) -> [CGRect] {
+    /// For a stack these are the prints before the turn. `compact`: a compact card's cover (see `make`).
+    public static func cells(count: Int, layout: Layout, in rect: CGRect, compact: Bool = false) -> [CGRect] {
         guard count >= 1 else { return [] }
+        let gap = compact ? compactGap : gap
         let size = rect.size, g = gap / 2
         let local: [CGRect]
-        switch effective(layout, width: size.width) {
+        switch effective(layout, width: size.width, compact: compact) {
         case .single: local = [CGRect(origin: .zero, size: size)]
-        case .grid: local = cells(count: count, size: size)
+        case .grid: local = cells(count: count, size: size, gap: gap)
         case .quad: local = cells(count: count, size: size, gap: quadGap)
         case .hero:
             let w = size.width, h = size.height

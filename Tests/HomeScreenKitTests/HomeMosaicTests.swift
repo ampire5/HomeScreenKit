@@ -148,4 +148,13 @@ import Testing
         #expect(HomeMosaic.fills(CGSize(width: 341, height: 512), cell: hero.size))
         #expect(!HomeMosaic.fills(CGSize(width: 2880, height: 810), cell: CGSize(width: 232, height: 232)))
     }
+
+    /// A compact card's 76 pt cover keeps its layout (board B draws the hero there), with 1.5 pt gaps.
+    @Test func compactCoverKeepsTheHero() {
+        let r = CGRect(x: 0, y: 0, width: 76, height: 76)
+        #expect(HomeMosaic.cells(count: 4, layout: .hero, in: r) == [r])   // any other narrow card: one picture
+        let cells = HomeMosaic.cells(count: 4, layout: .hero, in: r, compact: true)
+        #expect(cells.count == 4 && cells[0].width == 76 && abs(cells[1].minY - cells[0].maxY - 1.5) < 0.001)
+        #expect(abs(cells[2].minX - cells[1].maxX - 1.5) < 0.001)
+    }
 }
