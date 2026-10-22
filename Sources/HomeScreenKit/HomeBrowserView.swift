@@ -60,12 +60,12 @@ public final class HomeBrowserView: NSView {
     }
 
     /// The widest picture in view, in points: the width the pictures are asked at. A row's picture is its small cover
-    /// and a compact card's its square (`cardHeight`), not the row or the card; a section with no cards counts not.
+    /// and a compact card's its square (`cardCover`), not the row or the card; a section with no cards counts not.
     public var slotWidth: CGFloat {
         let style = shownCardStyle(width: gridWidth)
         if style == .list { return GridMetrics().listCover }
         let widths = sections.indices.filter { sections[$0].count > 0 }.map { s -> CGFloat in
-            style == .cards && sections[s].kind == .collections ? GridMetrics().cardHeight : grid.slotWidth(inSection: s)
+            style == .cards && sections[s].kind == .collections ? GridMetrics().cardCover : grid.slotWidth(inSection: s)
         }
         return widths.max() ?? cardSize
     }
@@ -76,12 +76,16 @@ public final class HomeBrowserView: NSView {
     public var coverWidth: CGFloat {
         switch shownCardStyle(width: gridWidth) {
         case .list: return GridMetrics().listCover
-        case .cards: return GridMetrics().cardHeight
+        case .cards: return GridMetrics().cardCover
         case .posters:
             let containers = sections.indices.first { sections[$0].kind == .collections && sections[$0].count > 0 }
             return containers.map { grid.slotWidth(inSection: $0) } ?? slotWidth
         }
     }
+
+    /// How the folders are drawn now (the chosen style, or posters in a narrow column and outside folders): a list
+    /// row's cover is four photos at 32 pt (`HomeMosaic.Layout.quad`).
+    public var shownStyle: CardStyle { shownCardStyle(width: gridWidth) }
 
     /// The wanted slot width for ⌘= / ⌘−: one photo column fewer (at one column, the range's top) or one more, at the
     /// grid's width now, within `range`. Nil for `reset`: the app's default.
@@ -154,7 +158,7 @@ public final class HomeBrowserView: NSView {
     /// After this long without all the names, the skeleton says why it waits.
     var slowAfter: Duration = .seconds(3)
     private var slowTask: Task<Void, Never>?
-    private let scroll = GridScrollView()
+    let scroll = GridScrollView()
     private let message = HomeMessageView()
     /// A source's empty hint, in the middle.
     private let hint = NSTextField(labelWithString: "")
@@ -164,7 +168,7 @@ public final class HomeBrowserView: NSView {
     private var toastLine: String?
     private(set) var renameField: BrowserRenameField?
     let document = FlippedView()
-    private var grid = GridLayout(sections: [], width: 0, target: 220, names: .off)
+    private(set) var grid = GridLayout(sections: [], width: 0, target: 220, names: .off)
     private var sections: [GridSection] = []
     var gridWidth: CGFloat = 0
     /// The cards on screen by entry index, and the ones put aside (a pool for each kind).
@@ -176,6 +180,8 @@ public final class HomeBrowserView: NSView {
     var rowPool: [ListRow] = []
     /// The column heads over the list's rows; made with the first list.
     var listHeader: ListHeader?
+    /// The list's container under its rows.
+    var listPlate: ListPlate?
     /// How the folders and archives of this location are drawn, from the source; a narrow column shows posters anyway.
     /// The style of this folder's cards (the View menu's checkmark).
     public internal(set) var cardStyle = CardStyle.posters
@@ -1018,7 +1024,8 @@ public final class HomeBrowserView: NSView {
         }
         guard case .folder = location else { return [GridSection(kind: .collections, count: entries.count)] }
         let files = entries.count - containerCount
-        let both = containerCount > 0 && files > 0
+        // The list is one container of rows with its column heads: no headings between folders and files.
+        let both = containerCount > 0 && files > 0 && shownCardStyle(width: gridWidth) != .list
         return [GridSection(kind: .collections, count: containerCount, title: both ? "Folders" : nil),
                 GridSection(kind: .photos, count: files, title: both ? "Photos · \(BrowserSummary.number(files))" : nil)]
     }
@@ -1035,7 +1042,6 @@ public final class HomeBrowserView: NSView {
         let showsListHeader = shownStyle == .list && !entries.isEmpty && isShowingEntries
         if showsListHeader { metrics.top += ListHeader.height }
         grid = GridLayout(sections: sections, width: width, target: cardSize, names: names, style: shownStyle, metrics: metrics)
-        placeListHeader(showsListHeader, width: width)
         let height = max(grid.contentHeight, scroll.contentSize.height)
         if document.frame.size != CGSize(width: width, height: height) {
             document.frame = CGRect(x: 0, y: 0, width: width, height: height)
@@ -1081,10 +1087,12 @@ public final class HomeBrowserView: NSView {
             } else if let collection = card as? CollectionCard {
                 collection.names = names
             }
+            if let row = card as? ListRow { row.showsSeparator = i < entries.count - 1 }
             // Straight to the slot: a view's frame animates only in an animation group that allows it (the sidebar's).
             card.frame = grid.frame(of: i)
         }
         placeHeaders()
+        placeListHeader(showsListHeader, width: width)   // over the rows just made: it stays at the top
         let summary = footerText.state.map { [footerText.line, $0] } ?? [footerText.line]
         footer.show(lines: isShowingEntries ? summary.filter { !$0.isEmpty } : [])
         footer.frame = grid.footerFrame
@@ -1213,7 +1221,8 @@ public final class HomeBrowserView: NSView {
                             tooltip: entry.kind == .collection ? entry.name : entry.url.path,
                             symbol: source?.symbol(for: entry) ?? "doc", progress: entry.progress,
                             badge: entry.badge ?? (entry.kind == .archive ? "ZIP" : nil),
-                            isDimmed: entry.isDimmed || summary?.problem == .offline,
+                            isDimmed: entry.isDimmed || (summary?.problem == .offline && entry.kind != .folder
+                                                                        && entry.kind != .archive),
                             menu: source?.menu(for: entry, in: location) ?? [], glassSymbol: entry.kind == .place,
                             summary: summary, count: entry.count,
                             format: entry.isFile && !entry.url.pathExtension.isEmpty ? entry.url.pathExtension.uppercased() : nil,

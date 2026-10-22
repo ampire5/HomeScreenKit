@@ -24,19 +24,35 @@ extension HomeBrowserView {
         return cardStyle
     }
 
+    /// The list's container and its column heads (mockup C): the container from under the toolbar to the last row,
+    /// `collectionEdge` in from the sides, under the rows; the heads at its top, kept at the top of the visible area
+    /// while the rows scroll under them (until the container's end pushes them up), over the rows.
     func placeListHeader(_ shown: Bool, width: CGFloat) {
         if shown, listHeader == nil {
             let header = ListHeader()
             header.onSort = { [weak self] key in self?.sortKeyChosen(key) }
             document.addSubview(header)
             listHeader = header
+            let plate = ListPlate()
+            document.addSubview(plate, positioned: .below, relativeTo: nil)
+            listPlate = plate
         }
-        guard let header = listHeader else { return }
+        guard let header = listHeader, let plate = listPlate else { return }
         header.isHidden = !shown
+        plate.isHidden = !shown
         guard shown else { return }
         header.sortable = sortKeys
         header.sort = sort
-        header.frame = CGRect(x: 0, y: HomeToolbar.height, width: width, height: ListHeader.height)
+        let x = GridMetrics().collectionEdge, w = max(0, width - 2 * x)
+        let top = HomeToolbar.height
+        let bottom = grid.count > 0 ? grid.frame(of: grid.count - 1).maxY : top + ListHeader.height
+        let plateFrame = CGRect(x: x, y: top, width: w, height: max(ListHeader.height, bottom - top))
+        if plate.frame != plateFrame { plate.frame = plateFrame }
+        let visible = scroll.contentView.documentVisibleRect
+        let y = min(max(top, visible.minY + HomeToolbar.height), plateFrame.maxY - ListHeader.height)
+        let headerFrame = CGRect(x: x, y: y, width: w, height: ListHeader.height)
+        if header.frame != headerFrame { header.frame = headerFrame }
+        if document.subviews.last !== header { document.addSubview(header, positioned: .above, relativeTo: nil) }
     }
 
     func makeRow() -> ListRow {

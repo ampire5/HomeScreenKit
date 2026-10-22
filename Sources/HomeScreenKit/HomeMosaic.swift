@@ -23,7 +23,14 @@ public enum HomeMosaic {
         return max(picture / slot, slot / picture) <= shapeLimit
     }
 
-    public enum Layout: String, CaseIterable, Sendable { case grid, hero, stack, single }
+    public enum Layout: String, CaseIterable, Sendable {
+        case grid, hero, stack, single
+        /// A list row's small cover (mockup C): the grid with 1 pt gaps, four photos even at 32 pt.
+        case quad
+    }
+
+    /// The gaps of `quad`.
+    public static let quadGap: CGFloat = 1
 
     /// A card narrower than this (points) shows one picture in any layout: smaller cells do not read.
     public static let narrowWidth: CGFloat = 110
@@ -104,7 +111,9 @@ public enum HomeMosaic {
         }
     }
 
-    private static func effective(_ layout: Layout, width: CGFloat) -> Layout { width < narrowWidth ? .single : layout }
+    private static func effective(_ layout: Layout, width: CGFloat) -> Layout {
+        layout == .quad || width >= narrowWidth ? layout : .single
+    }
 
     /// The cells for `count` pictures in `rect` (a grid takes four at most, a stack three), top-down, left to right.
     /// For a stack these are the prints before the turn.
@@ -115,6 +124,7 @@ public enum HomeMosaic {
         switch effective(layout, width: size.width) {
         case .single: local = [CGRect(origin: .zero, size: size)]
         case .grid: local = cells(count: count, size: size)
+        case .quad: local = cells(count: count, size: size, gap: quadGap)
         case .hero:
             let w = size.width, h = size.height
             guard count > 1 else { local = [CGRect(origin: .zero, size: size)]; break }
@@ -134,7 +144,7 @@ public enum HomeMosaic {
     }
 
     /// The grid's cells for `count` pictures (four at most), top-down, left to right.
-    public static func cells(count: Int, size: CGSize) -> [CGRect] {
+    public static func cells(count: Int, size: CGSize, gap: CGFloat = HomeMosaic.gap) -> [CGRect] {
         let w = size.width, h = size.height, g = gap / 2
         let left = CGRect(x: 0, y: 0, width: w / 2 - g, height: h)
         let right = CGRect(x: w / 2 + g, y: 0, width: w / 2 - g, height: h)

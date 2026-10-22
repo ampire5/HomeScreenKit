@@ -58,9 +58,16 @@ import Testing
 
     @Test func narrowIsSingle() {
         let r = CGRect(x: 0, y: 0, width: 100, height: 70)
-        for layout in HomeMosaic.Layout.allCases {
+        for layout in HomeMosaic.Layout.allCases where layout != .quad {
             #expect(HomeMosaic.cells(count: 4, layout: layout, in: r) == [r])
         }
+    }
+
+    /// A list row's 32 pt cover is four photos with 1 pt gaps, small as it is.
+    @Test func quadKeepsFourCellsWhenSmall() {
+        let cells = HomeMosaic.cells(count: 4, layout: .quad, in: CGRect(x: 0, y: 0, width: 32, height: 32))
+        #expect(cells == [CGRect(x: 0, y: 0, width: 15.5, height: 15.5), CGRect(x: 16.5, y: 0, width: 15.5, height: 15.5),
+                          CGRect(x: 0, y: 16.5, width: 15.5, height: 15.5), CGRect(x: 16.5, y: 16.5, width: 15.5, height: 15.5)])
     }
 
     @Test func everyLayoutDraws() {

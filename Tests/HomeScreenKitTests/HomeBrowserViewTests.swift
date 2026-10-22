@@ -377,7 +377,7 @@ import Testing
         let before = (view.card(for: ids[0]) as? PosterCard)?.insideLabel.stringValue
         view.setSummary(summary, for: id)
         let card = view.card(for: id) as? PosterCard
-        #expect(card?.insideLabel.stringValue == "248 · 3 folders")
+        #expect(card?.insideLabel.stringValue == "248 photos · 3 folders · 4.2 GB")
         #expect(card?.image != nil)                                       // the picture stays
         #expect(view.entries.map(\.id) == ids)                            // no reorder
         #expect(source.listed.count == listed)                            // no relisting
@@ -385,9 +385,10 @@ import Testing
         // a later listing of the same folder keeps the facts that arrived
         source.yield(x, folders)
         await settle()
-        #expect((view.card(for: id) as? PosterCard)?.insideLabel.stringValue == "248 · 3 folders")
+        #expect((view.card(for: id) as? PosterCard)?.insideLabel.stringValue == "248 photos · 3 folders · 4.2 GB")
         view.setSummary(nil, for: id)
-        #expect((view.card(for: id) as? PosterCard)?.insideLabel.isHidden == true)
+        (view.card(for: id) as? PosterCard)?.layoutSubtreeIfNeeded()
+        #expect((view.card(for: id) as? PosterCard)?.insideLabel.stringValue == "")   // the subtitle again (none here)
     }
 
     @Test func cardStyleComesFromTheSource() async {
@@ -405,19 +406,19 @@ import Testing
         #expect(view.card(for: view.entries[0].id) is PosterCard)
     }
 
-    /// Compact cards draw their picture in a 92 pt square: that is the width their pictures are asked at (one
+    /// Compact cards draw their picture in a 76 pt square: that is the width their pictures are asked at (one
     /// picture, not a mosaic made for the whole card), and the cover width the app reads in a folder with photos too.
     @Test func compactCardsAskForTheirSquare() async {
         let source = FakeHomeSource()
         source.cardStyles[.folder(x)] = .cards
         let view = await shown(source, ["a", "b", "c"].map { BrowserFixtures.folder($0) })
-        #expect(source.wantedWidths.last == GridMetrics().cardHeight)
-        #expect(view.slotWidth == 92 && view.coverWidth == 92)
+        #expect(source.wantedWidths.last == GridMetrics().cardCover)
+        #expect(view.slotWidth == 76 && view.coverWidth == 76)
         let mixed = FakeHomeSource()
         mixed.cardStyles[.folder(x)] = .cards
         let both = await shown(mixed, [BrowserFixtures.folder("a"), BrowserFixtures.file("p.jpg")])
-        #expect(both.coverWidth == 92)
-        #expect(both.slotWidth > 92)   // the photos' cards are asked at their own slot
+        #expect(both.coverWidth == 76)
+        #expect(both.slotWidth > 76)   // the photos' cards are asked at their own slot
         let posters = await shown(FakeHomeSource(), [BrowserFixtures.folder("a")])
         #expect(posters.coverWidth == posters.slotWidth && posters.coverWidth > 110)
     }
@@ -459,13 +460,13 @@ import Testing
         view.setSummary(CardSummary(photos: 1, problem: .broken), for: view.entries[1].id)
         view.setSummary(CardSummary(photos: 1), for: view.entries[2].id)
         let cards = view.entries.map { view.card(for: $0.id) as? PosterCard }
-        #expect(cards[0]?.alphaValue == 0.45)
-        #expect(cards[1]?.alphaValue == 1)
-        #expect(cards[2]?.alphaValue == 1)
-        #expect(cards[0]?.problemIcon.isHidden == false && cards[1]?.problemIcon.isHidden == false)
-        #expect(cards[2]?.problemIcon.isHidden == true)
+        // the cover is faint, the band stays readable: the card is not dimmed as a whole
+        #expect(cards.map { $0?.alphaValue } == [1, 1, 1])
+        #expect(cards.map { $0?.picture.alphaValue } == [0.4, 0.25, 1])
+        #expect(cards[0]?.coverAlert.isHidden == false && cards[1]?.coverAlert.isHidden == false)
+        #expect(cards[2]?.coverAlert.isHidden == true)
         view.setSummary(CardSummary(photos: 1), for: view.entries[0].id)   // reachable again
-        #expect((view.card(for: view.entries[0].id) as? PosterCard)?.alphaValue == 1)
+        #expect((view.card(for: view.entries[0].id) as? PosterCard)?.picture.alphaValue == 1)
     }
 }
 
@@ -520,10 +521,14 @@ import Testing
         let header = view.listHeader!
         let row = view.card(for: view.entries[0].id) as! ListRow
         #expect(header.frame.maxY <= row.frame.minY)
-        #expect(header.frame.width == row.frame.width)
+        #expect(header.frame.width == row.frame.width && header.frame.minX == row.frame.minX && row.frame.minX == 20)
         let columns = ListColumns(width: row.frame.width)
         #expect(header.columns == columns)
-        #expect(row.frame.height == 44 && row.pictureFrame.size == CGSize(width: 36, height: 36))
+        #expect(row.frame.height == 44 && row.pictureFrame == CGRect(x: 12, y: 6, width: 32, height: 32))
+        // one container under the header and the rows
+        let plate = try! #require(view.listPlate)
+        #expect(!plate.isHidden && plate.frame.minY == header.frame.minY && plate.frame.maxY == row.frame.maxY)
+        #expect(plate.frame.minX == 20 && plate.frame.width == row.frame.width)
     }
 
     @Test func listShowsFoldersWithFacts() async {
@@ -536,15 +541,15 @@ import Testing
         let a = view.card(for: view.entries[0].id) as! ListRow
         let b = view.card(for: view.entries[1].id) as! ListRow
         a.layoutSubtreeIfNeeded()
-        #expect(a.insideLabel.stringValue == "248 · 3 folders")
+        #expect(a.insideLabel.stringValue == "248 + 3 folders")
         #expect(a.yearsLabel.stringValue == "2019–2023" && !a.histogram.isHidden)
-        #expect(a.viewedLabel.stringValue == "136 / 248")
+        #expect(!a.progressTrack.isHidden && a.progressBar.frame.width == (a.progressTrack.frame.width * 0.55).rounded())
         #expect(a.sizeLabel.stringValue == "4.2 GB")
-        #expect(b.viewedLabel.stringValue == "✓")
-        let shown = [a.nameLabel, a.insideLabel, a.histogram, a.yearsLabel, a.viewedLabel, a.sizeLabel]
+        #expect(b.progressBar.frame.width == b.progressTrack.frame.width || b.summary?.viewed != 1)
+        let shown = [a.nameLabel, a.insideLabel, a.histogram, a.yearsLabel, a.progressTrack, a.sizeLabel]
             .filter { !$0.isHidden }.map(\.frame).sorted { $0.minX < $1.minX }
         for (p, q) in zip(shown, shown.dropFirst()) { #expect(p.maxX <= q.minX) }
-        #expect(shown.last!.maxX <= a.bounds.width)
+        #expect(shown.last!.maxX <= a.bounds.width - 12)
     }
 
     @Test func listShowsFilesInRows() async {
@@ -706,12 +711,12 @@ import Testing
         let row = ListRow(item: folder)
         row.frame = CGRect(x: 0, y: 0, width: 1000, height: 44)
         row.layoutSubtreeIfNeeded()
-        #expect(!row.histogram.isHidden && !row.flagPill.isHidden && !row.twoPagesIcon.isHidden)
+        #expect(!row.histogram.isHidden && !row.newPill.isHidden && !row.twoPagesIcon.isHidden)
         row.show(file)
         row.layoutSubtreeIfNeeded()
         #expect(row.insideLabel.stringValue == "PNG" && row.sizeLabel.stringValue == "2.0 KB")
         #expect(row.yearsLabel.isHidden && row.yearsLabel.stringValue.isEmpty)
-        #expect(row.viewedLabel.isHidden && row.histogram.isHidden && row.flagPill.isHidden)
+        #expect(row.progressTrack.isHidden && row.histogram.isHidden && row.newPill.isHidden)
         #expect(row.twoPagesIcon.isHidden && row.rtlLabel.isHidden && row.problemIcon.isHidden)
     }
 
