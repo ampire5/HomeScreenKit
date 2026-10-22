@@ -29,7 +29,7 @@ public enum HomeMosaic {
         let bounds = CGRect(origin: .zero, size: size)
         let cells = cells(count: images.count, layout: layout, in: bounds)
         if effective(layout, width: size.width) == .stack, cells.count > 1 {
-            drawStack(Array(images.prefix(cells.count)), cells: cells, in: context)
+            drawStack(Array(images.prefix(cells.count)), cells: cells, pixelsPerPoint: CGFloat(w) / size.width, in: context)
         } else {
             for (image, cell) in zip(images, cells) { draw(image, in: cell, context) }
         }
@@ -48,12 +48,11 @@ public enum HomeMosaic {
         context.restoreGState()
     }
 
-    /// Prints piled on a table: the one on top (the first) is straight, the others turned; each has a soft shadow and
-    /// a thin light border.
-    private static func drawStack(_ images: [CGImage], cells: [CGRect], in context: CGContext) {
+    /// Prints piled on a table: the turned ones are drawn first (−4°, then +4°) and the straight one (0°) last, on top;
+    /// each has a soft shadow and a thin light border. The shadow is set in pixels, so it follows `pixelsPerPoint`.
+    private static func drawStack(_ images: [CGImage], cells: [CGRect], pixelsPerPoint: CGFloat, in context: CGContext) {
         let rotations = stackRotations(count: images.count)
-        // The straightest print goes last, on top.
-        let order = images.indices.sorted { abs(rotations[$0]) > abs(rotations[$1]) }
+        let order = images.indices.filter { rotations[$0] != 0 } + images.indices.filter { rotations[$0] == 0 }
         for i in order {
             let cell = cells[i]
             context.saveGState()
@@ -61,7 +60,7 @@ public enum HomeMosaic {
             context.rotate(by: rotations[i] * .pi / 180)
             let local = CGRect(x: -cell.width / 2, y: -cell.height / 2, width: cell.width, height: cell.height)
             context.saveGState()
-            context.setShadow(offset: CGSize(width: 0, height: -2), blur: 6,
+            context.setShadow(offset: CGSize(width: 0, height: -2 * pixelsPerPoint), blur: 6 * pixelsPerPoint,
                               color: CGColor(gray: 0, alpha: 0.35))
             context.setFillColor(CGColor(gray: 1, alpha: 1))
             context.fill(local)
@@ -74,12 +73,13 @@ public enum HomeMosaic {
         }
     }
 
-    /// The turn of each print of a stack, in degrees, back to front: −4, 0, +4 for three.
+    /// The turn of each print of a stack, in degrees: −4, 0, +4 for three, −4 and 0 for two. The straight one is
+    /// drawn last, on top.
     public static func stackRotations(count: Int) -> [CGFloat] {
         switch count {
         case ..<1: return []
         case 1: return [0]
-        case 2: return [-4, 4]
+        case 2: return [-4, 0]
         default: return [-4, 0, 4]
         }
     }
