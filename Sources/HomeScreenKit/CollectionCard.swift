@@ -30,20 +30,17 @@ final class CollectionCard: GridCard {
         picture.layer?.cornerRadius = Self.corner
         picture.layer?.cornerCurve = .continuous
         picture.layer?.masksToBounds = true
-        picture.layer?.backgroundColor = NSColor(white: 0.14, alpha: 1).cgColor
         picture.layer?.contentsGravity = .resizeAspectFill
         picture.layer?.addSublayer(shade)
-        placeholder.contentTintColor = .tertiaryLabelColor
+        placeholder.contentTintColor = Chrome.Palette.window.tertiaryLabel
         placeholder.symbolConfiguration = .init(pointSize: 30, weight: .light)
         glassTile.cornerRadius = Self.corner
         glassTile.isHidden = true
         picture.addSubview(glassTile)
         picture.addSubview(placeholder)
         progressBar.wantsLayer = true
-        progressBar.layer?.backgroundColor = NSColor.controlAccentColor.cgColor
         progressBar.isHidden = true
         picture.addSubview(progressBar)
-        ring.borderColor = NSColor.controlAccentColor.cgColor
         ring.borderWidth = Self.ringWidth
         ring.cornerRadius = Self.corner + Self.ringGap + Self.ringWidth
         ring.cornerCurve = .continuous
@@ -52,7 +49,9 @@ final class CollectionCard: GridCard {
         titleLabel.lineBreakMode = .byTruncatingMiddle
         subtitleLabel.lineBreakMode = .byTruncatingTail
         for view in [picture, titleLabel, subtitleLabel, badgePill] { addSubview(view) }
+        Chrome.Palette.overMedia.apply(to: badgePill)   // over the photo: dark whatever the window is
         show(item)
+        appearanceChanged()
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
@@ -90,6 +89,15 @@ final class CollectionCard: GridCard {
         CATransaction.commit()
     }
 
+    override func appearanceChanged() {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        picture.layer?.backgroundColor = Chrome.resolve(Chrome.Palette.window.fill, in: self)
+        progressBar.layer?.backgroundColor = Chrome.resolve(Chrome.Palette.window.accent, in: self)
+        ring.borderColor = Chrome.resolve(Chrome.Palette.window.accent, in: self)
+        CATransaction.commit()
+    }
+
     override func layout() {
         super.layout()
         let p = pictureFrame, w = p.width
@@ -104,8 +112,8 @@ final class CollectionCard: GridCard {
         let below = names == .below
         titleLabel.font = Chrome.Text.font(.body, weight: .semibold)
         subtitleLabel.font = Chrome.Text.font(.small)
-        titleLabel.textColor = below ? .labelColor : .white
-        subtitleLabel.textColor = below ? .secondaryLabelColor : NSColor(white: 1, alpha: 0.75)
+        titleLabel.textColor = below ? Chrome.Palette.window.label : Chrome.Palette.overMedia.text
+        subtitleLabel.textColor = below ? Chrome.Palette.window.secondaryLabel : Chrome.Palette.overMedia.secondaryText
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         shade.isHidden = below

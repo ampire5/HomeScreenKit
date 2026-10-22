@@ -31,22 +31,18 @@ final class HomeCard: GridCard {
         picture.layer?.cornerRadius = Self.corner
         picture.layer?.cornerCurve = .continuous
         picture.layer?.masksToBounds = true
-        picture.layer?.backgroundColor = NSColor(white: 0.14, alpha: 1).cgColor
         picture.layer?.contentsGravity = .resizeAspectFill
         // A hairline at rest, so a dark picture keeps its edge on the dark screen.
         picture.layer?.borderWidth = 0.5
-        picture.layer?.borderColor = NSColor(white: 1, alpha: 0.1).cgColor
-        ring.borderColor = NSColor.controlAccentColor.cgColor
         ring.borderWidth = Self.ringWidth
         ring.cornerRadius = Self.corner + Self.ringGap + Self.ringWidth
         ring.cornerCurve = .continuous
         ring.isHidden = true
         layer?.addSublayer(ring)
         track.backgroundColor = Chrome.Palette.overMedia.mediaShadow.cgColor
-        bar.backgroundColor = NSColor.controlAccentColor.cgColor
         picture.layer?.addSublayer(track)
         picture.layer?.addSublayer(bar)
-        placeholder.contentTintColor = .tertiaryLabelColor
+        placeholder.contentTintColor = Chrome.Palette.window.tertiaryLabel
         placeholder.symbolConfiguration = .init(pointSize: 30, weight: .light)
         picture.addSubview(placeholder)
         badge.font = Chrome.Text.font(.badge)
@@ -57,11 +53,13 @@ final class HomeCard: GridCard {
         title.font = Chrome.Text.font(.body, weight: .medium)
         title.lineBreakMode = .byTruncatingMiddle
         subtitle.font = Chrome.Text.digits(.small, weight: .regular)
-        subtitle.textColor = .secondaryLabelColor
+        subtitle.textColor = Chrome.Palette.window.secondaryLabel
+        title.textColor = Chrome.Palette.window.label
         subtitle.lineBreakMode = .byTruncatingTail
         for view in [picture, title, subtitle] { addSubview(view) }
         show(item)
         selectionChanged()
+        appearanceChanged()
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
@@ -113,6 +111,19 @@ final class HomeCard: GridCard {
         CATransaction.setDisableActions(true)
         ring.isHidden = !isSelected
         CATransaction.commit()
-        title.textColor = isSelected ? .white : NSColor(white: 0.82, alpha: 1)
     }
+
+    /// The picture's underlay, hairline, ring and bar: layer colours, resolved in the card's appearance.
+    override func appearanceChanged() {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        picture.layer?.backgroundColor = pictureFill
+        picture.layer?.borderColor = Chrome.resolve(Chrome.Palette.window.separator, in: self)
+        ring.borderColor = Chrome.resolve(Chrome.Palette.window.accent, in: self)
+        bar.backgroundColor = Chrome.resolve(Chrome.Palette.window.accent, in: self)
+        CATransaction.commit()
+    }
+
+    /// The colour under the picture (a grey box with a symbol while there is none).
+    var pictureFill: CGColor { Chrome.resolve(Chrome.Palette.window.fill, in: self) }
 }

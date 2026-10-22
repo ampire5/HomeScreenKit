@@ -1,4 +1,5 @@
 import AppKit
+import HomeChrome
 import HomeScreenModel
 
 /// Home's sidebar: a glass panel inset from the window's edge with the app's sources, the
@@ -87,7 +88,7 @@ final class HomeSidebar: NSView {
 
     init() {
         super.init(frame: .zero)
-        panel.cornerRadius = 18
+        panel.cornerRadius = Chrome.Radius.panel
         let content = NSView()
         panel.contentView = content
         addSubview(panel)
@@ -307,7 +308,7 @@ private final class SidebarLineView: NSView {
         guides.fillColor = nil
         layer?.addSublayer(guides)
         light.wantsLayer = true
-        light.layer?.cornerRadius = 7
+        light.layer?.cornerRadius = Chrome.Radius.control
         title.lineBreakMode = .byTruncatingMiddle
         count.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
         count.textColor = .secondaryLabelColor
@@ -381,7 +382,14 @@ private final class SidebarLineView: NSView {
         // On the strong light the accent symbol would vanish into it.
         symbol.contentTintColor = lit && hasKeys ? .white : .controlAccentColor
         light.isHidden = !lit
-        light.layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(hasKeys ? 0.8 : 0.25).cgColor
+        light.layer?.backgroundColor = Chrome.resolve(Chrome.Palette.window.accent.withAlphaComponent(hasKeys ? 0.8 : 0.25),
+                                                      in: self)
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        if lit, !isHeading { paint() }
+        needsLayout = true   // the guides' stroke is resolved in `layout`
     }
 
     /// The triangle's frame (rows that open; headings put their chevron at the right).
@@ -423,9 +431,7 @@ private final class SidebarLineView: NSView {
         CATransaction.setDisableActions(true)
         guides.frame = bounds
         guides.path = path
-        effectiveAppearance.performAsCurrentDrawingAppearance {
-            guides.strokeColor = NSColor.separatorColor.cgColor
-        }
+        guides.strokeColor = Chrome.resolve(Chrome.Palette.window.separator, in: self)
         CATransaction.commit()
     }
 

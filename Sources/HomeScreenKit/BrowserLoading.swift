@@ -11,8 +11,7 @@ final class LoadingLine: NSView {
         super.init(frame: frame)
         wantsLayer = true
         layer?.masksToBounds = true
-        let accent = NSColor.controlAccentColor
-        glint.colors = [accent.withAlphaComponent(0).cgColor, accent.cgColor, accent.withAlphaComponent(0).cgColor]
+        paintGlint()
         glint.startPoint = CGPoint(x: 0, y: 0.5)
         glint.endPoint = CGPoint(x: 1, y: 0.5)
         layer?.addSublayer(glint)
@@ -23,6 +22,21 @@ final class LoadingLine: NSView {
 
     var isRunning: Bool { !isHidden }
 
+    /// The accent in the line's appearance: still and half strength with Reduce motion, else a glint fading at both ends.
+    private func paintGlint() {
+        let accent = NSColor(cgColor: Chrome.resolve(Chrome.Palette.window.accent, in: self)) ?? Chrome.Palette.window.accent
+        if isRunning, Chrome.Motion.reduced {
+            glint.colors = [accent.withAlphaComponent(0.5).cgColor, accent.withAlphaComponent(0.5).cgColor]
+        } else {
+            glint.colors = [accent.withAlphaComponent(0).cgColor, accent.cgColor, accent.withAlphaComponent(0).cgColor]
+        }
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        paintGlint()
+    }
+
     func run(_ on: Bool) {
         guard on != isRunning else { return }
         isHidden = !on
@@ -30,11 +44,8 @@ final class LoadingLine: NSView {
         guard on else { return }
         needsLayout = true
         layoutSubtreeIfNeeded()
-        if Chrome.Motion.reduced {   // Reduce motion
-            glint.colors = [NSColor.controlAccentColor.withAlphaComponent(0.5).cgColor,
-                            NSColor.controlAccentColor.withAlphaComponent(0.5).cgColor]
-            return
-        }
+        paintGlint()
+        if Chrome.Motion.reduced { return }   // Reduce motion
         let sweep = CABasicAnimation(keyPath: "position.x")
         sweep.fromValue = -bounds.width * 0.2
         sweep.toValue = bounds.width * 1.2
@@ -67,31 +78,30 @@ final class BrowserSkeleton: NSView {
     override init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
-        shine.colors = [NSColor(white: 0.14, alpha: 1).cgColor, NSColor(white: 0.21, alpha: 1).cgColor,
-                        NSColor(white: 0.14, alpha: 1).cgColor]
+        paintShine()
         shine.locations = [0, 0.5, 1]
         shine.startPoint = CGPoint(x: 0, y: 0.3)
         shine.endPoint = CGPoint(x: 1, y: 0.7)
         shine.mask = shapes
         layer?.addSublayer(shine)
         title.font = Chrome.Text.font(.heading, weight: .medium)
-        title.textColor = NSColor(white: 0.92, alpha: 1)
+        title.textColor = Chrome.Palette.window.label
         detail.font = Chrome.Text.digits(.body, weight: .regular)
-        detail.textColor = .secondaryLabelColor
+        detail.textColor = Chrome.Palette.window.secondaryLabel
         let stack = NSStackView(views: [title, detail])
         stack.orientation = .vertical
         stack.spacing = 6
         stack.translatesAutoresizingMaskIntoConstraints = false
-        // A dark plate under the words: they sit over the grey cards.
+        // A plate in the window's colour under the words: they sit over the grey cards.
         let plate = NSView()
         plate.wantsLayer = true
-        plate.layer?.backgroundColor = NSColor(white: 0.08, alpha: 0.92).cgColor
         plate.layer?.cornerRadius = Chrome.Radius.panel
         plate.layer?.cornerCurve = .continuous
         plate.translatesAutoresizingMaskIntoConstraints = false
         plate.addSubview(stack)
         self.plate = plate
         addSubview(plate)
+        paintPlate()
         NSLayoutConstraint.activate([
             stack.leadingAnchor.constraint(equalTo: plate.leadingAnchor, constant: 24),
             stack.trailingAnchor.constraint(equalTo: plate.trailingAnchor, constant: -24),
@@ -104,6 +114,23 @@ final class BrowserSkeleton: NSView {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    /// Cards in the window's fill with a brighter band running across them.
+    private func paintShine() {
+        let base = Chrome.resolve(Chrome.Palette.window.fill, in: self)
+        let band = Chrome.resolve(Chrome.Palette.window.label.withAlphaComponent(0.14), in: self)
+        shine.colors = [base, band, base]
+    }
+
+    private func paintPlate() {
+        plate?.layer?.backgroundColor = Chrome.resolve(Chrome.Palette.window.background.withAlphaComponent(0.92), in: self)
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        paintShine()
+        paintPlate()
+    }
 
     override var isFlipped: Bool { true }
     override func hitTest(_ point: NSPoint) -> NSView? { nil }

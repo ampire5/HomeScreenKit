@@ -36,7 +36,7 @@ final class HomeToolbar: NSView, NSSearchFieldDelegate, NSMenuDelegate {
     }
 
     /// The colour the backdrop fades from: the browser's background.
-    var background = NSColor.windowBackgroundColor { didSet { updateBackdrop() } }
+    var background = Chrome.Palette.window.background { didSet { updateBackdrop() } }
 
     /// Runs along the bottom edge while a folder loads.
     let loading = LoadingLine()
@@ -113,7 +113,13 @@ final class HomeToolbar: NSView, NSSearchFieldDelegate, NSMenuDelegate {
     }
 
     private func updateBackdrop() {
-        backdrop.colors = [background.withAlphaComponent(0.9).cgColor, background.withAlphaComponent(0).cgColor]
+        backdrop.colors = [Chrome.resolve(background.withAlphaComponent(0.9), in: self),
+                           Chrome.resolve(background.withAlphaComponent(0), in: self)]
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        updateBackdrop()
     }
 
     override func layout() {

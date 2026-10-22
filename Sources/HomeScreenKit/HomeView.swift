@@ -1,4 +1,5 @@
 import AppKit
+import HomeChrome
 import HomeScreenModel
 
 /// Home as one view, as in Photos: the sidebar of sources, places and the folder tree on the
@@ -21,11 +22,26 @@ public final class HomeView: NSView {
     }
 
     /// What Home is drawn on (the app's background); the toolbar's backdrop fades from it.
-    public var background = CGColor(gray: 0.06, alpha: 1) {
-        didSet {
-            layer?.backgroundColor = background
-            browser.toolbar.background = NSColor(cgColor: background) ?? .black
+    /// Unset, it is the window's background in the view's appearance and follows it; once the owner sets it, it stays.
+    public var background: CGColor {
+        get { customBackground ?? Chrome.resolve(Chrome.Palette.window.background, in: self) }
+        set {
+            customBackground = newValue
+            paintBackground()
         }
+    }
+    /// Set by the owner (`isBackgroundCustom`): an appearance change does not replace it.
+    private var customBackground: CGColor?
+    var isBackgroundCustom: Bool { customBackground != nil }
+
+    private func paintBackground() {
+        layer?.backgroundColor = background
+        browser.toolbar.background = customBackground.flatMap { NSColor(cgColor: $0) } ?? Chrome.Palette.window.background
+    }
+
+    public override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        paintBackground()
     }
 
     public var isSidebarVisible = true {
@@ -137,9 +153,8 @@ public final class HomeView: NSView {
         self.source = source
         browser = HomeBrowserView(source: source)
         super.init(frame: .zero)
-        appearance = NSAppearance(named: .darkAqua)
         wantsLayer = true
-        layer?.backgroundColor = background
+        paintBackground()
         for view in [browser, sidebarView, resizeHandle] as [NSView] {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)

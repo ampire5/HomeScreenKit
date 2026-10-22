@@ -134,8 +134,8 @@ public final class HomeBrowserView: NSView {
     private let hint = NSTextField(labelWithString: "")
     /// The page on screen (a source's `info.page`), kept as a subview while hidden.
     private var page: NSView?
-    private let toast = NSTextField(labelWithString: "")
-    private var toastTask: Task<Void, Never>?
+    private let toast = ChromeToastView(style: .window)
+    private var toastLine: String?
     private(set) var renameField: BrowserRenameField?
     private let document = FlippedView()
     private var grid = GridLayout(sections: [], width: 0, target: 220, names: .off)
@@ -152,7 +152,6 @@ public final class HomeBrowserView: NSView {
     public init(source: HomeSource) {
         self.source = source
         super.init(frame: .zero)
-        appearance = NSAppearance(named: .darkAqua)
         toolbar.translatesAutoresizingMaskIntoConstraints = false
         scroll.translatesAutoresizingMaskIntoConstraints = false
         scroll.drawsBackground = false
@@ -163,12 +162,6 @@ public final class HomeBrowserView: NSView {
         scroll.contentView.postsBoundsChangedNotifications = true
         NotificationCenter.default.addObserver(self, selector: #selector(scrolled), name: NSView.boundsDidChangeNotification,
                                                object: scroll.contentView)
-        toast.font = .systemFont(ofSize: 13, weight: .medium)
-        toast.textColor = .white
-        toast.drawsBackground = true
-        toast.backgroundColor = NSColor(white: 0.2, alpha: 0.95)
-        toast.alignment = .center
-        toast.isHidden = true
         toast.translatesAutoresizingMaskIntoConstraints = false
         skeleton.translatesAutoresizingMaskIntoConstraints = false
         hint.font = .systemFont(ofSize: 15)
@@ -194,7 +187,6 @@ public final class HomeBrowserView: NSView {
             toast.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -24),
             toast.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, constant: -64),
         ])
-        toolbar.background = .black
         toolbar.show(style: style)
         toolbar.onCrumb = { [weak self] location in self?.show(location, selecting: nil) }
         toolbar.onBack = { [weak self] in self?.goBack() }
@@ -253,7 +245,7 @@ public final class HomeBrowserView: NSView {
         orderCount += 1
         orderPending = nil
         loadingTask?.cancel()
-        toastTask?.cancel()
+        toast.hide()
         slowTask?.cancel()
         toolbar.loading.run(false)
         skeleton.stop()
@@ -616,17 +608,11 @@ public final class HomeBrowserView: NSView {
 
     /// A short line at the bottom for 3 s: an action that failed.
     public func showToast(_ text: String) {
-        toast.stringValue = "  \(text)  "
-        toast.isHidden = false
-        toastTask?.cancel()
-        toastTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(3))
-            guard !Task.isCancelled else { return }
-            self?.toast.isHidden = true
-        }
+        toastLine = text
+        toast.show(text, for: 3)
     }
 
-    var toastText: String? { toast.isHidden ? nil : toast.stringValue.trimmingCharacters(in: .whitespaces) }
+    var toastText: String? { toast.isShowing ? toastLine : nil }
 
     // MARK: Rename and trash
 
