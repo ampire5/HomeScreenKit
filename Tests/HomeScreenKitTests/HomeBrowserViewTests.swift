@@ -450,3 +450,172 @@ import Testing
         #expect((view.card(for: view.entries[0].id) as? PosterCard)?.alphaValue == 1)
     }
 }
+
+@MainActor @Suite struct HomeBrowserListTests {
+    let x = URL(fileURLWithPath: "/Volumes/T/x")
+
+    func make(_ source: FakeHomeSource, at location: BrowserLocation? = nil, width: CGFloat = 1200) -> HomeBrowserView {
+        let view = HomeBrowserView(source: source)
+        view.frame = CGRect(x: 0, y: 0, width: width, height: 800)
+        view.show(location ?? .folder(x), selecting: nil)
+        view.layoutSubtreeIfNeeded()
+        return view
+    }
+
+    func shown(_ source: FakeHomeSource, _ entries: [BrowserEntry]) async -> HomeBrowserView {
+        source.cardStyles[.folder(x)] = .list
+        let view = make(source)
+        source.yield(x, entries)
+        await settle(seconds: 5) { !view.entries.isEmpty }
+        view.layoutSubtreeIfNeeded()
+        return view
+    }
+
+    private let summary = CardSummary(photos: 248, folders: 3, bytes: 4_200_000_000,
+                                      first: Date(timeIntervalSince1970: 1_560_000_000),
+                                      last: Date(timeIntervalSince1970: 1_690_000_000),
+                                      histogram: [10, 40, 90, 20, 0, 0, 5, 5, 30, 25, 20, 10], viewed: 0.55)
+
+    @Test func listHeaderSorts() async {
+        let source = FakeHomeSource()
+        let view = await shown(source, [BrowserFixtures.folder("a"), BrowserFixtures.file("p.jpg", date: 1)])
+        let header = view.listHeader
+        #expect(header != nil && header?.isHidden == false)
+        #expect(header?.titles == ["Name ↑", "Inside", "Dates", "Viewed", "Size"])
+        header?.click(.dates)
+        #expect(source.setSorts.last?.0 == BrowserSort(text: "date-desc"))
+        #expect(header?.titles == ["Name", "Inside", "Dates ↓", "Viewed", "Size"])
+        header?.click(.dates)
+        #expect(source.setSorts.last?.0 == BrowserSort(text: "date"))
+        let count = source.setSorts.count
+        header?.click(.inside)
+        header?.click(.viewed)
+        #expect(source.setSorts.count == count)
+        header?.click(.size)
+        header?.click(.name)
+        #expect(source.setSorts.map(\.0).suffix(2) == [BrowserSort(text: "size-desc"), BrowserSort(text: "name")])
+    }
+
+    @Test func listHeaderSitsAboveTheRowsAndAlignsWithThem() async {
+        let source = FakeHomeSource()
+        let view = await shown(source, [BrowserFixtures.folder("a")])
+        let header = view.listHeader!
+        let row = view.card(for: view.entries[0].id) as! ListRow
+        #expect(header.frame.maxY <= row.frame.minY)
+        #expect(header.frame.width == row.frame.width)
+        let columns = ListColumns(width: row.frame.width)
+        #expect(header.columns == columns)
+        #expect(row.frame.height == 44 && row.pictureFrame.size == CGSize(width: 36, height: 36))
+    }
+
+    @Test func listShowsFoldersWithFacts() async {
+        let source = FakeHomeSource()
+        let view = await shown(source, [BrowserFixtures.folder("a"), BrowserFixtures.folder("b")])
+        view.setSummary(summary, for: view.entries[0].id)
+        var done = summary
+        done.done = true
+        view.setSummary(done, for: view.entries[1].id)
+        let a = view.card(for: view.entries[0].id) as! ListRow
+        let b = view.card(for: view.entries[1].id) as! ListRow
+        a.layoutSubtreeIfNeeded()
+        #expect(a.insideLabel.stringValue == "248 · 3 folders")
+        #expect(a.yearsLabel.stringValue == "2019–2023" && !a.histogram.isHidden)
+        #expect(a.viewedLabel.stringValue == "136 / 248")
+        #expect(a.sizeLabel.stringValue == "4.2 GB")
+        #expect(b.viewedLabel.stringValue == "✓")
+        let shown = [a.nameLabel, a.insideLabel, a.histogram, a.yearsLabel, a.viewedLabel, a.sizeLabel]
+            .filter { !$0.isHidden }.map(\.frame).sorted { $0.minX < $1.minX }
+        for (p, q) in zip(shown, shown.dropFirst()) { #expect(p.maxX <= q.minX) }
+        #expect(shown.last!.maxX <= a.bounds.width)
+    }
+
+    @Test func listShowsFilesInRows() async {
+        let source = FakeHomeSource()
+        let view = await shown(source, [BrowserFixtures.folder("a"), BrowserFixtures.file("img.jpg", date: 700_000_000)])
+        let row = view.card(for: view.entries[1].id) as? ListRow
+        #expect(row != nil)
+        #expect(row?.insideLabel.stringValue == "JPG")
+        #expect(row?.yearsLabel.stringValue.isEmpty == false)
+        #expect(row?.yearsLabel.stringValue == (view.entries[1].date.map { ListRow.dateText($0) }))
+        #expect(row?.sizeLabel.stringValue == "1 B")
+        #expect(row?.histogram.isHidden == true)
+        #expect(row?.frame.height == 44)
+        #expect(view.card(for: view.entries[0].id) is ListRow)
+    }
+
+    @Test func listRowsReusedWhileScrolling() async {
+        let source = FakeHomeSource()
+        let view = await shown(source, BrowserFixtures.files(10_000))
+        #expect(view.liveCardCount > 0 && view.liveCardCount <= 80)
+        view.scrollGrid(to: view.gridContentHeight)
+        #expect(view.liveCardCount <= 80)
+        #expect(view.liveIDs.contains(view.entries.last!.id))
+    }
+
+    @Test func listArrowsMoveByOneRow() async {
+        let source = FakeHomeSource()
+        let view = await shown(source, [BrowserFixtures.folder("a"), BrowserFixtures.folder("b")]
+                                       + BrowserFixtures.files(3))
+        #expect(view.columns == 1)
+        let down = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
+                                    context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false,
+                                    keyCode: 125)!
+        let up = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
+                                  context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false,
+                                  keyCode: 126)!
+        #expect(view.selectedID == view.entries[0].id)
+        #expect(view.handleKey(down))
+        #expect(view.selectedID == view.entries[1].id)
+        #expect(view.handleKey(down))
+        #expect(view.selectedID == view.entries[2].id)   // across the folders / photos sections
+        #expect(view.handleKey(up))
+        #expect(view.selectedID == view.entries[1].id)
+    }
+
+    @Test func narrowColumnShowsPostersWhateverTheChoice() async {
+        let source = FakeHomeSource()
+        source.cardStyles[.folder(x)] = .list
+        let view = make(source, width: 300)
+        source.yield(x, [BrowserFixtures.folder("a")])
+        await settle(seconds: 5) { !view.entries.isEmpty }
+        view.layoutSubtreeIfNeeded()
+        #expect(view.card(for: view.entries[0].id) is PosterCard)
+        #expect(view.listHeader?.isHidden ?? true)
+        #expect(view.toolbar.cardSwitchSelection == 2)
+    }
+
+    @Test func switchHiddenOnPlaces() async {
+        let source = FakeHomeSource()
+        source.infos["stash"] = HomeSourceInfo(title: "Stash", page: NSView(), pageFilters: ["Scenes"])
+        source.infos["recent"] = HomeSourceInfo(title: "Recent")
+        let view = make(source, at: .places)
+        #expect(!view.toolbar.isCardSwitchVisible)
+        view.show(.source("stash"), selecting: nil)
+        #expect(!view.toolbar.isCardSwitchVisible)
+        view.show(.source("recent"), selecting: nil)
+        #expect(!view.toolbar.isCardSwitchVisible)
+        view.show(.folder(x), selecting: nil)
+        #expect(view.toolbar.isCardSwitchVisible)
+        view.show(.places, selecting: nil)
+        #expect(!view.toolbar.isCardSwitchVisible)
+    }
+
+    @Test func toolbarSwitchFollowsStyle() async {
+        let source = FakeHomeSource()
+        source.cardStyles[.folder(x)] = .cards
+        let view = make(source)
+        #expect(view.toolbar.cardSwitchSelection == 1)
+        view.chooseCardStyle(.list)   // as the View menu does
+        #expect(view.toolbar.cardSwitchSelection == 2)
+        view.chooseCardStyle(.list)   // again: nothing more happens
+        #expect(view.toolbar.cardSwitchSelection == 2)
+        view.toolbar.clickCardStyle(0)   // the switch itself
+        #expect(source.setCardStyles.map(\.0) == [.list, .list, .posters])
+        #expect(view.toolbar.cardSwitchSelection == 0)
+        view.show(.folder(URL(fileURLWithPath: "/Volumes/T/y")), selecting: nil)   // a folder of its own style
+        #expect(view.toolbar.cardSwitchSelection == 0)
+        source.cardStyles[.folder(x)] = .cards
+        view.show(.folder(x), selecting: nil)
+        #expect(view.toolbar.cardSwitchSelection == 1)
+    }
+}

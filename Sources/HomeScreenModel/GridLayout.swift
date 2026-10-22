@@ -20,7 +20,7 @@ public enum GridNames: String, CaseIterable, Sendable {
 }
 
 /// How folders and archives are drawn: a big cover with a band of facts under it, a compact card with the cover at the
-/// left, or a row of a list. Photo sections ignore it.
+/// left, or a row of a list. Photo sections ignore it, except that the list also draws files as rows.
 public enum CardStyle: String, CaseIterable, Sendable {
     case posters, cards, list
 }
@@ -129,8 +129,9 @@ public struct GridLayout: Equatable, Sendable {
             var columns = Self.columns(width: width, target: wanted, gap: gap, edge: edge)
             var slot = max(1, (width - 2 * edge - gap * CGFloat(columns - 1)) / CGFloat(columns))
             var slotHeight: CGFloat, cover = slot, coverInset: CGFloat = 0
-            let used = isPhotos || width < metrics.minStyled ? CardStyle.posters : style
-            if isPhotos {
+            // Photos keep their tiles, except in the list, where files are rows like the folders.
+            let used = (isPhotos && style != .list) || width < metrics.minStyled ? CardStyle.posters : style
+            if isPhotos && used != .list {
                 slotHeight = slot + (names == .below ? metrics.belowText : 0)
             } else {
                 switch used {

@@ -204,6 +204,21 @@ import Testing
         #expect(!view.handleKey(key(19, "2", [.option, .shift])))
     }
 
+    @Test func commandDigitsSwitchStyle() async {
+        let source = FakeHomeSource()
+        let view = await shown(source, [BrowserFixtures.folder("a"), BrowserFixtures.file("a.jpg", date: 1)])
+        #expect(view.handleKey(key(19, "2", [.command])))
+        #expect(view.handleKey(key(20, "3", [.command])))
+        #expect(view.handleKey(key(18, "1", [.command])))
+        #expect(source.setCardStyles.map(\.0) == [.cards, .list, .posters])
+        #expect(view.toolbar.cardSwitchSelection == 0)
+        // ⌥1 is still the sort; ⌘⌥ and ⇧⌘ digits are not the switch
+        #expect(view.handleKey(key(18, "1", [.option])))
+        #expect(source.setSorts.count == 1)
+        #expect(!view.handleKey(key(19, "2", [.command, .shift])))
+        #expect(source.setCardStyles.count == 3)
+    }
+
     @Test func optionTFlipsStyle() async {
         let view = await shown(FakeHomeSource(), BrowserFixtures.files(3))
         var asked: [GridStyle] = []

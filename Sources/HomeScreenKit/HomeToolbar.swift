@@ -23,6 +23,8 @@ final class HomeToolbar: NSView, NSSearchFieldDelegate, NSMenuDelegate {
     var onPageFilter: ((Int) -> Void)?
     var onZoom: ((HomeResize) -> Void)?
     var onStyle: (() -> Void)?
+    /// A segment of the posters / cards / list switch: the view saves the choice and re-tiles.
+    var onCardStyle: ((CardStyle) -> Void)?
     var onFilterText: ((String) -> Void)?
     /// Esc in the name field: it is cleared and the keys go back to the grid.
     var onFilterEnd: (() -> Void)?
@@ -44,6 +46,10 @@ final class HomeToolbar: NSView, NSSearchFieldDelegate, NSMenuDelegate {
     let homeButton = GlassGroup(items: [(symbol: "house", tip: "Start Page (⇧⌘H)")])
     let zoom = GlassGroup(items: [(symbol: "minus", tip: "Smaller (⌘−)"), (symbol: "plus", tip: "Larger (⌘=)")])
     let styleButton = GlassGroup(items: [(symbol: "rectangle.grid.2x2", tip: "Square or Aspect (⌥T)")])
+    /// Posters / Cards / List, in `CardStyle.allCases` order; only a folder has folder cards, so it is off elsewhere.
+    let cardSwitch = GlassGroup(items: [(symbol: "square.grid.2x2", tip: "as Posters (⌘1)"),
+                                        (symbol: "rectangle.grid.1x2", tip: "as Cards (⌘2)"),
+                                        (symbol: "list.bullet", tip: "as List (⌘3)")])
     let field = NSSearchField()
     private(set) var styleSymbol = "rectangle.grid.2x2"
 
@@ -92,11 +98,14 @@ final class HomeToolbar: NSView, NSSearchFieldDelegate, NSMenuDelegate {
         sortCapsule.onChoose = { [weak self] i in self?.clickSort(i) }
         zoom.onPress = { [weak self] i in self?.onZoom?(i == 0 ? .smaller : .larger) }
         styleButton.onPress = { [weak self] _ in self?.onStyle?() }
+        cardSwitch.onPress = { [weak self] i in self?.clickCardStyle(i) }
+        cardSwitch.selected = 0
+        cardSwitch.isHidden = true
         field.placeholderString = "Filter"
         field.sendsSearchStringImmediately = true
         field.delegate = self
         field.controlSize = .regular
-        for view in [sidebarButton, homeButton, nav, crumbs, subtitle, kind, sortCapsule, zoom, styleButton, field, loading] as [NSView] {
+        for view in [sidebarButton, homeButton, nav, crumbs, subtitle, kind, sortCapsule, zoom, styleButton, cardSwitch, field, loading] as [NSView] {
             addSubview(view)
         }
         showSort()
@@ -140,7 +149,7 @@ final class HomeToolbar: NSView, NSSearchFieldDelegate, NSMenuDelegate {
             field.frame = CGRect(x: right - 180, y: (h - 24) / 2, width: 180, height: 24)
             right = field.frame.minX - Self.spacing
         }
-        for v in [styleButton, zoom, sortCapsule] as [NSView] where !v.isHidden {
+        for v in [styleButton, cardSwitch, zoom, sortCapsule] as [NSView] where !v.isHidden {
             let s = size(v)
             v.frame = CGRect(x: right - s.width, y: controlY, width: s.width, height: s.height)
             right = v.frame.minX - Self.spacing
@@ -169,6 +178,9 @@ final class HomeToolbar: NSView, NSSearchFieldDelegate, NSMenuDelegate {
     var isFilterVisible: Bool { !kind.isHidden }
     var kindFrame: CGRect { kind.frame }
     var sortFrame: CGRect { sortCapsule.frame }
+    var isCardSwitchVisible: Bool { !cardSwitch.isHidden }
+    /// The lit segment: 0 posters, 1 cards, 2 list.
+    var cardSwitchSelection: Int? { cardSwitch.selected }
     var filterText: String {
         get { field.stringValue }
         set { field.stringValue = newValue }
@@ -256,6 +268,7 @@ final class HomeToolbar: NSView, NSSearchFieldDelegate, NSMenuDelegate {
     func show(controls: Bool) {
         guard field.isHidden == controls else { return }
         for v in [field, zoom, styleButton] as [NSView] { v.isHidden = !controls }
+        if !controls { cardSwitch.isHidden = true }
         needsLayout = true
     }
 
@@ -270,6 +283,14 @@ final class HomeToolbar: NSView, NSSearchFieldDelegate, NSMenuDelegate {
     func show(style: GridStyle) {
         styleSymbol = style == .square ? "square.grid.2x2" : "rectangle.grid.2x2"
         styleButton.setSymbol(styleSymbol, at: 0)
+    }
+
+    /// The switch lit for `style`; shown only where there are folder cards (`visible`).
+    func show(cardStyle style: CardStyle, visible: Bool) {
+        cardSwitch.selected = CardStyle.allCases.firstIndex(of: style)
+        guard cardSwitch.isHidden == visible else { return }
+        cardSwitch.isHidden = !visible
+        needsLayout = true
     }
 
     func focusFilter() { window?.makeFirstResponder(field) }
@@ -289,6 +310,11 @@ final class HomeToolbar: NSView, NSSearchFieldDelegate, NSMenuDelegate {
         guard sortKeys.indices.contains(i) else { return }
         onSortKey?(sortKeys[i])
         showSort()   // the active field stays lit until the view shows the new sort
+    }
+
+    func clickCardStyle(_ i: Int) {
+        guard CardStyle.allCases.indices.contains(i) else { return }
+        onCardStyle?(CardStyle.allCases[i])
     }
 
     func clickKind(_ i: Int) {

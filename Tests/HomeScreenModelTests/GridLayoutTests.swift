@@ -134,11 +134,21 @@ import Testing
         #expect(below.frame(of: 0).height == grid.frame(of: 0).height)
     }
 
-    @Test func photosKeepTheirLayoutInAnyStyle() {
+    @Test func photosKeepTheirLayoutInPosterAndCardStyles() {
         let a = GridLayout(sections: [photos(100)], width: 1000, target: 200, names: .below)
-        for style in CardStyle.allCases {
+        for style in [CardStyle.posters, .cards] {
             #expect(GridLayout(sections: [photos(100)], width: 1000, target: 200, names: .below, style: style) == a)
         }
+    }
+
+    @Test func listDrawsFilesAsRowsToo() {
+        let grid = GridLayout(sections: [photos(10)], width: 1000, target: 200, names: .below, style: .list)
+        #expect(grid.columns(inSection: 0) == 1)
+        #expect(grid.frame(of: 0).height == 44 && grid.frame(of: 0).width == 1000)
+        #expect(grid.pictureFrame(of: 0).size == CGSize(width: 36, height: 36))
+        // a narrow column keeps the photo tiles
+        let narrow = GridLayout(sections: [photos(10)], width: 300, target: 200, names: .below, style: .list)
+        #expect(narrow == GridLayout(sections: [photos(10)], width: 300, target: 200, names: .below))
     }
 
     @Test func cardsAreThreeHundredWide() {

@@ -1,3 +1,5 @@
+import Foundation
+
 /// One entry of a card's right-click menu: what the app gets back (`id`) and what the menu shows.
 public struct HomeMenuItem: Equatable, Sendable {
     public let id: String
@@ -33,10 +35,19 @@ public struct HomeCardItem: Equatable, Sendable {
     public var summary: CardSummary?
     /// Photos in a folder, when the app knows it (the narrow poster's number).
     public var count: Int?
+    /// What a row of the list shows for a file (or for a folder without a summary): the format (the extension, in
+    /// capitals), the date and the size in bytes.
+    public var format: String?
+    public var date: Date?
+    public var bytes: Int64?
 
     public init(id: String, title: String, subtitle: String? = nil, tooltip: String, symbol: String,
                 progress: Double? = nil, badge: String? = nil, isDimmed: Bool = false, menu: [HomeMenuItem] = [],
-                glassSymbol: Bool = false, summary: CardSummary? = nil, count: Int? = nil) {
+                glassSymbol: Bool = false, summary: CardSummary? = nil, count: Int? = nil, format: String? = nil,
+                date: Date? = nil, bytes: Int64? = nil) {
+        self.format = format
+        self.date = date
+        self.bytes = bytes
         self.summary = summary
         self.count = count
         self.glassSymbol = glassSymbol

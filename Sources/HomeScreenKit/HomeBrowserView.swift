@@ -57,7 +57,9 @@ public final class HomeBrowserView: NSView {
 
     /// The widest slot in view, in points: the width the pictures are asked at.
     public var slotWidth: CGFloat {
-        (0..<sections.count).map { grid.slotWidth(inSection: $0) }.max() ?? cardSize
+        // A row's picture is its small cover, not the row.
+        if shownCardStyle(width: gridWidth) == .list { return GridMetrics().listCover }
+        return (0..<sections.count).map { grid.slotWidth(inSection: $0) }.max() ?? cardSize
     }
 
     /// The wanted slot width for ⌘= / ⌘−: one photo column fewer (at one column, the range's top) or one more, at the
@@ -150,6 +152,9 @@ public final class HomeBrowserView: NSView {
     private var collectionPool: [CollectionCard] = []
     private var posterPool: [PosterCard] = []
     private var compactPool: [CompactCard] = []
+    private var rowPool: [ListRow] = []
+    /// The column heads over the list's rows; made with the first list.
+    private(set) var listHeader: ListHeader?
     /// How the folders and archives of this location are drawn, from the source; a narrow column shows posters anyway.
     private var cardStyle = CardStyle.posters
     /// The facts that came after the listing, by id: they outlive a new listing of the same place, which may not carry
@@ -210,6 +215,7 @@ public final class HomeBrowserView: NSView {
         toolbar.onForward = { [weak self] in self?.goForward() }
         toolbar.onUp = { [weak self] in self?.goUp() }
         toolbar.onSortKey = { [weak self] key in self?.sortKeyChosen(key) }
+        toolbar.onCardStyle = { [weak self] style in self?.chooseCardStyle(style) }
         toolbar.onZoom = { [weak self] step in self?.onResize?(step) }
         toolbar.onStyle = { [weak self] in self?.toggleStyle() }
         toolbar.onKind = { [weak self] kind in self?.filterChanged { $0.kind = kind } }
@@ -759,6 +765,7 @@ public final class HomeBrowserView: NSView {
         source?.setSort(sortChoice.choose(key), for: location)
         heldSort = hasComplete ? nil : before
         toolbar.show(sort: sort, keys: sortKeys)
+        listHeader?.sort = sort
         if shownSort != before {
             orderCount += 1
             if let listing { apply(listing) }
@@ -792,6 +799,15 @@ public final class HomeBrowserView: NSView {
         toolbar.show(pageFilters: info?.pageFilters ?? [], selected: info?.pageFilters.isEmpty == false ? 0 : nil)
         toolbar.show(filter: filter.kind, visible: info == nil && location != .places)
         toolbar.show(controls: page == nil)
+        showCardSwitch()
+    }
+
+    /// The posters / cards / list switch: lit for the style of this folder, and only in a folder (the places, the
+    /// app's sources and pages have no folder cards).
+    private func showCardSwitch() {
+        var visible = false
+        if case .folder = location, page == nil { visible = true }
+        toolbar.show(cardStyle: cardStyle, visible: visible)
     }
 
     private var siblingTask: Task<Void, Never>?
@@ -902,7 +918,7 @@ public final class HomeBrowserView: NSView {
     }
 
     private var typeSelect = BrowserTypeSelect()
-    /// ⌥1 / ⌥2 / ⌥3: the sort capsule's first, second and third field.
+    /// The digit keys 1 / 2 / 3: with ⌥ the sort capsule's first, second and third field, with ⌘ the card style.
     private static let sortKeyIndex: [UInt16: Int] = [18: 0, 19: 1, 20: 2]
 
     /// Arrows, Return (⌘ a new tab, ⇧ a new window), ⌘↓ open, ⌘↑ up, ⌘[ / ⌘] back and forward, the size keys and
@@ -918,6 +934,11 @@ public final class HomeBrowserView: NSView {
         }
         if command, let resize = HomeScreenView.resizeKeys[event.keyCode] {
             onResize?(resize)
+            return true
+        }
+        // ⌘1 / ⌘2 / ⌘3: Posters, Cards, List (the View menu's items have the same keys).
+        if flags == .command, let i = Self.sortKeyIndex[event.keyCode] {
+            chooseCardStyle(CardStyle.allCases[i])
             return true
         }
         switch (event.keyCode, command) {
@@ -992,8 +1013,12 @@ public final class HomeBrowserView: NSView {
         sections = makeSections()
         var metrics = GridMetrics()
         metrics.top = HomeToolbar.height
-        grid = GridLayout(sections: sections, width: width, target: cardSize, names: names, style: shownCardStyle(width: width),
-                          metrics: metrics)
+        // The list has its column heads under the toolbar, above the first row.
+        let shownStyle = shownCardStyle(width: width)
+        let showsListHeader = shownStyle == .list && !entries.isEmpty && isShowingEntries
+        if showsListHeader { metrics.top += ListHeader.height }
+        grid = GridLayout(sections: sections, width: width, target: cardSize, names: names, style: shownStyle, metrics: metrics)
+        placeListHeader(showsListHeader, width: width)
         let height = max(grid.contentHeight, scroll.contentSize.height)
         if document.frame.size != CGSize(width: width, height: height) {
             document.frame = CGRect(x: 0, y: 0, width: width, height: height)
@@ -1022,6 +1047,7 @@ public final class HomeBrowserView: NSView {
                 switch kind(of: i) {
                 case .poster: card = posterPool.popLast() ?? makePoster()
                 case .compact: card = compactPool.popLast() ?? makeCompact()
+                case .row: card = rowPool.popLast() ?? makeRow()
                 case .collection: card = collectionPool.popLast() ?? makeCollection()
                 case .photo: card = photoPool.popLast() ?? makePhoto()
                 }
@@ -1051,32 +1077,37 @@ public final class HomeBrowserView: NSView {
 
     private func isCollection(_ i: Int) -> Bool { !entries[i].isFile }
 
-    private enum CardKind { case poster, compact, collection, photo }
+    private enum CardKind { case poster, compact, row, collection, photo }
 
-    /// A folder or archive in a folder is a poster or a compact card; the rest of the containers (places, the app's
-    /// collections) keep the collection card; files are photos.
+    /// A folder or archive in a folder is a poster, a compact card or a row; in the list the files are rows too. The
+    /// rest of the containers (places, the app's collections) keep the collection card; files are photos.
     private func kind(of i: Int) -> CardKind {
         let entry = entries[i]
-        guard !entry.isFile else { return .photo }
+        let style = shownCardStyle(width: gridWidth)
+        guard !entry.isFile else { return style == .list ? .row : .photo }
         guard entry.kind == .folder || entry.kind == .archive else { return .collection }
-        return shownCardStyle(width: gridWidth) == .cards ? .compact : .poster
+        switch style {
+        case .posters: return .poster
+        case .cards: return .compact
+        case .list: return .row
+        }
     }
 
     private func kind(of card: GridCard) -> CardKind {
         switch card {
         case is PosterCard: .poster
         case is CompactCard: .compact
+        case is ListRow: .row
         case is CollectionCard: .collection
         default: .photo
         }
     }
 
     /// The style the layout is given: only a folder's own cards have one (Recent, Sessions and the places are
-    /// collections), and a column narrower than `minStyled` shows posters. The list is the next step: until its rows
-    /// exist, it draws posters.
+    /// collections), and a column narrower than `minStyled` shows posters. 
     private func shownCardStyle(width: CGFloat) -> CardStyle {
         guard case .folder = location, width >= GridMetrics().minStyled else { return .posters }
-        return cardStyle == .cards ? .cards : .posters
+        return cardStyle
     }
 
     private func putAside(_ card: GridCard) {
@@ -1086,6 +1117,21 @@ public final class HomeBrowserView: NSView {
         if let collection = card as? CollectionCard { collectionPool.append(collection) }
         if let poster = card as? PosterCard { posterPool.append(poster) }
         if let compact = card as? CompactCard { compactPool.append(compact) }
+        if let row = card as? ListRow { rowPool.append(row) }
+    }
+
+    private func placeListHeader(_ shown: Bool, width: CGFloat) {
+        if shown, listHeader == nil {
+            let header = ListHeader()
+            header.onSort = { [weak self] key in self?.sortKeyChosen(key) }
+            document.addSubview(header)
+            listHeader = header
+        }
+        guard let header = listHeader else { return }
+        header.isHidden = !shown
+        guard shown else { return }
+        header.sort = sort
+        header.frame = CGRect(x: 0, y: HomeToolbar.height, width: width, height: ListHeader.height)
     }
 
     private func placeHeaders() {
@@ -1119,6 +1165,12 @@ public final class HomeBrowserView: NSView {
         let card = PosterCard(item: HomeCardItem(id: "", title: "", tooltip: "", symbol: "folder"))
         document.addSubview(card)
         return card
+    }
+
+    private func makeRow() -> ListRow {
+        let row = ListRow(item: HomeCardItem(id: "", title: "", tooltip: "", symbol: "folder"))
+        document.addSubview(row)
+        return row
     }
 
     private func makeCompact() -> CompactCard {
@@ -1173,7 +1225,9 @@ public final class HomeBrowserView: NSView {
                             badge: entry.badge ?? (entry.kind == .archive ? "ZIP" : nil),
                             isDimmed: entry.isDimmed || summary?.problem == .offline,
                             menu: source?.menu(for: entry, in: location) ?? [], glassSymbol: entry.kind == .place,
-                            summary: summary, count: entry.count)
+                            summary: summary, count: entry.count,
+                            format: entry.isFile && !entry.url.pathExtension.isEmpty ? entry.url.pathExtension.uppercased() : nil,
+                            date: entry.date, bytes: entry.size)
     }
 
     /// The live cards without a picture, those in view first. The visible ones go to the source at once; the margin
@@ -1237,6 +1291,7 @@ public final class HomeBrowserView: NSView {
         source?.setCardStyle(style, for: location)
         guard style != cardStyle else { return }
         cardStyle = style
+        showCardSwitch()
         tile()
     }
 
