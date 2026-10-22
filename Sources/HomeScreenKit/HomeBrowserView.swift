@@ -100,6 +100,9 @@ public final class HomeBrowserView: NSView {
     /// The last listing of this place and whether a complete one has come (a sort by date or size waits for it).
     private var listing: BrowserListing?
     private var hasComplete = false
+    /// The order the grid keeps while a sort by date or size chosen over it waits for the complete listing: the one
+    /// on screen when it was chosen, so the grid stays (more names join it) instead of blanking. Nil: none kept.
+    private var heldSort: BrowserSort?
     /// What the app says of the source on screen; nil in a folder or at the places.
     private var info: HomeSourceInfo?
     /// The date headings of a source's list (`DateGroups`), or nil for one untitled run.
@@ -313,6 +316,7 @@ public final class HomeBrowserView: NSView {
         loadingTask?.cancel()
         listing = nil
         hasComplete = false
+        heldSort = nil
         footerText = ("", nil)
         containerCount = 0
         // A filter is for the place it was set in: a move starts with everything shown.
@@ -425,8 +429,13 @@ public final class HomeBrowserView: NSView {
     var isGridHidden: Bool { scroll.isHidden }
     var hintText: String? { hint.isHidden ? nil : hint.stringValue }
 
-    /// Whether entries are on screen: a sort by date or size shows none until the complete listing.
-    private var isShowingEntries: Bool { sort.key == .name || hasComplete }
+    /// The order entries go on screen in: `sort`, or until the complete listing that a sort by date or size needs, the
+    /// held one (`heldSort`); nil shows none.
+    private var shownSort: BrowserSort? { sort.key == .name || hasComplete ? sort : heldSort }
+
+    /// Whether entries are on screen: a sort by date or size shows none until the complete listing, unless it was
+    /// chosen over a grid that stays.
+    private var isShowingEntries: Bool { shownSort != nil }
 
     private func apply(_ new: BrowserListing) {
         // Names only after a complete listing (the one remembered, shown on Back): it has nothing the other lacks.
@@ -440,19 +449,19 @@ public final class HomeBrowserView: NSView {
             onListingComplete?(location)
         }
         defer { updateLoading() }
-        guard isShowingEntries else { return }
+        guard let shownSort else { return }
         if new.entries.count <= Self.orderInlineLimit, orderTask == nil {
             orderCount += 1   // an older big order still on its way must not cover this one
-            show(Self.arrange(new, sort: sort, filter: filter, info: arrangeInfo), of: new)
+            show(Self.arrange(new, sort: shownSort, filter: filter, info: arrangeInfo), of: new)
         } else if orderTask != nil {
             orderPending = new
         } else {
-            order(new)
+            order(new, by: shownSort)
         }
     }
 
-    private func order(_ new: BrowserListing) {
-        let count = orderCount, sort = sort, filter = filter, info = arrangeInfo
+    private func order(_ new: BrowserListing, by sort: BrowserSort) {
+        let count = orderCount, filter = filter, info = arrangeInfo
         orderTask = Task { @MainActor [weak self] in
             let arranged = await Task.detached(priority: .userInitiated) { Self.arrange(new, sort: sort, filter: filter, info: info) }.value
             guard let self else { return }
@@ -481,7 +490,7 @@ public final class HomeBrowserView: NSView {
     }
 
     private var arrangeInfo: ArrangeInfo {
-        ArrangeInfo(noun: info?.noun, groupsByDate: info?.groupsByDate == true && sort.key == .date)
+        ArrangeInfo(noun: info?.noun, groupsByDate: info?.groupsByDate == true && shownSort?.key == .date)
     }
 
     /// Off the main actor for a big listing: nothing here touches the view.
@@ -719,18 +728,19 @@ public final class HomeBrowserView: NSView {
         if let listing { apply(listing) }
     }
 
-    /// A segment of the capsule or ⌥1–3: the field, or the other direction of the active one.
+    /// A segment of the capsule or ⌥1–3: the field, or the other direction of the active one. The capsule shows it at
+    /// once; a sort by date or size before the complete listing leaves the grid as it is until that listing comes.
     private func sortKeyChosen(_ key: BrowserSort.Key) {
         guard sortKeys.contains(key) else { return }
+        let before = shownSort
         source?.setSort(sortChoice.choose(key), for: location)
-        orderCount += 1
+        heldSort = hasComplete ? nil : before
         toolbar.show(sort: sort, keys: sortKeys)
-        if let listing { apply(listing) } else { setEntries([]) }
-        if !isShowingEntries {
-            footerText = ("", nil)
-            setEntries([])
-            toolbar.show(subtitle: "Loading…")
+        if shownSort != before {
+            orderCount += 1
+            if let listing { apply(listing) }
         }
+        if shownSort != sort { toolbar.show(subtitle: "Loading…") }
     }
 
     private func setEntries(_ new: [BrowserEntry]) {
@@ -966,19 +976,23 @@ public final class HomeBrowserView: NSView {
         }
         let visible = scroll.contentView.documentVisibleRect
         let range = grid.indices(in: visible, margin: max(visible.height, 1))
-        for (i, card) in live where !range.contains(i) || isCollection(i) != (card is CollectionCard) {
-            live[i] = nil
-            putAside(card)
+        // A card goes with its entry to the entry's slot now (a new order, a filter, names before it), its picture and
+        // closures kept; one whose entry left the range, or whose slot is of the other kind now, goes back to its pool.
+        var kept: [Int: GridCard] = [:]
+        for card in live.values {
+            if let i = indexByID[card.item.id], range.contains(i), kept[i] == nil,
+               isCollection(i) == (card is CollectionCard) {
+                kept[i] = card
+            } else {
+                putAside(card)
+            }
         }
+        live = kept
         for i in range {
             let entry = entries[i]
             if let card = live[i] {
-                if card.item.id != entry.id {
-                    configure(card, entry)
-                } else {
-                    let item = item(for: entry)   // a count, a date, dimming or a menu changed: the picture stays
-                    if card.item != item { card.show(item) }
-                }
+                let item = item(for: entry)   // a count, a date, dimming or a menu changed: the picture stays
+                if card.item != item { card.show(item) }
             } else {
                 let card: GridCard = isCollection(i) ? collectionPool.popLast() ?? makeCollection()
                                                      : photoPool.popLast() ?? makePhoto()
@@ -995,6 +1009,7 @@ public final class HomeBrowserView: NSView {
             } else if let collection = card as? CollectionCard {
                 collection.names = names
             }
+            // Straight to the slot: a view's frame animates only in an animation group that allows it (the sidebar's).
             card.frame = grid.frame(of: i)
         }
         placeHeaders()
@@ -1072,7 +1087,7 @@ public final class HomeBrowserView: NSView {
         case .folder, .archive:
             subtitle = entry.count.map { $0 == 1 ? "1 photo" : "\($0) photos" }
         case .file:
-            switch sort.key {
+            switch (shownSort ?? sort).key {
             case .name: subtitle = nil
             case .date: subtitle = entry.date.map(Self.dateFormat.string)
             case .size: subtitle = entry.size.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) }
