@@ -15,7 +15,7 @@ import AppKit
 
     let glassView = NSGlassEffectView()
     private let rim = RimView()
-    var rimLayer: CALayer { rim.layer ?? CALayer() }
+    var rimLayer: CALayer { rim.rimLayer }
 
     public init(style: Style, cornerRadius: CGFloat) {
         self.style = style
@@ -30,8 +30,6 @@ import AppKit
             break
         }
         glassView.contentView = contentView
-        rim.layer = CALayer()
-        rim.wantsLayer = true
         rimLayer.borderWidth = 1
         addSubview(glassView)
         addSubview(rim)   // above the glass and its content; takes no clicks
@@ -69,5 +67,16 @@ import AppKit
 
 /// The rim overlay: draws a hairline and never takes a click.
 private final class RimView: NSView {
+    let rimLayer = CALayer()
+
+    init() {
+        super.init(frame: .zero)
+        layer = rimLayer
+        wantsLayer = true
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("not used") }
+
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }

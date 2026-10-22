@@ -44,4 +44,39 @@ import Testing
         toast.hide()
         #expect(!toast.isShowing)
     }
+
+    @Test func toastSizesFromText() {
+        let toast = ChromeToastView(style: .window)
+        toast.show("Some text", for: 5)
+        let short = toast.fittingSize.width
+        #expect(short > 0)
+        toast.show("Some much longer text than before", for: 5)
+        #expect(toast.fittingSize.width > short)
+        toast.hide()
+    }
+
+    @Test func rimIsOnePoint() {
+        let glass = ChromeGlass(style: .overMedia(.regular), cornerRadius: 10)
+        #expect(glass.rimLayer.borderWidth == 1)
+    }
+
+    @Test func tintAlphaFollowsWeight() {
+        let regular = ChromeGlass(style: .overMedia(.regular), cornerRadius: 10)
+        let light = ChromeGlass(style: .overMedia(.light), cornerRadius: 10)
+        let a = regular.glassView.tintColor?.usingColorSpace(.sRGB)?.alphaComponent ?? -1
+        let b = light.glassView.tintColor?.usingColorSpace(.sRGB)?.alphaComponent ?? -1
+        #expect(abs(a - 0.62) < 0.001)
+        #expect(abs(b - 0.55) < 0.001)
+        #expect(ChromeGlass(style: .window, cornerRadius: 10).glassView.tintColor == nil)
+    }
+
+    @Test func windowRimFollowsAppearance() {
+        let glass = ChromeGlass(style: .window, cornerRadius: 10)
+        let window = windowWith(glass, appearance: .aqua)
+        let light = glass.rimLayer.borderColor
+        window.appearance = NSAppearance(named: .darkAqua)
+        glass.viewDidChangeEffectiveAppearance()
+        let dark = glass.rimLayer.borderColor
+        #expect(light != nil && dark != nil && light != dark)
+    }
 }

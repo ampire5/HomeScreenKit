@@ -5,6 +5,7 @@ import AppKit
     private let glass: ChromeGlass
     private let label = NSTextField(labelWithString: "")
     private var hideTask: Task<Void, Never>?
+    /// True from `show` until `hide` (or the timeout): "requested visible", not "fade finished".
     public private(set) var isShowing = false
 
     public init(style: ChromeGlass.Style) {
@@ -38,12 +39,18 @@ import AppKit
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("not used") }
 
+    public override var intrinsicContentSize: NSSize {
+        let text = label.intrinsicContentSize
+        return NSSize(width: text.width + 2 * Chrome.Space.l, height: text.height + 2 * Chrome.Space.s)
+    }
+
     public override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
     public func show(_ text: String, for seconds: TimeInterval) {
         hideTask?.cancel()
         label.stringValue = text
         isShowing = true
+        invalidateIntrinsicContentSize()
         fade(to: 1, duration: Chrome.Motion.duration(Chrome.Motion.show))
         hideTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(seconds))
@@ -53,6 +60,7 @@ import AppKit
     }
 
     public func hide() {
+        guard isShowing else { return }
         hideTask?.cancel()
         hideTask = nil
         isShowing = false
