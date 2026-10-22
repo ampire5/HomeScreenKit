@@ -2,57 +2,79 @@ import AppKit
 import HomeChrome
 import HomeScreenModel
 
-/// What `PosterCard` and `CompactCard` share: a folder's or an archive's square cover with rounded corners and a ring
-/// around it, the name with its badges (⧉, RTL, a problem), the facts (counts, a histogram of dates, the years, the
-/// size, how much was seen) and the label (`+12`, ✓) that tells about new photos. The subclasses place them.
-/// A card without `summary` shows its subtitle where the facts go, as the collection card did.
+/// What `PosterCard`, `CompactCard` and `ListRow` share, drawn as the approved mockups (E «Плакат», B «Карточка»,
+/// C «Список»): the cover (dimmed while the folder's volume is away or the archive cannot be read), the name with
+/// its badges (⧉, RTL), the facts' texts and the dates' bars, the progress track, the `+12` pill and ✓, the
+/// cover's `ZIP` chip and the warning line. The colours are `Chrome.Palette.card`'s; the subclasses place the parts
+/// and pick their sizes. A card without `summary` shows its subtitle where the facts go.
 class FolderCard: GridCard {
-    let nameLabel = NSTextField(labelWithString: "")
-    let insideLabel = NSTextField(labelWithString: "")
-    let yearsLabel = NSTextField(labelWithString: "")
-    let sizeLabel = NSTextField(labelWithString: "")
-    let viewedLabel = NSTextField(labelWithString: "")
-    /// The photo count at the end of a narrow poster's only line.
-    let countLabel = NSTextField(labelWithString: "")
-    /// The facts line's count in its two forms: with the folders part (`248 · 3 folders`) and the photo count alone.
-    private(set) var insideFull = ""
-    private(set) var insideShort = ""
-    /// The subtitle, when there is no summary.
-    let fallbackLabel = NSTextField(labelWithString: "")
-    let rtlLabel = NSTextField(labelWithString: "RTL")
-    let twoPagesIcon = NSImageView()
-    let problemIcon = NSImageView()
-    let histogram = HistogramView()
-    /// The label for a ZIP (or any `item.badge`), at the cover's top left.
-    let badgePill = GlassPill()
-    /// `+12` or ✓, in the accent colour.
-    let flagPill = FlagPill()
+    // MARK: Parts
+
+    /// The card's plate (posters and compact cards) and its 0.5 pt ring, outside the plate as the mockups' shadow is.
+    let plate = CALayer()
+    let edge = CALayer()
+    /// The selection ring.
     let ring = CALayer()
-    /// How much was seen: a line along the cover's bottom edge (posters) or in a track (cards).
-    let progressBar = NSView()
-    let progressTrack = NSView()
+    /// Rounds the cover's corners: as tall as the cover, or (a poster) a radius taller so that only its top corners
+    /// show round; the picture inside it.
+    let coverClip = CoverClip()
     let picture = NSView()
     private let placeholder = NSImageView()
+    let nameLabel = CardText()
+    let twoPagesIcon = GlyphView(ChromeGlyph.twoPages, color: Chrome.Palette.card.secondary, lineWidth: 1.4)
+    let rtlLabel = TextChip(.outlined(size: 9.5))
+    /// The facts: a poster's line, a compact card's counts, a row's Inside column.
+    let insideLabel = CardText()
+    /// The years (a poster, a row) or the dates' span (a compact card, a large poster with its progress).
+    let yearsLabel = CardText()
+    let sizeLabel = CardText()
+    /// "153 / 248" (a compact card).
+    let viewedLabel = CardText()
+    /// The subtitle, when there is no summary.
+    let fallbackLabel = CardText()
+    /// An unavailable folder's or a damaged archive's line, and its glyph (a compact card's, a row's badge).
+    let warningLabel = CardText()
+    let problemIcon = GlyphView(nil, color: Chrome.Palette.card.warning, lineWidth: 1.5)
+    let histogram = HistogramView()
+    /// `+12`, and ✓ when viewed to the end.
+    let newPill = TextChip(.newPill())
+    let checkIcon = GlyphView(ChromeGlyph.check, color: Chrome.Palette.card.secondary, lineWidth: 2)
+    /// The archive's type over the cover (`ZIP`, `CBZ`).
+    let coverChip = TextChip(.overCover(size: 10, padX: 6, padY: 2, radius: 6, veil: 0.58))
+    /// How much was seen: a track and its fill.
+    let progressTrack = NSView()
+    let progressBar = NSView()
 
-    static let corner = Chrome.Radius.card
-    private static let ringWidth = Chrome.Ring.width
-    private static let ringGap = Chrome.Ring.gap
-    static let nameFont = Chrome.Text.font(.body, weight: .semibold)
-    static let factsFont = Chrome.Text.font(.small)
+    static let ringWidth = Chrome.Ring.width
+    static let ringGap = Chrome.Ring.gap
+    /// Between the name line's parts (the mockups' `gap: 6px`).
+    static let gap: CGFloat = 6
 
-    /// The band and card measurements (the kit's defaults: the browser only changes the grid's top, which cards do not use).
+    /// The measurements (the kit's defaults: the browser only changes the grid's top, which cards do not use).
     var metrics = GridMetrics() { didSet { needsLayout = true } }
-    var nameLineHeight: CGFloat { metrics.bandNameLine }
-    var factsLineHeight: CGFloat { metrics.bandFactsLine }
 
     /// The summary on the card now.
     var summary: CardSummary? { item.summary }
+    /// An archive that holds pages (read as a book: ⧉ or RTL, or a comic's CBZ): its count is "pages".
+    var holdsPages: Bool {
+        guard let badge = item.badge, let s = summary else { return false }
+        return s.twoPages || s.rightToLeft || badge.uppercased().hasPrefix("CB")
+    }
+    /// The progress shown: the summary's, else the item's (a recent folder's).
+    var shownProgress: Double? { summary?.viewed ?? item.progress }
+    var problem: CardSummary.Problem? { summary?.problem }
 
     override init(item: HomeCardItem) {
         super.init(item: item)
+        layer?.addSublayer(plate)
+        plate.cornerCurve = .continuous
+        edge.borderWidth = 0.5
+        edge.cornerCurve = .continuous
+        coverClip.wantsLayer = true
+        coverClip.layer?.cornerCurve = .continuous
+        coverClip.layer?.masksToBounds = true
+        coverClip.addSubview(picture)
         picture.wantsLayer = true
-        picture.layer?.cornerRadius = Self.corner
-        picture.layer?.cornerCurve = .continuous
         picture.layer?.masksToBounds = true
         picture.layer?.contentsGravity = .resizeAspectFill
         placeholder.contentTintColor = Chrome.Palette.window.tertiaryLabel
@@ -60,106 +82,82 @@ class FolderCard: GridCard {
         picture.addSubview(placeholder)
         for bar in [progressTrack, progressBar] {
             bar.wantsLayer = true
-            bar.isHidden = true
         }
         ring.borderWidth = Self.ringWidth
-        ring.cornerRadius = Self.corner + Self.ringGap + Self.ringWidth
         ring.cornerCurve = .continuous
         ring.isHidden = true
-        layer?.addSublayer(ring)
-        nameLabel.font = Self.nameFont
-        nameLabel.lineBreakMode = .byTruncatingMiddle
-        nameLabel.textColor = Chrome.Palette.window.label
-        for label in [insideLabel, yearsLabel, sizeLabel, viewedLabel, countLabel, fallbackLabel, rtlLabel] {
-            label.font = Self.factsFont
-            label.textColor = Chrome.Palette.window.secondaryLabel
-            label.lineBreakMode = .byTruncatingTail
+        nameLabel.textColor = Chrome.Palette.card.label
+        for label in [insideLabel, yearsLabel, sizeLabel, viewedLabel, fallbackLabel] {
+            label.textColor = Chrome.Palette.card.secondary
         }
-        rtlLabel.font = Chrome.Text.font(.badge)
-        rtlLabel.textColor = Chrome.Palette.window.tertiaryLabel
-        twoPagesIcon.image = Self.symbol("square.on.square", "Two pages")
-        twoPagesIcon.symbolConfiguration = .init(pointSize: 11, weight: .regular)
-        twoPagesIcon.contentTintColor = Chrome.Palette.window.tertiaryLabel
-        problemIcon.symbolConfiguration = .init(pointSize: 12, weight: .semibold)
-        Chrome.Palette.overMedia.apply(to: badgePill)   // over the photo: dark whatever the window is
-        let parts: [NSView] = [picture, nameLabel, insideLabel, yearsLabel, sizeLabel, viewedLabel, countLabel,
-                               fallbackLabel, rtlLabel, twoPagesIcon, problemIcon, histogram, badgePill, flagPill]
+        warningLabel.textColor = Chrome.Palette.card.warning
+        let parts: [NSView] = [coverClip, progressTrack, progressBar, nameLabel, twoPagesIcon, rtlLabel, insideLabel,
+                               yearsLabel, sizeLabel, viewedLabel, fallbackLabel, warningLabel, problemIcon, histogram,
+                               newPill, checkIcon, coverChip]
         for view in parts { addSubview(view) }
-        picture.addSubview(progressTrack)
-        picture.addSubview(progressBar)
+        rtlLabel.text = "RTL"
+        layer?.addSublayer(edge)
+        layer?.addSublayer(ring)
         show(item)
         appearanceChanged()
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
-    /// The square cover; the subclasses say where.
+    /// The cover; the subclasses say where.
     var pictureFrame: CGRect { .zero }
-    /// Where the rename field goes over the name, in the card's coordinates.
-    var progressFrame: CGRect { convert(progressBar.frame, from: progressBar.superview) }
+    var progressFrame: CGRect { progressBar.frame }
     var isShowingSymbol: Bool { !placeholder.isHidden }
 
-    /// The progress shown: the summary's, else the item's (a recent folder's).
-    var shownProgress: Double? { summary?.viewed ?? item.progress }
+    /// Folder cards draw an unavailable folder themselves (its cover faint, its facts readable): the item's dimming
+    /// is for the other cards.
+    override func show(_ item: HomeCardItem) {
+        super.show(item)
+        alphaValue = item.isDimmed && item.summary?.problem == nil ? 0.45 : 1
+    }
 
     override func itemChanged() {
         placeholder.image = Self.symbol(item.symbol)
         imageChanged()
         nameLabel.stringValue = item.title
-        badgePill.text = item.badge ?? ""
-        badgePill.isHidden = item.badge == nil
-        let s = item.summary
-        if let s {
-            insideFull = CardSummaryText.inside(s)
-            insideShort = (s.photos ?? 0) > 0 ? CardSummaryText.inside(CardSummary(photos: s.photos)) : insideFull
-            insideLabel.stringValue = insideFull
-            yearsLabel.stringValue = CardSummaryText.years(s) ?? ""
-            sizeLabel.stringValue = CardSummaryText.size(s) ?? ""
-            viewedLabel.stringValue = CardSummaryText.viewed(s) ?? ""
-            countLabel.stringValue = Self.narrowCount(s)
-            histogram.bins = s.histogram
-        } else {
-            insideFull = ""
-            insideShort = ""
-            for label in [insideLabel, yearsLabel, sizeLabel, viewedLabel] { label.stringValue = "" }
-            countLabel.stringValue = item.count.map { CardSummaryText.inside(CardSummary(photos: $0)) } ?? ""
-            histogram.bins = []
-        }
+        coverChip.text = item.badge ?? ""
+        coverChip.isHidden = item.badge == nil
+        let s = summary
+        histogram.bins = s?.histogram ?? []
         fallbackLabel.stringValue = s == nil ? item.subtitle ?? "" : ""
         rtlLabel.isHidden = !(s?.rightToLeft ?? false)
         twoPagesIcon.isHidden = !(s?.twoPages ?? false)
+        newPill.text = (s?.new ?? 0) > 0 ? "+\(s!.new)" : ""
+        newPill.isHidden = newPill.text.isEmpty
+        checkIcon.isHidden = !(s?.done ?? false)
         switch s?.problem {
-        case .broken?:
-            problemIcon.image = Self.symbol("exclamationmark.triangle.fill", "Damaged")
-            problemIcon.contentTintColor = .systemOrange
-        case .offline?:
-            problemIcon.image = Self.symbol("wifi.slash", "Not reachable")
-            problemIcon.contentTintColor = Chrome.Palette.window.secondaryLabel
-        case nil:
-            problemIcon.image = nil
+        case .broken?: problemIcon.glyph = ChromeGlyph.warning
+        case .offline?: problemIcon.glyph = ChromeGlyph.offline
+        case nil: problemIcon.glyph = nil
         }
         problemIcon.isHidden = s?.problem == nil
-        if let s, s.new > 0 {
-            flagPill.text = "+\(s.new)"
-        } else if let s, s.done {
-            flagPill.text = "✓"
-        } else {
-            flagPill.text = ""
-        }
-        flagPill.isHidden = flagPill.text.isEmpty
+        picture.alphaValue = Self.coverOpacity(s?.problem)
+        warningLabel.stringValue = ""
+        warningLabel.isHidden = true
         progressBar.isHidden = shownProgress == nil
-        progressTrack.isHidden = progressBar.isHidden || !showsTrack
     }
 
-    /// A narrow poster's count: the photos (`248`), else the subfolders (`3 folders`), else nothing.
-    static func narrowCount(_ s: CardSummary) -> String {
-        if let photos = s.photos, photos > 0 { return CardSummaryText.inside(CardSummary(photos: photos)) }
-        if let folders = s.folders, folders > 0 { return CardSummaryText.inside(CardSummary(folders: folders)) }
-        return ""
+    /// The mockups' cover opacity: .4 while the volume is away, .25 for an archive that cannot be read.
+    static func coverOpacity(_ problem: CardSummary.Problem?) -> CGFloat {
+        switch problem {
+        case .offline?: 0.4
+        case .broken?: 0.25
+        case nil: 1
+        }
     }
 
-    /// Cards draw the progress in a track; posters only a line.
-    var showsTrack: Bool { false }
+    /// The warning line's words: the short ones under a poster's cover, the long ones in a compact card.
+    static func warning(_ problem: CardSummary.Problem, short: Bool) -> String {
+        switch problem {
+        case .offline: short ? "Volume not connected · from the catalog" : "Network volume not connected · facts from the catalog"
+        case .broken: short ? "Archive is damaged" : "Archive is damaged: couldn't open it"
+        }
+    }
 
     override func imageChanged() {
         picture.layer?.contents = image
@@ -176,27 +174,38 @@ class FolderCard: GridCard {
     override func appearanceChanged() {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
+        plate.backgroundColor = Chrome.resolve(Chrome.Palette.card.background, in: self)
+        edge.borderColor = Chrome.resolve(Chrome.Palette.card.separator, in: self)
         picture.layer?.backgroundColor = Chrome.resolve(Chrome.Palette.window.fill, in: self)
-        progressBar.layer?.backgroundColor = Chrome.resolve(Chrome.Palette.window.accent, in: self)
-        progressTrack.layer?.backgroundColor = Chrome.resolve(Chrome.Palette.window.fill, in: self)
+        progressBar.layer?.backgroundColor = Chrome.resolve(Chrome.Palette.card.accent, in: self)
+        progressTrack.layer?.backgroundColor = Chrome.resolve(Chrome.Palette.card.track, in: self)
         ring.borderColor = Chrome.resolve(Chrome.Palette.window.accent, in: self)
         CATransaction.commit()
-        histogram.needsDisplay = true
     }
 
-    /// The cover, the placeholder, the label pills and the ring: the same in both cards.
-    func layoutCover(_ p: CGRect, ringAround: CGRect? = nil) {
-        picture.frame = p
+    /// The plate and its ring over `rect` with `radius`; the selection ring round `selection`.
+    func layoutPlate(_ rect: CGRect, radius: CGFloat, selection: CGRect? = nil, selectionRadius: CGFloat? = nil) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        plate.frame = rect
+        plate.cornerRadius = radius
+        edge.frame = rect.insetBy(dx: -0.5, dy: -0.5)
+        edge.cornerRadius = radius + 0.5
+        let outset = Self.ringGap + Self.ringWidth
+        let around = selection ?? rect
+        ring.frame = around.insetBy(dx: -outset, dy: -outset)
+        ring.cornerRadius = (selectionRadius ?? radius) + outset
+        CATransaction.commit()
+    }
+
+    /// The cover in `p` with `radius` (only its top corners for a poster) and the placeholder in its middle.
+    func layoutCover(_ p: CGRect, radius: CGFloat, topOnly: Bool = false) {
+        coverClip.frame = CGRect(x: p.minX, y: p.minY, width: p.width, height: p.height + (topOnly ? radius : 0))
+        coverClip.layer?.cornerRadius = radius
+        picture.frame = CGRect(origin: .zero, size: p.size)
         let size = placeholder.fittingSize
         placeholder.frame = CGRect(x: (p.width - size.width) / 2, y: (p.height - size.height) / 2, width: size.width,
                                    height: size.height)
-        let pill = badgePill.fittingSize
-        badgePill.frame = CGRect(x: p.minX + 8, y: p.minY + 8, width: pill.width, height: pill.height)
-        let outset = Self.ringGap + Self.ringWidth
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        ring.frame = (ringAround ?? p).insetBy(dx: -outset, dy: -outset)
-        CATransaction.commit()
     }
 
     /// Symbols by name: a card is shown again for every scroll step, the image is made once.
@@ -208,122 +217,45 @@ class FolderCard: GridCard {
         return image
     }
 
-    /// A string's width in the facts font, with a little room against truncation.
-    static func textWidth(_ text: String) -> CGFloat {
-        ceil(NSAttributedString(string: text, attributes: [.font: factsFont]).size().width) + 6
-    }
-
-    static func width(of view: NSView) -> CGFloat {
-        if let label = view as? NSTextField { return ceil(label.attributedStringValue.size().width) + 6 }
-        return view.intrinsicContentSize.width
-    }
-
     /// The name must keep this much of its line; a badge that would squeeze it further is left out.
     static let minName: CGFloat = 48
 
-    /// Lays the name line: the name takes what the badges at its right leave. `trailing` are the badges the card has
-    /// (view, whether it has one), nearest the end first.
-    func layoutNameLine(_ line: CGRect, trailing: [(view: NSView, wanted: Bool)]) {
+    /// Lays a name line as the mockups' flex row does: the name (cut with "…" when short of room), then right after
+    /// it the badges `after` (⧉, RTL, a warning), then at the line's end the items `end` (`+12`, ✓). Each item is
+    /// (view, size, wanted); a badge that would leave the name less than `minName` is left out, the last first.
+    func layoutNameLine(_ line: CGRect, after: [(NSView, CGSize, Bool)], end: [(NSView, CGSize, Bool)] = []) {
+        let gap = Self.gap
         var right = line.maxX
-        for (view, wanted) in trailing {
-            let w = Self.width(of: view)
-            let size = view is NSTextField ? CGSize(width: w, height: line.height)
-                                           : CGSize(width: w, height: view.intrinsicContentSize.height)
-            let fits = right - size.width - 5 - line.minX >= Self.minName
-            view.isHidden = !(wanted && fits)
-            guard !view.isHidden else { continue }
+        for (view, size, wanted) in end.reversed() {
+            view.isHidden = !wanted
+            guard wanted else { continue }
             right -= size.width
-            view.frame = CGRect(x: right, y: line.minY + (line.height - size.height) / 2, width: size.width, height: size.height)
-            right -= 5
+            view.frame = CGRect(x: right, y: (line.midY - size.height / 2).rounded(), width: size.width, height: size.height)
+            right -= gap
         }
-        let end = right < line.maxX ? right : line.maxX   // the gap after the last badge is not the name's
-        nameLabel.frame = CGRect(x: line.minX, y: line.minY, width: max(Self.minName, end - line.minX), height: line.height)
+        var badges = after.filter(\.2)
+        for (view, _, wanted) in after where !wanted { view.isHidden = true }
+        func badgesWidth() -> CGFloat { badges.reduce(0) { $0 + gap + $1.1.width } }
+        while !badges.isEmpty, right - line.minX - badgesWidth() < Self.minName {
+            badges.removeLast().0.isHidden = true
+        }
+        let nameWidth = min(nameLabel.textWidth, max(0, right - line.minX - badgesWidth()))
+        nameLabel.frame = CGRect(x: line.minX, y: line.minY, width: max(nameWidth, 1), height: line.height)
+        var x = line.minX + nameWidth
+        for (view, size, _) in badges {
+            view.isHidden = false
+            x += gap
+            view.frame = CGRect(x: x, y: (line.midY - size.height / 2).rounded(), width: size.width, height: size.height)
+            x += size.width
+        }
     }
 
-    /// The name line in the card's coordinates: the rename field goes here, and `layout` puts the name here.
+    /// The name line in the card's coordinates: the rename field goes here.
     var nameLine: CGRect { .zero }
     override var nameFrame: CGRect { nameLine }
 }
 
-/// The bars of a folder's dates: 12 bins, heights scaled to the largest bin so that a spread histogram stays visible.
-final class HistogramView: NSView {
-    static let barWidth: CGFloat = 2, barGap: CGFloat = 1, height: CGFloat = 12
-
-    var bins: [UInt8] = [] {
-        didSet {
-            guard bins != oldValue else { return }
-            invalidateIntrinsicContentSize()
-            needsDisplay = true
-        }
-    }
-    /// At least one bin has photos; the card shows the view only then (and when it fits).
-    var hasBars: Bool { bins.contains { $0 > 0 } }
-
-    override init(frame: NSRect) {
-        super.init(frame: frame)
-        isHidden = true
-    }
-
-    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
-
+/// The cover's rounded clip: top-down, so the picture sits at its top.
+final class CoverClip: NSView {
     override var isFlipped: Bool { true }
-    override var intrinsicContentSize: NSSize {
-        NSSize(width: CGFloat(bins.count) * (Self.barWidth + Self.barGap) - Self.barGap, height: Self.height)
-    }
-
-    /// Bar heights for `bins` in `height` points: the largest bin is full height, a bin with photos at least 1 pt, an
-    /// empty bin nothing.
-    static func heights(_ bins: [UInt8], height: CGFloat) -> [CGFloat] {
-        guard let top = bins.max(), top > 0 else { return bins.map { _ in 0 } }
-        return bins.map { $0 == 0 ? 0 : max(1, height * CGFloat($0) / CGFloat(top)) }
-    }
-
-    override func draw(_ dirtyRect: NSRect) {
-        let heights = Self.heights(bins, height: bounds.height)
-        Chrome.Palette.window.tertiaryLabel.setFill()
-        for (i, h) in heights.enumerated() where h > 0 {
-            let x = CGFloat(i) * (Self.barWidth + Self.barGap)
-            NSRect(x: x, y: bounds.height - h, width: Self.barWidth, height: h).fill()
-        }
-    }
-}
-
-/// `+12` or ✓ on an accent capsule.
-final class FlagPill: NSView {
-    static let height: CGFloat = 18
-    var text: String {
-        get { label.stringValue }
-        set { label.stringValue = newValue; invalidateIntrinsicContentSize(); needsLayout = true }
-    }
-    private let label = NSTextField(labelWithString: "")
-
-    override init(frame: NSRect) {
-        super.init(frame: frame)
-        wantsLayer = true
-        layer?.cornerRadius = Chrome.Radius.capsule(Self.height)
-        layer?.cornerCurve = .continuous
-        label.font = Chrome.Text.font(.badge)
-        label.textColor = .white
-        label.alignment = .center
-        addSubview(label)
-        isHidden = true
-    }
-
-    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
-
-    override var intrinsicContentSize: NSSize {
-        NSSize(width: ceil(label.intrinsicContentSize.width) + 12, height: Self.height)
-    }
-
-    override func viewDidChangeEffectiveAppearance() {
-        super.viewDidChangeEffectiveAppearance()
-        layer?.backgroundColor = Chrome.resolve(Chrome.Palette.window.accent, in: self)
-    }
-
-    override func layout() {
-        super.layout()
-        layer?.backgroundColor = Chrome.resolve(Chrome.Palette.window.accent, in: self)
-        let h = label.intrinsicContentSize.height
-        label.frame = CGRect(x: 6, y: (bounds.height - h) / 2, width: max(0, bounds.width - 12), height: h)
-    }
 }

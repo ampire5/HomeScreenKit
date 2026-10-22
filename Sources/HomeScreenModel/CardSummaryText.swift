@@ -50,6 +50,71 @@ public enum CardSummaryText {
         return "\(grouped(seen)) / \(grouped(photos))"
     }
 
+    // MARK: The mockups' words
+
+    /// `248 photos`, `1 photo`, `96 pages`, `3 folders`.
+    public static func count(_ n: Int, _ noun: String) -> String {
+        n == 1 ? "1 \(noun)" : "\(grouped(n)) \(noun)s"
+    }
+
+    /// A poster's facts line: `248 photos · 3 folders · 1.9 GB`; a folder of folders only `14 folders · 3 860 photos`
+    /// (the photos in them, as far as known); an archive of pages `96 pages · 1.2 GB`. `withInside` adds the
+    /// subfolders' photos after their count, `3 folders (412)` (a `+` while some are unknown). Empty when nothing
+    /// is known.
+    public static func facts(_ s: CardSummary, pages: Bool, withInside: Bool = false) -> String {
+        var parts: [String] = []
+        let photos = s.photos ?? 0, folders = s.folders ?? 0
+        let inside = s.insidePhotos.map { grouped($0) + (s.insideIncomplete ? "+" : "") }
+        if photos > 0 {
+            parts.append(count(photos, pages ? "page" : "photo"))
+            if folders > 0 {
+                parts.append(count(folders, "folder") + (withInside ? inside.map { " (\($0))" } ?? "" : ""))
+            }
+        } else if folders > 0 {
+            parts.append(count(folders, "folder"))
+            if let n = s.insidePhotos, let inside { parts.append(inside + (n == 1 && !s.insideIncomplete ? " photo" : " photos")) }
+        }
+        if let size = size(s) { parts.append(size) }
+        return parts.joined(separator: " · ")
+    }
+
+    /// The dates' span in months: `Jun – Aug 2024`, `Mar 2023` (one month), `2009 – 2024` (over years); nil without
+    /// a date. Month names are English, like the rest of the interface; local calendar and time zone.
+    public static func span(_ s: CardSummary) -> String? {
+        let dates = [s.first, s.last].compactMap { $0 }
+        guard let low = dates.min(), let high = dates.max() else { return nil }
+        let calendar = Calendar(identifier: .gregorian)
+        let a = calendar.dateComponents([.year, .month], from: low), b = calendar.dateComponents([.year, .month], from: high)
+        guard let y1 = a.year, let y2 = b.year, let m1 = a.month, let m2 = b.month else { return nil }
+        if y1 != y2 { return "\(y1) – \(y2)" }
+        if m1 == m2 { return "\(months[m1 - 1]) \(y1)" }
+        return "\(months[m1 - 1]) – \(months[m2 - 1]) \(y1)"
+    }
+
+    private static let months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+    /// The list's Inside column: `248 + 412` (own and the subfolders' photos), `248 + 3 folders` while those are
+    /// unknown, `14 folders` (folders only), `1 120` or `96 pages`; `—` when nothing is known.
+    public static func listInside(_ s: CardSummary, pages: Bool) -> String {
+        let photos = s.photos ?? 0, folders = s.folders ?? 0
+        if photos > 0 {
+            if folders > 0 {
+                if let inside = s.insidePhotos { return "\(grouped(photos)) + \(grouped(inside))\(s.insideIncomplete ? "+" : "")" }
+                return "\(grouped(photos)) + \(count(folders, "folder"))"
+            }
+            return pages ? count(photos, "page") : grouped(photos)
+        }
+        if folders > 0 { return count(folders, "folder") }
+        return s.photos == nil ? "—" : "0"
+    }
+
+    /// A compact card's progress text: `153 / 248`, `viewed` (to the end), `not opened` (no visit).
+    public static func progress(_ s: CardSummary) -> String? {
+        if s.done { return "viewed" }
+        if s.viewed == nil { return "not opened" }
+        return viewed(s)
+    }
+
     /// `1 204`.
     private static func grouped(_ n: Int) -> String {
         let digits = String(abs(n))

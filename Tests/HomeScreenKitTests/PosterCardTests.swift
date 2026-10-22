@@ -3,197 +3,150 @@ import Testing
 @testable import HomeScreenKit
 @testable import HomeScreenModel
 
+/// Posters as mockup E: one card holding the cover, the seam and the band, the band's lines by width.
 @MainActor @Suite struct PosterCardTests {
-    private let summary = CardSummary(photos: 248, folders: 3, bytes: 4_200_000_000,
-                                      first: Date(timeIntervalSince1970: 1_560_000_000),
-                                      last: Date(timeIntervalSince1970: 1_690_000_000),
-                                      histogram: [10, 40, 90, 20, 0, 0, 5, 5, 30, 25, 20, 10], viewed: 0.55)
+    private let summary = CardSummary(photos: 248, folders: 3, insidePhotos: 412, bytes: 1_900_000_000,
+                                      first: Date(timeIntervalSince1970: 1_717_200_000),   // June 2024
+                                      last: Date(timeIntervalSince1970: 1_723_000_000),    // August 2024
+                                      histogram: [1, 3, 8, 10, 7, 4, 2, 1, 0, 0, 0, 0], viewed: 0.62, seen: 153)
 
-    private func card(_ summary: CardSummary?, width: CGFloat, count: Int? = nil, subtitle: String? = nil) -> PosterCard {
-        let item = HomeCardItem(id: "a", title: "Holiday", subtitle: subtitle, tooltip: "a", symbol: "folder",
-                                progress: nil, summary: summary, count: count)
+    private func card(_ summary: CardSummary?, width: CGFloat, badge: String? = nil, count: Int? = nil,
+                      subtitle: String? = nil) -> PosterCard {
+        let item = HomeCardItem(id: "a", title: "Vacation 2024", subtitle: subtitle, tooltip: "a", symbol: "folder",
+                                progress: nil, badge: badge, summary: summary, count: count)
         let card = PosterCard(item: item)
         card.frame = CGRect(x: 0, y: 0, width: width, height: width + GridLayout.bandHeight(width: width))
         card.layoutSubtreeIfNeeded()
         return card
     }
 
-    @Test func posterDrawsBandBelowPicture() {
+    /// The mockup's three sizes: a 32 / 51 / 68 pt seam and band under the cover.
+    @Test func bandHeightsAtTheMockupsSizes() {
+        let small: CGFloat = 3 + 6 + 15 + 8, normal: CGFloat = 3 + 7 + 16 + 3 + 13 + 9
+        let large: CGFloat = 3 + 6 + 17 + 3 + 14 + 3 + 14 + 8
+        #expect(GridLayout.bandHeight(width: 176) == small)
+        #expect(GridLayout.bandHeight(width: 232) == normal)
+        #expect(GridLayout.bandHeight(width: 300) == large)
+        #expect(GridLayout.bandHeight(width: 199.5) == GridLayout.bandHeight(width: 176))
+        #expect(GridLayout.bandHeight(width: 200) == GridLayout.bandHeight(width: 232))
+        #expect(GridLayout.bandHeight(width: 280) == GridLayout.bandHeight(width: 300))
+    }
+
+    @Test func oneCardWithCoverSeamAndBand() {
+        var s = summary
+        s.new = 12
+        let c = card(s, width: 232)
+        #expect(c.pictureFrame == CGRect(x: 0, y: 0, width: 232, height: 232))
+        #expect(c.plate.frame == c.bounds && c.plate.cornerRadius == 12)
+        // the seam: a 3 pt track under the cover, filled 62 %
+        #expect(c.progressTrack.frame == CGRect(x: 0, y: 232, width: 232, height: 3))
+        #expect(c.progressBar.frame == CGRect(x: 0, y: 232, width: (232 * 0.62).rounded(), height: 3))
+        // the band: 10 pt from the sides, the name 7 pt under the seam
+        #expect(c.nameLabel.frame.minX == 10 && c.nameLabel.frame.minY == 235 + 7)
+        #expect(c.nameLabel.font.pointSize == 13)
+        for view in [c.nameLabel, c.insideLabel, c.histogram, c.yearsLabel, c.newPill] as [NSView] {
+            #expect(!view.isHidden)
+            #expect(view.frame.minY >= 235 && view.frame.maxY <= c.bounds.height)
+            #expect(view.frame.minX >= 10 && view.frame.maxX <= 222)
+        }
+        // "+12" at the name line's end, the bars and the years at the facts line's end
+        #expect(c.newPill.frame.maxX == 222 && abs(c.newPill.frame.midY - c.nameLabel.frame.midY) <= 1)
+        #expect(c.yearsLabel.frame.maxX == 222 && c.yearsLabel.stringValue == "2024")
+        #expect(c.histogram.frame.maxX + 8 == c.yearsLabel.frame.minX)
+        #expect(c.insideLabel.stringValue == "248 photos · 3 folders · 1.9 GB")
+        #expect(c.insideLabel.frame.maxX + 8 == c.histogram.frame.minX)   // the text gives way, the bars do not
+        #expect(c.histogram.barWidth == 2.5 && c.histogram.barGap == 1.5 && c.histogram.frame.height == 12)
+    }
+
+    @Test func narrowPosterHasTheNameAndThePill() {
+        var s = summary
+        s.new = 12
+        let c = card(s, width: 176)
+        #expect(c.nameLabel.font.pointSize == 12 && !c.newPill.isHidden)
+        for view in [c.insideLabel, c.histogram, c.yearsLabel, c.viewedLabel, c.warningLabel, c.sizeLabel] as [NSView] {
+            #expect(view.isHidden)
+        }
+        #expect(c.nameLabel.frame.maxY + 8 == c.bounds.height)
+    }
+
+    @Test func largePosterAddsTheSpanAndProgress() {
+        let c = card(summary, width: 300)
+        #expect(c.nameLabel.font.pointSize == 14)
+        #expect(c.insideLabel.stringValue == "248 photos · 3 folders (412) · 1.9 GB")
+        #expect(c.insideLabel.font.pointSize == 12)
+        #expect(c.viewedLabel.stringValue == "Jun – Aug 2024 · 153 / 248" && !c.viewedLabel.isHidden)
+        #expect(c.histogram.barWidth == 4 && c.histogram.frame.height == 14 && c.histogram.frame.minX == 10)
+        #expect(c.viewedLabel.frame.minX == c.histogram.frame.maxX + 8)
+        #expect(c.viewedLabel.frame.minY > c.insideLabel.frame.maxY && c.yearsLabel.isHidden)
+        #expect(c.viewedLabel.frame.maxY + 8 == c.bounds.height)
+    }
+
+    @Test func badgesFollowTheNameAndDoneShowsCheck() {
+        var s = summary
+        s.twoPages = true
+        s.rightToLeft = true
+        s.done = true
+        s.viewed = 1
+        let c = card(s, width: 232, badge: "ZIP")
+        #expect(!c.twoPagesIcon.isHidden && !c.rtlLabel.isHidden && !c.checkIcon.isHidden && c.newPill.isHidden)
+        #expect(c.twoPagesIcon.frame.minX == c.nameLabel.frame.maxX + 6)
+        #expect(c.rtlLabel.frame.minX == c.twoPagesIcon.frame.maxX + 6)
+        #expect(c.checkIcon.frame.maxX == 222)
+        // the archive's chip at the cover's top left; its count is pages when it is read as a book
+        #expect(!c.coverChip.isHidden && c.coverChip.frame.origin == CGPoint(x: 8, y: 8))
+        #expect(c.insideLabel.stringValue.hasPrefix("248 pages"))
+    }
+
+    /// Short of room the badges after the name go (RTL first); the pill at the end stays, the name is cut.
+    @Test func badgesGiveWayOnANarrowPoster() {
         var s = summary
         s.twoPages = true
         s.rightToLeft = true
         s.new = 12
-        let c = card(s, width: 270)
-        #expect(c.pictureFrame == CGRect(x: 0, y: 0, width: 270, height: 270))
-        #expect(c.bounds.height == 270 + GridLayout.bandHeight(width: 270))
-        for view in [c.nameLabel, c.insideLabel, c.sizeLabel, c.yearsLabel, c.histogram] as [NSView] {
-            #expect(!view.isHidden)
-            #expect(view.frame.minY >= 270)           // nothing of the band over the picture
-            #expect(view.frame.maxY <= c.bounds.height)
-        }
-        // the badges are on the name line
-        #expect(!c.twoPagesIcon.isHidden && !c.rtlLabel.isHidden)
-        for badge in [c.twoPagesIcon, c.rtlLabel] as [NSView] {
-            #expect(badge.frame.intersects(c.nameLabel.frame) == false)
-            #expect(abs(badge.frame.midY - c.nameLabel.frame.midY) <= 3)   // on the name line, centred
-            #expect(badge.frame.minY >= 270)
-        }
-        #expect(c.insideLabel.stringValue == "248 · 3 folders")
-        #expect(c.sizeLabel.stringValue == "4.2 GB")
-        // "+12" on the cover's corner, not in the band
-        #expect(!c.flagPill.isHidden && c.flagPill.text == "+12")
-        #expect(c.pictureFrame.contains(c.flagPill.frame))
-        // the thin line on the seam
-        #expect(!c.progressBar.isHidden)
-        #expect(abs(c.progressFrame.maxY - 270) <= 3.01)
-        #expect(abs(c.progressFrame.width - (270 * 0.55).rounded()) < 1)
+        let c = card(s, width: 120)
+        #expect(c.rtlLabel.isHidden && !c.newPill.isHidden)
+        #expect(c.nameLabel.frame.maxX + 6 <= c.newPill.frame.minX)
+        #expect(c.newPill.frame.maxX == 110)
     }
 
-    @Test func posterAtDefaultSizeKeepsDates() {
-        let c = card(summary, width: 232)
-        #expect(!c.insideLabel.isHidden && c.insideLabel.stringValue.hasPrefix("248"))
-        #expect(!c.histogram.isHidden && !c.yearsLabel.isHidden)
-        #expect(c.yearsLabel.stringValue == "2019–2023")
-        let shown = [c.insideLabel, c.histogram, c.yearsLabel, c.sizeLabel].filter { !$0.isHidden }.map(\.frame)
-            .sorted { $0.minX < $1.minX }
-        for (a, b) in zip(shown, shown.dropFirst()) { #expect(a.maxX <= b.minX) }
-        #expect(shown.last!.maxX <= 232)
-    }
-
-    @Test func shortOfRoomTheCountLosesItsFoldersFirst() {
-        // 200 pt: "248 · 3 folders" is too long beside the dates; the count alone stays, with the size
-        let c = card(summary, width: 200)
-        #expect(c.insideLabel.stringValue == "248")
-        #expect(!c.sizeLabel.isHidden && !c.yearsLabel.isHidden && !c.histogram.isHidden)
-    }
-
-    @Test func dropOrder() {
-        func pick(_ room: CGFloat) -> PosterFacts {
-            PosterFacts.pick(room: room, full: 89, short: 22, size: 39, years: 50, bars: 35, viewed: 60)
-        }
-        // 22 | 35 + 5 + 50 | 39 with 8 between = 167; the full count 89 makes it 234; the progress text 60 + 8 more
-        #expect(pick(320) == PosterFacts(shortInside: false, size: true, years: true, bars: true, viewed: true))
-        #expect(pick(240) == PosterFacts(shortInside: false, size: true, years: true, bars: true, viewed: false))
-        #expect(pick(200) == PosterFacts(shortInside: true, size: true, years: true, bars: true, viewed: false))
-        #expect(pick(150) == PosterFacts(shortInside: true, size: false, years: true, bars: true, viewed: false))
-        #expect(pick(110) == PosterFacts(shortInside: true, size: false, years: false, bars: true, viewed: false))
-        #expect(pick(40) == PosterFacts(shortInside: true, size: false, years: false, bars: false, viewed: false))
-    }
-
-    @Test func renameFieldSitsOnTheName() {
-        var s = summary
-        s.twoPages = true
-        let poster = card(s, width: 270)
-        #expect(poster.nameFrame.minY == poster.nameLabel.frame.minY && poster.nameFrame.height == poster.nameLabel.frame.height)
-        #expect(poster.nameFrame.minX == poster.nameLabel.frame.minX && poster.nameFrame.width >= poster.nameLabel.frame.width)
-        let item = HomeCardItem(id: "a", title: "Holiday", tooltip: "a", symbol: "folder", summary: s, count: 248)
-        let compact = CompactCard(item: item)
-        compact.frame = CGRect(x: 0, y: 0, width: 300, height: 92)
-        compact.layoutSubtreeIfNeeded()
-        #expect(compact.nameFrame.minY == compact.nameLabel.frame.minY && compact.nameFrame.height == compact.nameLabel.frame.height)
-        #expect(compact.nameFrame.minX == compact.nameLabel.frame.minX && compact.nameFrame.width >= compact.nameLabel.frame.width)
-    }
-
-    @Test func badgesNeverSqueezeTheNameAway() {
-        var s = summary
-        s.twoPages = true
-        s.rightToLeft = true
-        s.problem = .broken
-        let c = card(s, width: 100)
-        #expect(c.nameLabel.frame.width >= FolderCard.minName)
-        #expect(c.nameLabel.frame.maxX <= 100)
-    }
-
-    @Test func doneShowsCheck() {
-        var s = summary
-        s.done = true
-        s.viewed = 1
-        let c = card(s, width: 270)
-        #expect(!c.flagPill.isHidden && c.flagPill.text == "✓")
-        #expect(card(summary, width: 270).flagPill.isHidden)
-    }
-
-    @Test func posterNarrowHasOneLine() {
-        let c = card(summary, width: 180)
-        #expect(c.bounds.height == 180 + GridLayout.bandHeight(width: 180))
-        #expect(!c.nameLabel.isHidden && !c.countLabel.isHidden)
-        #expect(c.countLabel.stringValue == "248")
-        for view in [c.insideLabel, c.sizeLabel, c.yearsLabel, c.histogram, c.viewedLabel, c.fallbackLabel] as [NSView] {
-            #expect(view.isHidden)
-        }
-        #expect(c.nameLabel.frame.maxY <= c.bounds.height)
-    }
-
-    /// A narrow poster of a folder with only subfolders says how many ("3 folders"), not "0"; nothing when both are 0.
-    @Test func narrowFolderOfFoldersCountsFolders() {
-        let folders = card(CardSummary(photos: 0, folders: 3), width: 180)
-        #expect(folders.countLabel.stringValue == "3 folders" && !folders.countLabel.isHidden)
-        #expect(card(CardSummary(photos: 0, folders: 1), width: 180).countLabel.stringValue == "1 folder")
-        let empty = card(CardSummary(photos: 0, folders: 0), width: 180)
-        #expect(empty.countLabel.stringValue.isEmpty && empty.countLabel.isHidden)
-    }
-
-    @Test func widthDecidesWhatTheSecondLineHolds() {
-        let two = card(summary, width: 270)
-        #expect(two.viewedLabel.isHidden)
-        let wide = card(summary, width: 320)
-        #expect(!wide.viewedLabel.isHidden)
-        #expect(wide.viewedLabel.stringValue == "136 / 248")
-        #expect(wide.viewedLabel.frame.minY >= 320)
-        // every item of the line stays inside the card and clear of its neighbours
-        let line = [wide.insideLabel, wide.histogram, wide.yearsLabel, wide.viewedLabel, wide.sizeLabel]
-            .filter { !$0.isHidden }.map(\.frame).sorted { $0.minX < $1.minX }
-        for (a, b) in zip(line, line.dropFirst()) { #expect(a.maxX <= b.minX) }
-        #expect(line.last!.maxX <= 320)
+    /// An unavailable folder: the cover faint with a glyph on it, a warning line in place of the facts, the band
+    /// readable (the card is not dimmed as a whole). A damaged archive: the same with its own words.
+    @Test func unavailableAndBroken() {
+        var off = summary
+        off.problem = .offline
+        let c = card(off, width: 232)
+        #expect(c.alphaValue == 1 && c.picture.alphaValue == 0.4)
+        #expect(!c.coverAlert.isHidden && c.coverAlert.frame.size == CGSize(width: 34, height: 34))
+        #expect(!c.warningLabel.isHidden && c.warningLabel.stringValue == "Volume not connected · from the catalog")
+        #expect(c.insideLabel.isHidden && c.histogram.isHidden && c.yearsLabel.isHidden)
+        var broken = CardSummary(bytes: 310_000_000)
+        broken.problem = .broken
+        let b = card(broken, width: 232, badge: "CBZ")
+        #expect(b.picture.alphaValue == 0.25 && !b.coverAlert.isHidden)
+        #expect(b.warningLabel.stringValue == "Archive is damaged")
+        #expect(card(summary, width: 232).coverAlert.isHidden)
     }
 
     @Test func withoutSummaryItShowsWhatItShowedBefore() {
         let c = card(nil, width: 270, count: 12, subtitle: "12 photos")
-        #expect(c.fallbackLabel.stringValue == "12 photos" && !c.fallbackLabel.isHidden)
-        #expect(c.insideLabel.isHidden && c.histogram.isHidden && c.flagPill.isHidden && c.progressBar.isHidden)
-        let narrow = card(nil, width: 180, count: 12, subtitle: "12 photos")
-        #expect(narrow.countLabel.stringValue == "12")
+        #expect(c.insideLabel.stringValue == "12 photos" && !c.insideLabel.isHidden)
+        #expect(c.histogram.isHidden && c.newPill.isHidden && c.progressBar.isHidden && !c.progressTrack.isHidden)
     }
 
-    @Test func histogramScalesToLargestBin() {
-        let h = HistogramView.heights([10, 40, 90, 0, 45], height: 12)
-        let expected: [CGFloat] = [12.0 * 10 / 90, 12.0 * 40 / 90, 12, 0, 6]
-        #expect(h == expected)
-        #expect(HistogramView.heights([0, 0], height: 12) == [0, 0])
+    @Test func renameFieldSitsOnTheName() {
+        let c = card(summary, width: 232)
+        #expect(c.nameFrame.minY == c.nameLabel.frame.minY && c.nameFrame.height == c.nameLabel.frame.height)
+        #expect(c.nameFrame.minX == c.nameLabel.frame.minX && c.nameFrame.width >= c.nameLabel.frame.width)
+    }
+
+    @Test func histogramAsTheMockupDrawsIt() {
+        // scaled to the largest bin, whole points, an empty bin a 1 pt stub
+        #expect(HistogramView.heights([1, 3, 8, 10, 7, 4, 2, 1], height: 12) == [1, 4, 10, 12, 8, 5, 2, 1])
+        #expect(HistogramView.heights([0, 10, 0], height: 12) == [1, 12, 1])
+        #expect(HistogramView.heights([0, 0], height: 12) == [1, 1])   // no dated photo: the stubs alone
         #expect(HistogramView.heights([], height: 12).isEmpty)
-        // a bin with photos is never invisible
-        #expect(HistogramView.heights([1, 255], height: 12)[0] >= 1)
-    }
-
-    @Test func problemsShowBadge() {
-        var s = summary
-        s.problem = .broken
-        #expect(!card(s, width: 270).problemIcon.isHidden)
-        s.problem = .offline
-        #expect(!card(s, width: 270).problemIcon.isHidden)
-        #expect(card(summary, width: 270).problemIcon.isHidden)
-    }
-
-    @Test func compactCardHasFourLines() {
-        var s = summary
-        s.new = 3
-        s.twoPages = true
-        let item = HomeCardItem(id: "a", title: "Holiday", tooltip: "a", symbol: "folder", summary: s, count: 248)
-        let c = CompactCard(item: item)
-        c.frame = CGRect(x: 0, y: 0, width: 300, height: 92)
-        c.layoutSubtreeIfNeeded()
-        #expect(c.pictureFrame == CGRect(x: 0, y: 0, width: 92, height: 92))
-        let lines = [c.nameLabel, c.insideLabel, c.yearsLabel, c.viewedLabel] as [NSView]
-        for view in lines {
-            #expect(!view.isHidden)
-            #expect(view.frame.minX >= 92)
-            #expect(c.bounds.contains(view.frame))
-        }
-        let ys = lines.map { $0.frame.minY }
-        #expect(ys == ys.sorted())
-        #expect(c.insideLabel.stringValue == "248 photos · 3 folders · 4.2 GB")
-        #expect(c.flagPill.text == "+3" && c.bounds.contains(c.flagPill.frame))
-        #expect(c.flagPill.frame.minX >= 92)
-        #expect(c.bounds.contains(c.progressFrame) && c.progressFrame.minX >= 92)
+        let h = HistogramView()
+        h.bins = [1, 2, 3]
+        #expect(h.barsWidth == CGFloat(10.5))
     }
 }

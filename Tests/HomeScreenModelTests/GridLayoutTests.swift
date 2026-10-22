@@ -125,10 +125,14 @@ import Testing
         let grid = GridLayout(sections: [folders(10)], width: 1000, target: 100, names: .off)
         let slot = grid.slotWidth(inSection: 0)
         #expect(grid.frame(of: 0).height == slot + GridLayout.bandHeight(width: slot))
-        #expect(GridLayout.bandHeight(width: 180) == 20)    // name line only
-        #expect(GridLayout.bandHeight(width: 232) == 35)    // name and facts
-        #expect(GridLayout.bandHeight(width: 199.5) == 20)
-        #expect(GridLayout.bandHeight(width: 200) == 35)
+        // the seam and the band of mockup E: one line, two, three
+        #expect(GridLayout.bandHeight(width: 180) == 32)
+        #expect(GridLayout.bandHeight(width: 232) == 51)
+        #expect(GridLayout.bandHeight(width: 300) == 68)
+        #expect(GridLayout.bandHeight(width: 199.5) == 32)
+        #expect(GridLayout.bandHeight(width: 200) == 51)
+        #expect(GridLayout.bandHeight(width: 279.5) == 51)
+        #expect(GridLayout.bandHeight(width: 280) == 68)
         // Whatever the name mode: the band does not depend on it.
         let below = GridLayout(sections: [folders(10)], width: 1000, target: 100, names: .below)
         #expect(below.frame(of: 0).height == grid.frame(of: 0).height)
@@ -144,8 +148,8 @@ import Testing
     @Test func listDrawsFilesAsRowsToo() {
         let grid = GridLayout(sections: [photos(10)], width: 1000, target: 200, names: .below, style: .list)
         #expect(grid.columns(inSection: 0) == 1)
-        #expect(grid.frame(of: 0).height == 44 && grid.frame(of: 0).width == 1000)
-        #expect(grid.pictureFrame(of: 0).size == CGSize(width: 36, height: 36))
+        #expect(grid.frame(of: 0).height == 44 && grid.frame(of: 0).width == 960 && grid.frame(of: 0).minX == 20)
+        #expect(grid.pictureFrame(of: 0).size == CGSize(width: 32, height: 32))
         // a narrow column keeps the photo tiles
         let narrow = GridLayout(sections: [photos(10)], width: 300, target: 200, names: .below, style: .list)
         #expect(narrow == GridLayout(sections: [photos(10)], width: 300, target: 200, names: .below))
@@ -157,7 +161,8 @@ import Testing
         #expect(grid.slotWidth(inSection: 0) == 300)
         #expect(grid.frame(of: 0).height == 92)
         #expect(grid.frame(of: 1).minX - grid.frame(of: 0).maxX == m.cardGap)
-        #expect(grid.pictureFrame(of: 0).size == CGSize(width: 92, height: 92))
+        #expect(grid.pictureFrame(of: 0) == CGRect(x: grid.frame(of: 0).minX + 8, y: grid.frame(of: 0).minY + 8,
+                                                   width: 76, height: 76))
         #expect(grid.index(at: CGPoint(x: grid.frame(of: 4).midX, y: grid.frame(of: 4).midY)) == 4)
         let wide = GridLayout(sections: [folders(10)], width: 1400, target: 220, names: .off, style: .cards)
         #expect(wide.slotWidth(inSection: 0) >= 300)
@@ -168,9 +173,9 @@ import Testing
         let grid = GridLayout(sections: [folders(10)], width: 800, target: 220, names: .off, style: .list)
         #expect(grid.columns(inSection: 0) == 1)
         #expect(grid.frame(of: 0).height == 44)
-        #expect(grid.frame(of: 0).width == 800)
+        #expect(grid.frame(of: 0).width == 760 && grid.frame(of: 0).minX == 20)   // in a container 20 pt in
         #expect(grid.frame(of: 1).minY - grid.frame(of: 0).minY == 44)
-        #expect(grid.pictureFrame(of: 0) == CGRect(x: 4, y: 4, width: 36, height: 36))
+        #expect(grid.pictureFrame(of: 0) == CGRect(x: 32, y: 6, width: 32, height: 32))
     }
 
     @Test func narrowColumnIsPosters() {

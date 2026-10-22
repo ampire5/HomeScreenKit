@@ -2,104 +2,143 @@ import AppKit
 import HomeChrome
 import HomeScreenModel
 
-/// What the poster's facts line holds in the room it has. Short of room it gives up, in this order: (a) the folders part
-/// of the count (`248 · 3 folders` becomes `248`), (b) the size, (c) the years' text (the bars stay), (d) the bars.
-/// The progress text, the lowest priority, goes before any of these. A width of nil: there is no such item.
-struct PosterFacts: Equatable {
-    var shortInside = false, size = true, years = true, bars = true, viewed = true
-
-    static let gap: CGFloat = 8, tight: CGFloat = 5
-
-    static func pick(room: CGFloat, full: CGFloat?, short: CGFloat?, size: CGFloat?, years: CGFloat?, bars: CGFloat?,
-                     viewed: CGFloat?) -> PosterFacts {
-        let configs = [PosterFacts(shortInside: false), PosterFacts(shortInside: true),
-                       PosterFacts(shortInside: true, size: false), PosterFacts(shortInside: true, size: false, years: false),
-                       PosterFacts(shortInside: true, size: false, years: false, bars: false)]
-        func need(_ c: PosterFacts, withViewed: Bool) -> CGFloat {
-            var blocks: [CGFloat] = []
-            if let inside = c.shortInside ? short ?? full : full { blocks.append(inside) }
-            var dates: CGFloat = 0
-            if c.bars, let bars { dates += bars }
-            if c.years, let years { dates += (dates > 0 ? tight : 0) + years }
-            if dates > 0 { blocks.append(dates) }
-            if c.size, let size { blocks.append(size) }
-            if withViewed, let viewed { blocks.append(viewed) }
-            return blocks.reduce(0, +) + gap * CGFloat(max(0, blocks.count - 1))
-        }
-        for var c in configs {
-            for withViewed in [true, false] where need(c, withViewed: withViewed) <= room + 0.5 {
-                c.viewed = withViewed
-                return c
-            }
-        }
-        var last = configs[configs.count - 1]
-        last.viewed = false
-        return last
-    }
-}
-
-/// A folder or an archive as a poster: the square cover, and under it a band of facts that the grid reserves exactly
-/// (`GridLayout.bandHeight`): the name line (the name, ⧉, RTL, a problem badge), and from 200 pt wide a facts line —
-/// `248 · 3 folders`, the dates' histogram and years, the size, and from 280 pt "137 / 248". Under 200 pt the band is
-/// the name line with the photo count at its end. A thin line on the seam between cover and band shows how far the
-/// folder was viewed; `+12` (new photos) or ✓ (viewed to the end) sits in the cover's top right corner.
+/// A folder or an archive as a poster (mockup E «Плакат»): one card, as wide as the cover, radius 12 with a 0.5 pt
+/// ring. At its top the square cover (an archive's `ZIP` chip at its top left); under it a 3 pt seam, the progress
+/// track filled as far as the folder was viewed; then the band (`GridMetrics.posterBand`, which the grid reserves
+/// exactly), by width:
+/// - under 200 pt: the name, and at the line's end `+12` and ✓;
+/// - from 200 pt: also `248 photos · 3 folders · 1.9 GB`, the dates' bars and the years at the line's end;
+/// - from 280 pt: the facts line with the subfolders' photos (`3 folders (412)`), and a third line of larger bars
+///   with the dates' span and the progress: `Jun – Aug 2024 · 153 / 248`.
+/// A folder whose volume is away, or an archive that cannot be read, has its cover faint with a warning glyph over
+/// it and a warning line in place of the facts.
 final class PosterCard: FolderCard {
+    static let radius: CGFloat = 12
+    static let side: CGFloat = 10
+    /// The warning glyph over the cover: 34 pt, 92 pt down a 232 pt cover (the mockup's place, scaled).
+    let coverAlert = GlyphView(nil, color: Chrome.Palette.card.label, lineWidth: 1.2)
+
+    override init(item: HomeCardItem) {
+        super.init(item: item)
+        addSubview(coverAlert, positioned: .above, relativeTo: coverClip)
+        itemChanged()
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    var band: PosterBand { metrics.posterBand(width: bounds.width) }
+
     override var pictureFrame: CGRect { CGRect(x: 0, y: 0, width: bounds.width, height: bounds.width) }
     override var nameLine: CGRect {
-        CGRect(x: 0, y: bounds.width + metrics.bandInset, width: bounds.width, height: nameLineHeight)
+        let w = bounds.width
+        return CGRect(x: Self.side, y: w + metrics.seam + band.top, width: max(0, w - 2 * Self.side), height: band.nameLine)
+    }
+
+    /// The facts line's words: with the subfolders' photos on a large poster.
+    private var withInside: Bool { bounds.width >= metrics.bandProgressFrom }
+
+    override func itemChanged() {
+        super.itemChanged()
+        problemIcon.isHidden = true   // a poster says it on its cover and in the warning line
+        coverAlert.glyph = problemIcon.glyph
+        coverAlert.isHidden = problem == nil
+        guard let s = summary else {
+            insideLabel.stringValue = fallbackLabel.stringValue
+            yearsLabel.stringValue = ""
+            viewedLabel.stringValue = ""
+            return
+        }
+        insideLabel.stringValue = CardSummaryText.facts(s, pages: holdsPages, withInside: withInside)
+        yearsLabel.stringValue = CardSummaryText.years(s) ?? ""
+        viewedLabel.stringValue = [CardSummaryText.span(s), CardSummaryText.viewed(s)].compactMap { $0 }
+            .joined(separator: " · ")
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        let was = withInside
+        super.setFrameSize(newSize)
+        if withInside != was { itemChanged() }   // the facts line's words change with the size
     }
 
     override func layout() {
         super.layout()
-        let m = metrics, w = bounds.width
-        layoutCover(pictureFrame)
-        let flag = flagPill.fittingSize
-        flagPill.frame = CGRect(x: w - 8 - flag.width, y: 8, width: flag.width, height: flag.height)
-        // The line sits on the cover's bottom edge, inside its rounded clip (the picture's coordinates are not flipped).
+        let w = bounds.width, band = band
+        layoutPlate(bounds, radius: Self.radius)
+        layoutCover(pictureFrame, radius: Self.radius, topOnly: true)
+        let chip = coverChip.fittingSize
+        coverChip.frame = CGRect(x: 8, y: 8, width: chip.width, height: chip.height)
+        let alert: CGFloat = 34
+        coverAlert.frame = CGRect(x: ((w - alert) / 2).rounded(), y: (w * 92 / 232).rounded(), width: alert, height: alert)
+        // The seam: the track the whole width, the fill as far as viewed.
+        progressTrack.frame = CGRect(x: 0, y: w, width: w, height: metrics.seam)
         let fraction = min(1, max(0, shownProgress ?? 0))
-        progressBar.frame = CGRect(x: 0, y: 0, width: (w * fraction).rounded(), height: 3)
-        let narrow = w < m.bandTwoLinesFrom
+        progressBar.frame = CGRect(x: 0, y: w, width: (w * fraction).rounded(), height: metrics.seam)
+        // Line 1: the name, ⧉ and RTL after it; `+12` and ✓ at the end.
+        nameLabel.font = CardFont.text(band.nameSize, .semibold)
+        let line1 = nameLine
         let s = summary
-        layoutNameLine(nameLine, trailing: [(countLabel, narrow && !countLabel.stringValue.isEmpty),
-                                            (problemIcon, s?.problem != nil), (rtlLabel, s?.rightToLeft ?? false),
-                                            (twoPagesIcon, s?.twoPages ?? false)])
-        let factsY = nameLine.maxY
-        guard !narrow else {
-            for view in [insideLabel, histogram, yearsLabel, sizeLabel, viewedLabel, fallbackLabel] as [NSView] { view.isHidden = true }
+        layoutNameLine(line1, after: [(twoPagesIcon, CGSize(width: 13, height: 13), s?.twoPages ?? false),
+                                      (rtlLabel, rtlLabel.fittingSize, s?.rightToLeft ?? false)],
+                       end: [(newPill, newPill.fittingSize, !newPill.text.isEmpty),
+                             (checkIcon, CGSize(width: 13, height: 13), s?.done ?? false)])
+        sizeLabel.isHidden = true
+        fallbackLabel.isHidden = true
+        guard band.lines > 1 else {
+            for view in [insideLabel, histogram, yearsLabel, viewedLabel, warningLabel] as [NSView] { view.isHidden = true }
             return
         }
-        func width(_ text: String) -> CGFloat? { text.isEmpty ? nil : Self.textWidth(text) }
-        let hasBars = histogram.hasBars
-        let pick = PosterFacts.pick(room: w, full: width(insideFull.isEmpty ? fallbackLabel.stringValue : insideFull),
-                                    short: width(insideShort), size: width(sizeLabel.stringValue),
-                                    years: width(yearsLabel.stringValue),
-                                    bars: hasBars ? Self.width(of: histogram) : nil,
-                                    viewed: w >= m.bandProgressFrom ? width(viewedLabel.stringValue) : nil)
-        let hasInside = !insideFull.isEmpty
-        insideLabel.stringValue = pick.shortInside ? insideShort : insideFull
-        insideLabel.isHidden = !hasInside
-        fallbackLabel.isHidden = hasInside || fallbackLabel.stringValue.isEmpty
-        sizeLabel.isHidden = !pick.size || sizeLabel.stringValue.isEmpty
-        yearsLabel.isHidden = !pick.years || yearsLabel.stringValue.isEmpty
-        histogram.isHidden = !pick.bars || !hasBars
-        viewedLabel.isHidden = !pick.viewed || w < m.bandProgressFrom || viewedLabel.stringValue.isEmpty
-        // In display order from the left, the size at the right end.
-        let h = factsLineHeight
-        var x: CGFloat = 0
-        func put(_ view: NSView, height: CGFloat, gap: CGFloat = PosterFacts.gap) {
-            guard !view.isHidden else { return }
-            let vw = view === insideLabel ? Self.textWidth(insideLabel.stringValue) : Self.width(of: view)
-            view.frame = CGRect(x: x, y: factsY + (h - height) / 2, width: vw, height: height)
-            x += vw + gap
+        let x = Self.side, width = max(0, w - 2 * Self.side)
+        let y2 = line1.maxY + band.gap
+        let line2 = CGRect(x: x, y: y2, width: width, height: band.factsLine)
+        let font = CardFont.text(band.factsSize)
+        for label in [insideLabel, yearsLabel, viewedLabel] { label.font = font }
+        if let problem {
+            warningLabel.font = CardFont.text(11)
+            warningLabel.stringValue = Self.warning(problem, short: true)
+            warningLabel.isHidden = false
+            warningLabel.frame = line2
+            insideLabel.isHidden = true
+        } else {
+            warningLabel.isHidden = true
+            insideLabel.isHidden = insideLabel.stringValue.isEmpty
         }
-        put(insideLabel, height: h)
-        put(fallbackLabel, height: h)
-        put(histogram, height: HistogramView.height, gap: PosterFacts.tight)
-        put(yearsLabel, height: h)
-        put(viewedLabel, height: h)
-        if !sizeLabel.isHidden {
-            let sw = Self.width(of: sizeLabel)
-            sizeLabel.frame = CGRect(x: w - sw, y: factsY, width: sw, height: h)
+        if band.lines == 2 {
+            viewedLabel.isHidden = true
+            // The facts take what is left (cut with "…" first); the bars and the years at the line's end.
+            histogram.barWidth = 2.5
+            histogram.barGap = 1.5
+            var right = line2.maxX
+            yearsLabel.isHidden = problem != nil || yearsLabel.stringValue.isEmpty
+            if !yearsLabel.isHidden {
+                let yw = yearsLabel.textWidth
+                right -= yw
+                yearsLabel.frame = CGRect(x: right, y: y2, width: yw, height: band.factsLine)
+                right -= 8
+            }
+            histogram.isHidden = problem != nil || !histogram.hasBars
+            if !histogram.isHidden {
+                let hw = histogram.barsWidth
+                right -= hw
+                histogram.frame = CGRect(x: right, y: line2.maxY - 12, width: hw, height: 12)
+                right -= 8
+            }
+            insideLabel.frame = CGRect(x: x, y: y2, width: max(0, right - x), height: band.factsLine)
+            return
         }
+        // Three lines: the facts alone, then the larger bars with the span and the progress.
+        insideLabel.frame = line2
+        yearsLabel.isHidden = true
+        let y3 = line2.maxY + band.gap
+        histogram.barWidth = 4
+        histogram.barGap = 2
+        histogram.isHidden = !histogram.hasBars
+        var cursor = x
+        if !histogram.isHidden {
+            let hw = histogram.barsWidth
+            histogram.frame = CGRect(x: x, y: y3 + band.factsLine - 14, width: hw, height: 14)
+            cursor += hw + 8
+        }
+        viewedLabel.isHidden = viewedLabel.stringValue.isEmpty
+        viewedLabel.frame = CGRect(x: cursor, y: y3, width: max(0, x + width - cursor), height: band.factsLine)
     }
 }

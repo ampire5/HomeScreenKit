@@ -58,28 +58,72 @@ public struct GridMetrics: Equatable, Sendable {
     public var belowText: CGFloat = 22
     /// Names and badges only on slots at least this wide.
     public var minNamed: CGFloat = 90
-    /// A poster's band, line by line. The heights are the caption's metrics from `CollectionCard` under a picture
-    /// (`.below`): 3 pt, the name line 17 pt, the facts line 15 pt — so one line is 20 pt and two are 35 pt (the 35 that
-    /// the caption draws and the grid used to reserve 22 for).
-    public var bandInset: CGFloat = 3
-    public var bandNameLine: CGFloat = 17
-    public var bandFactsLine: CGFloat = 15
-    /// A poster narrower than this has the name line only.
+    /// A poster is one card: the square cover, a 3 pt seam (the progress track) under it, then the band of facts
+    /// (`PosterBand`, by width). The band's lines change at these widths: under `bandTwoLinesFrom` the name line
+    /// only; from `bandProgressFrom` a third line with the dates' span and the progress as text.
+    public var seam: CGFloat = 3
     public var bandTwoLinesFrom: CGFloat = 200
-    /// A poster at least this wide adds the progress as text ("137 / 248") to the facts line.
     public var bandProgressFrom: CGFloat = 280
     /// A column narrower than this shows posters whatever the style.
     public var minStyled: CGFloat = 320
-    /// A compact card: the cover is a square of `cardHeight` at its left. The columns are at least `cardWidth` wide
-    /// and share what is left over; the gap is 10 so that three fit a 960 pt window.
+    /// A compact card (mockup B, 300 × 92): the columns are at least `cardWidth` wide and share what is left over;
+    /// the gap is 10 so that three fit a 960 pt window. The cover is a `cardCover` square `cardPadding` in from the
+    /// card's top left.
     public var cardWidth: CGFloat = 300
     public var cardHeight: CGFloat = 92
     public var cardGap: CGFloat = 10
-    /// A list row: one column over the whole width, the cover a square of `listCover` in the middle of the row's height.
+    public var cardPadding: CGFloat = 8
+    public var cardCover: CGFloat = 76
+    /// The list (mockup C): rows of `listRow` (the 1 pt separator included) in one container `collectionEdge` in
+    /// from the sides; a row's cover is a `listCover` square `listPadding` in from the row's left, in the middle of
+    /// its height. The column heads (`listHeader` tall) sit at the container's top.
     public var listRow: CGFloat = 44
-    public var listCover: CGFloat = 36
+    public var listCover: CGFloat = 32
+    public var listPadding: CGFloat = 12
+    public var listHeader: CGFloat = 28
+
+    /// The band under a poster's cover at slot width `width`, from the mockup's three sizes (⌘− 176 pt, the default
+    /// 232 pt, ⌘+ 300 pt): its paddings, line heights and font sizes. Heights are whole points; each line is the
+    /// height of its font's line in AppKit (12 / 13 / 14 pt semibold: 15 / 16 / 17), the facts lines the mockup's
+    /// 13 and 14.
+    public func posterBand(width: CGFloat) -> PosterBand {
+        if width < bandTwoLinesFrom {
+            return PosterBand(lines: 1, top: 6, bottom: 8, nameLine: 15, nameSize: 12, factsLine: 0, factsSize: 11.5)
+        }
+        if width < bandProgressFrom {
+            return PosterBand(lines: 2, top: 7, bottom: 9, nameLine: 16, nameSize: 13, factsLine: 13, factsSize: 11.5)
+        }
+        return PosterBand(lines: 3, top: 6, bottom: 8, nameLine: 17, nameSize: 14, factsLine: 14, factsSize: 12)
+    }
 
     public init() {}
+}
+
+/// A poster's band of facts at one size: one line (the name, the `+N` pill or ✓), two (the facts with the dates'
+/// bars and years) or three (the facts, then the bars with the dates' span and the progress as text).
+public struct PosterBand: Equatable, Sendable {
+    public var lines: Int
+    public var top: CGFloat
+    public var bottom: CGFloat
+    public var nameLine: CGFloat
+    public var nameSize: CGFloat
+    /// The second and third lines' height; their gap to the line above is `gap`.
+    public var factsLine: CGFloat
+    public var factsSize: CGFloat
+    public var gap: CGFloat = 3
+
+    public init(lines: Int, top: CGFloat, bottom: CGFloat, nameLine: CGFloat, nameSize: CGFloat, factsLine: CGFloat,
+                factsSize: CGFloat) {
+        self.lines = lines
+        self.top = top
+        self.bottom = bottom
+        self.nameLine = nameLine
+        self.nameSize = nameSize
+        self.factsLine = factsLine
+        self.factsSize = factsSize
+    }
+
+    public var height: CGFloat { top + nameLine + CGFloat(lines - 1) * (gap + factsLine) + bottom }
 }
 
 /// The grid as geometry only: sections top to bottom, each a heading (when titled) and rows at its own column count,
@@ -106,7 +150,7 @@ public struct GridLayout: Equatable, Sendable {
         var rowsTop: CGFloat
         /// The cover's side and where it sits in the slot: the full width for a poster, a square at the left otherwise.
         var cover: CGFloat
-        var coverInset: CGFloat
+        var coverInset: CGPoint
         var rows: Int { (count + columns - 1) / columns }
         var pitch: CGFloat { slotHeight + gap }
     }
@@ -128,7 +172,7 @@ public struct GridLayout: Equatable, Sendable {
             let wanted = isPhotos ? target : target * metrics.collectionScale
             var columns = Self.columns(width: width, target: wanted, gap: gap, edge: edge)
             var slot = max(1, (width - 2 * edge - gap * CGFloat(columns - 1)) / CGFloat(columns))
-            var slotHeight: CGFloat, cover = slot, coverInset: CGFloat = 0
+            var slotHeight: CGFloat, cover = slot, coverInset = CGPoint.zero
             // Photos keep their tiles, except in the list, where files are rows like the folders.
             let used = (isPhotos && style != .list) || width < metrics.minStyled ? CardStyle.posters : style
             if isPhotos && used != .list {
@@ -142,15 +186,16 @@ public struct GridLayout: Equatable, Sendable {
                     columns = max(1, Int(((width - 2 * edge + gap) / (metrics.cardWidth + gap)).rounded(.down)))
                     slot = max(1, (width - 2 * edge - gap * CGFloat(columns - 1)) / CGFloat(columns))
                     slotHeight = metrics.cardHeight
-                    cover = metrics.cardHeight
+                    cover = metrics.cardCover
+                    coverInset = CGPoint(x: metrics.cardPadding, y: metrics.cardPadding)
                 case .list:
                     gap = 0
-                    edge = 0
+                    edge = metrics.collectionEdge   // the files' rows too: one container
                     columns = 1
-                    slot = max(1, width)
+                    slot = max(1, width - 2 * edge)
                     slotHeight = metrics.listRow
                     cover = metrics.listCover
-                    coverInset = (metrics.listRow - metrics.listCover) / 2
+                    coverInset = CGPoint(x: metrics.listPadding, y: ((metrics.listRow - metrics.listCover) / 2).rounded(.down))
                 }
             }
             var header: CGRect?
@@ -169,11 +214,10 @@ public struct GridLayout: Equatable, Sendable {
         footerFrame = CGRect(x: 0, y: y, width: width, height: metrics.footerHeight)
     }
 
-    /// A folder poster's band under the cover at slot width `width`: the name line, and under 200 pt wide nothing
-    /// more; wider, the facts line too. The poster view draws exactly this.
+    /// What a folder poster has under its cover at slot width `width`: the seam and the band (`posterBand`). The
+    /// grid reserves exactly this and the poster view draws exactly this.
     public static func bandHeight(width: CGFloat, metrics: GridMetrics = .init()) -> CGFloat {
-        let lines = width < metrics.bandTwoLinesFrom ? metrics.bandNameLine : metrics.bandNameLine + metrics.bandFactsLine
-        return metrics.bandInset + lines
+        metrics.seam + metrics.posterBand(width: width).height
     }
 
     /// The column count nearest to `target` at `width`, at least one.
@@ -206,10 +250,11 @@ public struct GridLayout: Equatable, Sendable {
                       width: p.slot, height: p.slotHeight)
     }
 
-    /// The square cover: the slot's width at its top for a poster, the card's height at its left, a row's small one.
+    /// The square cover: the slot's width at its top for a poster, a compact card's square inside its padding, a
+    /// row's small one.
     public func pictureFrame(of index: Int) -> CGRect {
         let f = frame(of: index), p = placed[section(of: index)]
-        return CGRect(x: f.minX + p.coverInset, y: f.minY + p.coverInset, width: p.cover, height: p.cover)
+        return CGRect(x: f.minX + p.coverInset.x, y: f.minY + p.coverInset.y, width: p.cover, height: p.cover)
     }
 
     /// The cards whose rows meet `rect` grown by `margin` above and below, whole rows.
