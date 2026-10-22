@@ -531,6 +531,24 @@ import Testing
         #expect(plate.frame.minX == 20 && plate.frame.width == row.frame.width)
     }
 
+    /// The column heads stay at the top of the visible area while the rows scroll under them, over the rows; the
+    /// last row has no separator of its own (the container's edge is there).
+    @Test func listHeaderStaysOnTopWhileScrolling() async {
+        let source = FakeHomeSource()
+        source.cardStyles[.folder(x)] = .list
+        let view = await shown(source, (0..<200).map { BrowserFixtures.folder("f\($0)") })
+        let header = view.listHeader!
+        #expect(header.frame.minY == HomeToolbar.height)
+        view.scrollGrid(to: 1000)
+        #expect(header.frame.minY == view.scrollOffset + HomeToolbar.height)
+        #expect(header.superview?.subviews.last === header)
+        view.scrollGrid(to: view.gridContentHeight)
+        #expect(header.frame.maxY <= view.listPlate!.frame.maxY)
+        let last = view.card(for: view.entries.last!.id) as? ListRow
+        #expect(last?.showsSeparator == false)
+        #expect((view.card(for: view.entries[view.entries.count - 2].id) as? ListRow)?.showsSeparator == true)
+    }
+
     @Test func listShowsFoldersWithFacts() async {
         let source = FakeHomeSource()
         let view = await shown(source, [BrowserFixtures.folder("a"), BrowserFixtures.folder("b")])
