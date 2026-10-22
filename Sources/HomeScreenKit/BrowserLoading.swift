@@ -30,7 +30,7 @@ final class LoadingLine: NSView {
         guard on else { return }
         needsLayout = true
         layoutSubtreeIfNeeded()
-        if Chrome.Motion.duration(1) == 0 {   // Reduce motion
+        if Chrome.Motion.reduced {   // Reduce motion
             glint.colors = [NSColor.controlAccentColor.withAlphaComponent(0.5).cgColor,
                             NSColor.controlAccentColor.withAlphaComponent(0.5).cgColor]
             return
@@ -48,7 +48,7 @@ final class LoadingLine: NSView {
         super.layout()
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        glint.frame = Chrome.Motion.duration(1) == 0 ? bounds : CGRect(x: 0, y: 0, width: bounds.width * 0.4, height: bounds.height)
+        glint.frame = Chrome.Motion.reduced ? bounds : CGRect(x: 0, y: 0, width: bounds.width * 0.4, height: bounds.height)
         CATransaction.commit()
     }
 }
@@ -122,7 +122,7 @@ final class BrowserSkeleton: NSView {
 
     func start() {
         shine.removeAllAnimations()
-        guard Chrome.Motion.duration(1) > 0 else { return }   // Reduce motion
+        guard !Chrome.Motion.reduced else { return }   // Reduce motion
         let move = CABasicAnimation(keyPath: "locations")
         move.fromValue = [-1, -0.5, 0]
         move.toValue = [1, 1.5, 2]

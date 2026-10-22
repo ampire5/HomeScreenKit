@@ -20,7 +20,7 @@ public struct FilmstripTool {
     }
 }
 
-/// One tool button: a light-line symbol at 0.7, 1 with a white 10 % pill under the pointer, and a white 20 % pill
+/// One tool button: a light-line symbol at 0.7, 1 with a `overMedia.hover` pill under the pointer, and an `overMedia.pressed` pill
 /// while it is on. No accent tint.
 @MainActor final class FilmstripToolButton: NSButton {
     private var hovered = false { didSet { refresh() } }
@@ -28,7 +28,7 @@ public struct FilmstripTool {
 
     override var state: NSControl.StateValue { didSet { refresh() } }
 
-    /// The pill's white level: 20 % on, 10 % hovered, none otherwise.
+    /// The pill's white level: 20 % on, 10 % hovered, none otherwise (`pillColor` is the same as a colour).
     var pillAlpha: CGFloat { state == .on ? 0.2 : hovered ? 0.1 : 0 }
     /// The pill's colour: `overMedia.pressed` on, `overMedia.hover` hovered, none otherwise.
     var pillColor: NSColor? {
@@ -71,7 +71,7 @@ public struct FilmstripTool {
     static let separatorWidth: CGFloat = 1
     static let separatorMargin: CGFloat = 3
     static let symbolSize: CGFloat = 16
-    
+
     public var tools: [FilmstripTool] = [] { didSet { rebuild() } }
 
     private let glass = ChromeGlass(style: .overMedia(.regular), cornerRadius: Chrome.Radius.capsule(height))
@@ -98,11 +98,11 @@ public struct FilmstripTool {
 
     public override var fittingSize: NSSize { intrinsicContentSize }
 
-    /// Fades the capsule in or out (`Chrome.Motion.show`); hidden, it takes no clicks.
+    /// Fades the capsule in (`Chrome.Motion.show`) or out (`Chrome.Motion.hide`); hidden, it takes no clicks.
     public func setShown(_ shown: Bool, animated: Bool) {
         self.shown = shown
         let alpha: CGFloat = shown ? 1 : 0
-        let duration = Chrome.Motion.duration(Chrome.Motion.show)
+        let duration = Chrome.Motion.duration(shown ? Chrome.Motion.show : Chrome.Motion.hide)
         if animated, duration > 0 {
             NSAnimationContext.runAnimationGroup { c in
                 c.duration = duration

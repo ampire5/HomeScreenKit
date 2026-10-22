@@ -169,7 +169,7 @@ import HomeScreenKit
         let windowItem = NSMenuItem()
         let windowMenu = NSMenu(title: "Window")
         windowMenu.addItem(withTitle: "Filmstrip Demo", action: #selector(showFilmstrip), keyEquivalent: "f").target = self
-        windowMenu.addItem(withTitle: "Chrome Demo", action: #selector(showChrome), keyEquivalent: "c").target = self
+        windowMenu.addItem(withTitle: "Chrome Demo", action: #selector(showChrome), keyEquivalent: "").target = self
         windowItem.submenu = windowMenu
         main.addItem(windowItem)
         NSApp.mainMenu = main

@@ -74,6 +74,9 @@ public enum Chrome {
         public static let hide: TimeInterval = 0.25
         public static let select: TimeInterval = 0.2
 
+        /// True when the user asked to reduce motion (System Settings › Accessibility › Display).
+        @MainActor public static var reduced: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
+
         @MainActor public static func duration(
             _ d: TimeInterval,
             reduceMotion: Bool = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion

@@ -82,10 +82,11 @@ import Testing
     #expect(off.pillAlpha == 0 && off.symbolAlpha == 0.7)
     #expect(on.pillAlpha == 0.2 && on.symbolAlpha == 1)
     #expect(on.contentTintColor != .controlAccentColor && off.contentTintColor == on.contentTintColor)
+    #expect(off.pillColor == nil && on.pillColor == Chrome.Palette.overMedia.pressed)
     off.setHovered(true)
-    #expect(off.pillAlpha == 0.1 && off.symbolAlpha == 1)
+    #expect(off.pillAlpha == 0.1 && off.symbolAlpha == 1 && off.pillColor == Chrome.Palette.overMedia.hover)
     off.setHovered(false)
-    #expect(off.pillAlpha == 0 && off.symbolAlpha == 0.7)
+    #expect(off.pillAlpha == 0 && off.symbolAlpha == 0.7 && off.pillColor == nil)
 }
 
 @MainActor @Test func separatorSpacesTheGroups() {
@@ -114,4 +115,11 @@ import Testing
         let expected: ChromeGlass.Style = view === tools ? .overMedia(.regular) : .overMedia(.light)
         #expect(found.first?.style == expected)
     }
+}
+
+@MainActor @Test func revealChevronIsLaidOutOnTheFirstPass() {
+    let view = FilmstripRevealView(frame: NSRect(x: 0, y: 0, width: 40, height: 18))
+    view.layoutSubtreeIfNeeded()
+    let chevron = view.subviews.compactMap { $0 as? ChromeGlass }.first?.contentView.subviews.first
+    #expect(chevron != nil && chevron!.frame.width > 0 && chevron!.frame.height > 0)
 }

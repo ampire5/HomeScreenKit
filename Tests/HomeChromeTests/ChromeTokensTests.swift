@@ -50,6 +50,10 @@ import Testing
         expectSRGB(P.mediaShadow, 0, 0, 0, 0.55)
     }
 
+    @Test func reducedMatchesTheSystem() {
+        #expect(Chrome.Motion.reduced == NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+    }
+
     @Test func motionIsInstantWithReduceMotion() {
         #expect(Chrome.Motion.show == 0.15)
         #expect(Chrome.Motion.hide == 0.25)
