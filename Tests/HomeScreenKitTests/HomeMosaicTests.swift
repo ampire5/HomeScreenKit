@@ -73,4 +73,44 @@ import Testing
             #expect(m?.width == 400 && m?.height == 260)
         }
     }
+
+    /// A solid red picture `width` × `height` pixels.
+    private func red(_ width: Int, _ height: Int) -> CGImage {
+        let c = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                          space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        c.setFillColor(CGColor(red: 1, green: 0, blue: 0, alpha: 1))
+        c.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        return c.makeImage()!
+    }
+
+    /// The alpha of the pixel at `x`, `y` (from the top) of `image`.
+    private func alpha(_ image: CGImage, _ x: Int, _ y: Int) -> UInt8 {
+        let c = CGContext(data: nil, width: image.width, height: image.height, bitsPerComponent: 8,
+                          bytesPerRow: image.width * 4, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        c.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        let bytes = c.data!.assumingMemoryBound(to: UInt8.self)
+        return bytes[(y * image.width + x) * 4 + 3]
+    }
+
+    /// A panorama's thumbnail (a 2880 × 810 photo kept 288 × 81) cannot fill a square cell without being enlarged
+    /// several times: it is fitted, whole and sharp, with the card's own fill above and below it.
+    @Test func wideThumbnailIsFittedNotStretched() throws {
+        let mosaic = try #require(HomeMosaic.make([red(288, 81)], size: CGSize(width: 200, height: 200),
+                                                  layout: .single, scale: 2))
+        #expect(alpha(mosaic, 200, 200) == 255)   // the picture in the middle
+        #expect(alpha(mosaic, 200, 10) == 0)      // nothing above it
+        #expect(alpha(mosaic, 200, 390) == 0)     // nor below
+        #expect(alpha(mosaic, 2, 200) == 255)     // from edge to edge across
+    }
+
+    /// An ordinary photo's thumbnail fills its cell, cropped, as before: enlarged less than twice.
+    @Test func ordinaryThumbnailStillFills() throws {
+        let mosaic = try #require(HomeMosaic.make([red(300, 200)], size: CGSize(width: 200, height: 200),
+                                                  layout: .single, scale: 2))
+        #expect(alpha(mosaic, 200, 2) == 255 && alpha(mosaic, 200, 397) == 255 && alpha(mosaic, 2, 2) == 255)
+        #expect(HomeMosaic.fills(CGSize(width: 300, height: 200), cell: CGSize(width: 400, height: 400)))
+        #expect(!HomeMosaic.fills(CGSize(width: 288, height: 81), cell: CGSize(width: 400, height: 400)))
+    }
 }

@@ -4,9 +4,21 @@ import Foundation
 /// Up to four pictures in one, with thin gaps: a session card's picture, and a folder's in the file browser. The
 /// layout says how they sit: `grid` (one fills, two side by side, three a large one on the left and two stacked, four
 /// 2×2), `hero` (a large one on top, up to three under it), `stack` (three prints with a slight turn and a shadow) or
-/// `single` (the first fills). Each picture is cropped to its cell.
+/// `single` (the first fills). Each picture is cropped to its cell, unless that would enlarge it more than
+/// `fillLimit` (a panorama's thumbnail in a square cell): then it is fitted whole, the card's fill around it.
 public enum HomeMosaic {
     public static let gap: CGFloat = 2
+    /// How much a picture may be enlarged to fill its cell. A photo's thumbnail is kept at a fixed long side (Loupe's
+    /// `thumb-size`, 512 px), so an ordinary photo fills a large card's cell enlarged up to about 1.6 times; a
+    /// panorama's (2880 × 810 kept 512 × 144) would be enlarged almost four times, its short side smeared over the
+    /// cell and most of it cropped away. Past this it is fitted: whole, at about its own pixels.
+    public static let fillLimit: CGFloat = 2
+
+    /// Whether a picture of `size` pixels fills a cell of `cell` pixels (cropped) rather than being fitted in it.
+    public static func fills(_ size: CGSize, cell: CGSize) -> Bool {
+        guard size.width > 0, size.height > 0 else { return true }
+        return max(cell.width / size.width, cell.height / size.height) <= fillLimit
+    }
 
     public enum Layout: String, CaseIterable, Sendable { case grid, hero, stack, single }
 
@@ -28,17 +40,22 @@ public enum HomeMosaic {
         context.scaleBy(x: 1, y: -1)
         let bounds = CGRect(origin: .zero, size: size)
         let cells = cells(count: images.count, layout: layout, in: bounds)
+        let pixelsPerPoint = CGFloat(w) / size.width
         if effective(layout, width: size.width) == .stack, cells.count > 1 {
-            drawStack(Array(images.prefix(cells.count)), cells: cells, pixelsPerPoint: CGFloat(w) / size.width, in: context)
+            drawStack(Array(images.prefix(cells.count)), cells: cells, pixelsPerPoint: pixelsPerPoint, in: context)
         } else {
-            for (image, cell) in zip(images, cells) { draw(image, in: cell, context) }
+            for (image, cell) in zip(images, cells) { draw(image, in: cell, pixelsPerPoint: pixelsPerPoint, context) }
         }
         return context.makeImage()
     }
 
-    /// `image` cropped to `cell` (the context is top-down, so the picture is flipped back).
-    private static func draw(_ image: CGImage, in cell: CGRect, _ context: CGContext) {
-        let scale = max(cell.width / CGFloat(image.width), cell.height / CGFloat(image.height))
+    /// `image` cropped to `cell`, or fitted in it when filling would enlarge it past `fillLimit` (the context is
+    /// top-down, so the picture is flipped back).
+    private static func draw(_ image: CGImage, in cell: CGRect, pixelsPerPoint: CGFloat, _ context: CGContext) {
+        let pixels = CGSize(width: image.width, height: image.height)
+        let fill = fills(pixels, cell: CGSize(width: cell.width * pixelsPerPoint, height: cell.height * pixelsPerPoint))
+        let scale = fill ? max(cell.width / pixels.width, cell.height / pixels.height)
+                         : min(cell.width / pixels.width, cell.height / pixels.height)
         let drawn = CGSize(width: CGFloat(image.width) * scale, height: CGFloat(image.height) * scale)
         context.saveGState()
         context.clip(to: cell)
@@ -65,7 +82,7 @@ public enum HomeMosaic {
             context.setFillColor(CGColor(gray: 1, alpha: 1))
             context.fill(local)
             context.restoreGState()
-            draw(images[i], in: local, context)
+            draw(images[i], in: local, pixelsPerPoint: pixelsPerPoint, context)
             context.setStrokeColor(CGColor(gray: 1, alpha: 0.7))
             context.setLineWidth(1)
             context.stroke(local.insetBy(dx: 0.5, dy: 0.5))
