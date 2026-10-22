@@ -740,7 +740,7 @@ public final class HomeBrowserView: NSView {
             orderCount += 1
             if let listing { apply(listing) }
         }
-        if shownSort != sort { toolbar.show(subtitle: "Loading…") }
+        if shownSort != sort { toolbar.show(subtitle: "Loading…") } else { updateSubtitle() }   // back to the order shown
     }
 
     private func setEntries(_ new: [BrowserEntry]) {
