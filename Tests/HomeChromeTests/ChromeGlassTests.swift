@@ -26,6 +26,14 @@ import Testing
         #expect(glass.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .aqua)
     }
 
+    @Test func contentFollowsFrameAtOnce() {
+        let glass = ChromeGlass(style: .overMedia(.regular), cornerRadius: 10)
+        glass.frame = NSRect(x: 0, y: 0, width: 120, height: 50)
+        #expect(glass.contentView.bounds.size == glass.bounds.size)
+        glass.setFrameSize(NSSize(width: 80, height: 30))
+        #expect(glass.contentView.bounds.size == glass.bounds.size)
+    }
+
     @Test func glassKeepsRadius() {
         let glass = ChromeGlass(style: .overMedia(.light), cornerRadius: 4)
         glass.cornerRadius = 10

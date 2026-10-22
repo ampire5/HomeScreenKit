@@ -58,10 +58,22 @@ import AppKit
         applyColors()
     }
 
+    /// The glass, its content and the rim follow the frame at once, so callers can read `contentView.bounds` right
+    /// after setting the frame, without waiting for a layout pass.
+    public override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        syncChildren()
+    }
+
+    private func syncChildren() {
+        glassView.frame = bounds
+        glassView.layoutSubtreeIfNeeded()
+        rim.frame = bounds
+    }
+
     public override func layout() {
         super.layout()
-        glassView.frame = bounds
-        rim.frame = bounds
+        syncChildren()
     }
 }
 
