@@ -48,11 +48,11 @@ import HomeChrome
 
     public override var fittingSize: NSSize { Self.size(for: edge) }
 
-    /// Fades the nub in or out (`Chrome.Motion.show`); hidden, it takes no clicks.
+    /// Fades the nub in (`Chrome.Motion.show`) or out (`Chrome.Motion.hide`); hidden, it takes no clicks.
     public func setShown(_ shown: Bool, animated: Bool) {
         self.shown = shown
         let alpha: CGFloat = shown ? 1 : 0
-        let duration = Chrome.Motion.duration(Chrome.Motion.show)
+        let duration = Chrome.Motion.duration(shown ? Chrome.Motion.show : Chrome.Motion.hide)
         if animated, duration > 0 {
             NSAnimationContext.runAnimationGroup { c in
                 c.duration = duration
@@ -73,6 +73,6 @@ import HomeChrome
     public override func layout() {
         super.layout()
         glass.frame = bounds
-        image.frame = glass.contentView.bounds
+        image.frame = bounds
     }
 }

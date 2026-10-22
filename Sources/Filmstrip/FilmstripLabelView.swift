@@ -1,9 +1,9 @@
 import AppKit
 import HomeChrome
 
-/// The hover label: "137 / 200 · name" on a glass capsule, 12 pt, digits of one width. Takes no clicks.
+/// The hover label: "137 / 200 · name" on a `ChromeGlass` capsule, 12 pt, digits of one width. Takes no clicks.
 @MainActor public final class FilmstripLabelView: NSView {
-    private let glass = NSGlassEffectView()
+    private let glass = ChromeGlass(style: .overMedia(.light), cornerRadius: 0)
     private let field = NSTextField(labelWithString: "")
 
     public var text: String {
@@ -18,14 +18,13 @@ import HomeChrome
         field.textColor = Chrome.Palette.overMedia.text
         field.lineBreakMode = .byTruncatingMiddle
         field.translatesAutoresizingMaskIntoConstraints = false
-        let content = NSView()
+        let content = glass.contentView
         content.addSubview(field)
         NSLayoutConstraint.activate([
             field.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 10),
             field.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -10),
             field.centerYAnchor.constraint(equalTo: content.centerYAnchor),
         ])
-        glass.contentView = content
         glass.autoresizingMask = [.width, .height]
         addSubview(glass)
     }
