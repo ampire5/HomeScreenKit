@@ -25,8 +25,11 @@ public struct CardSummary: Equatable, Sendable {
     /// 12 bins over `first`…`last`; each bin's share of the photos, the bins summing to about 255 (all photos on one
     /// date: one bin 255). The views scale the bars to the largest bin.
     public var histogram: [UInt8]
-    /// 0…1: how much of the folder was viewed.
+    /// 0…1: how much of the folder was viewed (the bar), as counted at the visit.
     public var viewed: Double?
+    /// How many photos were seen (up to the one viewed last, counted at the visit): the `137 / 248` text, whose
+    /// second number is the photos now. Nil: from `viewed` of the photos now.
+    public var seen: Int?
     /// Viewed to the end.
     public var done: Bool
     /// Photos new since the last visit; 0 is none.
@@ -38,7 +41,7 @@ public struct CardSummary: Equatable, Sendable {
 
     public init(photos: Int? = nil, folders: Int? = nil, insidePhotos: Int? = nil, insideIncomplete: Bool = false,
                 bytes: Int64? = nil, first: Date? = nil, last: Date? = nil, histogram: [UInt8] = [], viewed: Double? = nil,
-                done: Bool = false, new: Int = 0, twoPages: Bool = false, rightToLeft: Bool = false,
+                seen: Int? = nil, done: Bool = false, new: Int = 0, twoPages: Bool = false, rightToLeft: Bool = false,
                 problem: Problem? = nil) {
         self.photos = photos
         self.folders = folders
@@ -49,6 +52,7 @@ public struct CardSummary: Equatable, Sendable {
         self.last = last
         self.histogram = histogram
         self.viewed = viewed
+        self.seen = seen
         self.done = done
         self.new = new
         self.twoPages = twoPages

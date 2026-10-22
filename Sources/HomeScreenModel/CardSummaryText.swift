@@ -42,10 +42,11 @@ public enum CardSummaryText {
         }
     }
 
-    /// `137 / 248`: the photos seen of all; nil when nothing is known or the folder is empty.
+    /// `137 / 248`: the photos seen (`seen`, else `viewed` of the photos now) of the photos now; nil when nothing is
+    /// known or the folder is empty.
     public static func viewed(_ s: CardSummary) -> String? {
         guard let fraction = s.viewed, let photos = s.photos, photos > 0 else { return nil }
-        let seen = min(photos, max(0, Int((fraction * Double(photos)).rounded())))
+        let seen = min(photos, max(0, s.seen ?? Int((fraction * Double(photos)).rounded())))
         return "\(grouped(seen)) / \(grouped(photos))"
     }
 

@@ -55,11 +55,28 @@ public final class HomeBrowserView: NSView {
         return live.keys.sorted().filter { grid.frame(of: $0).intersects(visible) }.map { entries[$0].id }
     }
 
-    /// The widest slot in view, in points: the width the pictures are asked at.
+    /// The widest picture in view, in points: the width the pictures are asked at. A row's picture is its small cover
+    /// and a compact card's its square (`cardHeight`), not the row or the card; a section with no cards counts not.
     public var slotWidth: CGFloat {
-        // A row's picture is its small cover, not the row.
-        if shownCardStyle(width: gridWidth) == .list { return GridMetrics().listCover }
-        return (0..<sections.count).map { grid.slotWidth(inSection: $0) }.max() ?? cardSize
+        let style = shownCardStyle(width: gridWidth)
+        if style == .list { return GridMetrics().listCover }
+        let widths = sections.indices.filter { sections[$0].count > 0 }.map { s -> CGFloat in
+            style == .cards && sections[s].kind == .collections ? GridMetrics().cardHeight : grid.slotWidth(inSection: s)
+        }
+        return widths.max() ?? cardSize
+    }
+
+    /// The width of a folder's or an archive's picture in the style shown, in points: a poster's slot, a compact
+    /// card's square, a row's cover. In a folder with photos too, `slotWidth` is the photos' (the wider); the app
+    /// makes its folder covers at this one.
+    public var coverWidth: CGFloat {
+        switch shownCardStyle(width: gridWidth) {
+        case .list: return GridMetrics().listCover
+        case .cards: return GridMetrics().cardHeight
+        case .posters:
+            let containers = sections.indices.first { sections[$0].kind == .collections && sections[$0].count > 0 }
+            return containers.map { grid.slotWidth(inSection: $0) } ?? slotWidth
+        }
     }
 
     /// The wanted slot width for ⌘= / ⌘−: one photo column fewer (at one column, the range's top) or one more, at the

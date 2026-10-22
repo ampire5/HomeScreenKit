@@ -38,6 +38,10 @@ import Testing
 
     @Test func viewedText() {
         #expect(CardSummaryText.viewed(CardSummary(photos: 248, viewed: 137.0 / 248)) == "137 / 248")
+        // The photos seen are told as counted at the visit: read to the end at 248, then 12 came.
+        #expect(CardSummaryText.viewed(CardSummary(photos: 260, viewed: 1, seen: 248)) == "248 / 260")
+        // Fewer photos now than were seen (some deleted): never more seen than there are.
+        #expect(CardSummaryText.viewed(CardSummary(photos: 200, viewed: 1, seen: 248)) == "200 / 200")
         #expect(CardSummaryText.viewed(CardSummary(photos: 248)) == nil)
         #expect(CardSummaryText.viewed(CardSummary(photos: 0, viewed: 0.5)) == nil)
     }

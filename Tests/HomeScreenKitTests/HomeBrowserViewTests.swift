@@ -404,6 +404,23 @@ import Testing
         #expect(view.card(for: view.entries[0].id) is PosterCard)
     }
 
+    /// Compact cards draw their picture in a 92 pt square: that is the width their pictures are asked at (one
+    /// picture, not a mosaic made for the whole card), and the cover width the app reads in a folder with photos too.
+    @Test func compactCardsAskForTheirSquare() async {
+        let source = FakeHomeSource()
+        source.cardStyles[.folder(x)] = .cards
+        let view = await shown(source, ["a", "b", "c"].map { BrowserFixtures.folder($0) })
+        #expect(source.wantedWidths.last == GridMetrics().cardHeight)
+        #expect(view.slotWidth == 92 && view.coverWidth == 92)
+        let mixed = FakeHomeSource()
+        mixed.cardStyles[.folder(x)] = .cards
+        let both = await shown(mixed, [BrowserFixtures.folder("a"), BrowserFixtures.file("p.jpg")])
+        #expect(both.coverWidth == 92)
+        #expect(both.slotWidth > 92)   // the photos' cards are asked at their own slot
+        let posters = await shown(FakeHomeSource(), [BrowserFixtures.folder("a")])
+        #expect(posters.coverWidth == posters.slotWidth && posters.coverWidth > 110)
+    }
+
     @Test func posterIsTheDefaultAndFollowsTheGridsBand() async {
         let source = FakeHomeSource()
         let view = await shown(source, [BrowserFixtures.folder("a"), BrowserFixtures.folder("z.zip")])
