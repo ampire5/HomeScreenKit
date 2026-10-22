@@ -1,14 +1,11 @@
 import AppKit
 
-/// Whether animations should be skipped (System Settings › Accessibility › Display › Reduce motion).
-@MainActor var reducesMotion: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
-
 /// A segmented capsule on glass (the toolbar's kind filter and sort): the lit segment is a tinted inner capsule that
 /// slides to the chosen one. `selected` nil lights none.
 @MainActor public final class GlassCapsule: NSView {
     public static let height: CGFloat = 28
     private static let padding: CGFloat = 12
-    private static let font = NSFont.systemFont(ofSize: 12, weight: .medium)
+    private static let font = Chrome.Text.font(.label, weight: .medium)
 
     public var onChoose: ((Int) -> Void)?
     public var titles: [String] { didSet { rebuild() } }
@@ -22,12 +19,12 @@ import AppKit
     public init(titles: [String]) {
         self.titles = titles
         super.init(frame: .zero)
-        glass.cornerRadius = Self.height / 2
+        glass.cornerRadius = Chrome.Radius.capsule(Self.height)
         glass.contentView = content
         addSubview(glass)
         light.wantsLayer = true
         light.layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.25).cgColor
-        light.layer?.cornerRadius = (Self.height - 4) / 2
+        light.layer?.cornerRadius = Chrome.Radius.capsule(Self.height - 4)
         light.isHidden = true
         content.addSubview(light)
         rebuild()
@@ -88,9 +85,9 @@ import AppKit
         let target = buttons[s].frame
         let wasHidden = light.isHidden
         light.isHidden = false
-        if animated, !wasHidden, !reducesMotion {
+        if animated, !wasHidden, Chrome.Motion.duration(Chrome.Motion.select) > 0 {
             NSAnimationContext.runAnimationGroup { c in
-                c.duration = 0.2
+                c.duration = Chrome.Motion.select
                 light.animator().frame = target
             }
         } else {

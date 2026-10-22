@@ -20,9 +20,9 @@ final class CollectionCard: GridCard {
     let progressBar = NSView()
     private let glassTile = NSGlassEffectView()
 
-    private static let corner: CGFloat = 12
-    private static let ringWidth: CGFloat = 3
-    private static let ringGap: CGFloat = 2
+    private static let corner = Chrome.Radius.card
+    private static let ringWidth = Chrome.Ring.width
+    private static let ringGap = Chrome.Ring.gap
 
     override init(item: HomeCardItem) {
         super.init(item: item)
@@ -102,8 +102,8 @@ final class CollectionCard: GridCard {
         let pill = badgePill.fittingSize
         badgePill.frame = CGRect(x: 8, y: 8, width: pill.width, height: pill.height)
         let below = names == .below
-        titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
-        subtitleLabel.font = .systemFont(ofSize: 11)
+        titleLabel.font = Chrome.Text.font(.body, weight: .semibold)
+        subtitleLabel.font = Chrome.Text.font(.small)
         titleLabel.textColor = below ? .labelColor : .white
         subtitleLabel.textColor = below ? .secondaryLabelColor : NSColor(white: 1, alpha: 0.75)
         CATransaction.begin()

@@ -1,4 +1,5 @@
 import AppKit
+import HomeChrome
 import HomeScreenModel
 
 /// One card: a picture (or a grey box with a symbol), a title and a line under it, an optional bar along the picture's
@@ -17,9 +18,9 @@ final class HomeCard: GridCard {
     /// The selection: an accent ring a little outside the picture, as Photos draws it, so it never covers the picture.
     let ring = CALayer()
 
-    private static let corner: CGFloat = 10
-    private static let ringWidth: CGFloat = 2.5
-    private static let ringGap: CGFloat = 2
+    private static let corner = Chrome.Radius.card
+    private static let ringWidth = Chrome.Ring.width
+    private static let ringGap = Chrome.Ring.gap
 
     private static let barHeight: CGFloat = 4
 
@@ -41,21 +42,21 @@ final class HomeCard: GridCard {
         ring.cornerCurve = .continuous
         ring.isHidden = true
         layer?.addSublayer(ring)
-        track.backgroundColor = NSColor(white: 0, alpha: 0.55).cgColor
+        track.backgroundColor = Chrome.Palette.overMedia.mediaShadow.cgColor
         bar.backgroundColor = NSColor.controlAccentColor.cgColor
         picture.layer?.addSublayer(track)
         picture.layer?.addSublayer(bar)
         placeholder.contentTintColor = .tertiaryLabelColor
         placeholder.symbolConfiguration = .init(pointSize: 30, weight: .light)
         picture.addSubview(placeholder)
-        badge.font = .systemFont(ofSize: 10, weight: .semibold)
-        badge.textColor = .white
+        badge.font = Chrome.Text.font(.badge)
+        badge.textColor = Chrome.Palette.overMedia.text
         badge.drawsBackground = true
-        badge.backgroundColor = NSColor(white: 0, alpha: 0.55)
+        badge.backgroundColor = Chrome.Palette.overMedia.mediaShadow
         picture.addSubview(badge)
-        title.font = .systemFont(ofSize: 13, weight: .medium)
+        title.font = Chrome.Text.font(.body, weight: .medium)
         title.lineBreakMode = .byTruncatingMiddle
-        subtitle.font = .monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
+        subtitle.font = Chrome.Text.digits(.small, weight: .regular)
         subtitle.textColor = .secondaryLabelColor
         subtitle.lineBreakMode = .byTruncatingTail
         for view in [picture, title, subtitle] { addSubview(view) }

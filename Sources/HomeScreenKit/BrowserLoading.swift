@@ -1,8 +1,6 @@
 import AppKit
+import HomeChrome
 import HomeScreenModel
-
-/// Whether animations should be skipped (System Settings › Accessibility › Display › Reduce motion).
-@MainActor var reducesMotion: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
 
 /// A thin accent line under the path bar while a folder loads: a glint runs along it (still, at half strength, with
 /// Reduce motion).
@@ -32,7 +30,7 @@ final class LoadingLine: NSView {
         guard on else { return }
         needsLayout = true
         layoutSubtreeIfNeeded()
-        if reducesMotion {
+        if Chrome.Motion.duration(1) == 0 {   // Reduce motion
             glint.colors = [NSColor.controlAccentColor.withAlphaComponent(0.5).cgColor,
                             NSColor.controlAccentColor.withAlphaComponent(0.5).cgColor]
             return
@@ -50,7 +48,7 @@ final class LoadingLine: NSView {
         super.layout()
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        glint.frame = reducesMotion ? bounds : CGRect(x: 0, y: 0, width: bounds.width * 0.4, height: bounds.height)
+        glint.frame = Chrome.Motion.duration(1) == 0 ? bounds : CGRect(x: 0, y: 0, width: bounds.width * 0.4, height: bounds.height)
         CATransaction.commit()
     }
 }
@@ -76,9 +74,9 @@ final class BrowserSkeleton: NSView {
         shine.endPoint = CGPoint(x: 1, y: 0.7)
         shine.mask = shapes
         layer?.addSublayer(shine)
-        title.font = .systemFont(ofSize: 17, weight: .medium)
+        title.font = Chrome.Text.font(.heading, weight: .medium)
         title.textColor = NSColor(white: 0.92, alpha: 1)
-        detail.font = .monospacedDigitSystemFont(ofSize: 13, weight: .regular)
+        detail.font = Chrome.Text.digits(.body, weight: .regular)
         detail.textColor = .secondaryLabelColor
         let stack = NSStackView(views: [title, detail])
         stack.orientation = .vertical
@@ -88,7 +86,7 @@ final class BrowserSkeleton: NSView {
         let plate = NSView()
         plate.wantsLayer = true
         plate.layer?.backgroundColor = NSColor(white: 0.08, alpha: 0.92).cgColor
-        plate.layer?.cornerRadius = 14
+        plate.layer?.cornerRadius = Chrome.Radius.panel
         plate.layer?.cornerCurve = .continuous
         plate.translatesAutoresizingMaskIntoConstraints = false
         plate.addSubview(stack)
@@ -124,7 +122,7 @@ final class BrowserSkeleton: NSView {
 
     func start() {
         shine.removeAllAnimations()
-        guard !reducesMotion else { return }
+        guard Chrome.Motion.duration(1) > 0 else { return }   // Reduce motion
         let move = CABasicAnimation(keyPath: "locations")
         move.fromValue = [-1, -0.5, 0]
         move.toValue = [1, 1.5, 2]

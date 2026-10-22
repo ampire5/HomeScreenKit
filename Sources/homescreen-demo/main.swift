@@ -12,6 +12,7 @@ import HomeScreenKit
     lazy var browser = HomeBrowserView(source: source)
     lazy var homeView = HomeView(source: source)
     var filmstrip: FilmstripDemo?
+    var chromeDemo: ChromeDemo?
     static let tabs = ["Recent", "Folders", "Stash"]
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -168,6 +169,7 @@ import HomeScreenKit
         let windowItem = NSMenuItem()
         let windowMenu = NSMenu(title: "Window")
         windowMenu.addItem(withTitle: "Filmstrip Demo", action: #selector(showFilmstrip), keyEquivalent: "f").target = self
+        windowMenu.addItem(withTitle: "Chrome Demo", action: #selector(showChrome), keyEquivalent: "c").target = self
         windowItem.submenu = windowMenu
         main.addItem(windowItem)
         NSApp.mainMenu = main
@@ -177,6 +179,11 @@ import HomeScreenKit
     @objc func showFilmstrip() {
         let demo = filmstrip ?? FilmstripDemo()
         filmstrip = demo
+        demo.show()
+    }
+    @objc func showChrome() {
+        let demo = chromeDemo ?? ChromeDemo()
+        chromeDemo = demo
         demo.show()
     }
     @objc func photo() { home.aspect = 2.0 / 3 }

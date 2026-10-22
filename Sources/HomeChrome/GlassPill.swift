@@ -3,7 +3,7 @@ import AppKit
 /// A small label on glass (a count or a state over the grid).
 @MainActor public final class GlassPill: NSView {
     public static let height: CGFloat = 18
-    private static let font = NSFont.systemFont(ofSize: 10, weight: .semibold)
+    private static let font = Chrome.Text.font(.badge)
 
     public var text: String {
         get { label.stringValue }
@@ -15,7 +15,7 @@ import AppKit
 
     public override init(frame: NSRect) {
         super.init(frame: frame)
-        glass.cornerRadius = Self.height / 2
+        glass.cornerRadius = Chrome.Radius.capsule(Self.height)
         addSubview(glass)
         label.font = Self.font
         label.alignment = .center

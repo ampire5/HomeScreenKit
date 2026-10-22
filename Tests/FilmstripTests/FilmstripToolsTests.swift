@@ -1,4 +1,5 @@
 import AppKit
+import HomeChrome
 import Testing
 @testable import Filmstrip
 
@@ -98,4 +99,19 @@ import Testing
     ])
     #expect(grouped.intrinsicContentSize.width == plain.intrinsicContentSize.width + 1 + 6)
     #expect(grouped.buttons[1].frame.minX == plain.buttons[1].frame.minX + 7)
+}
+
+@MainActor private func glasses(in view: NSView) -> [ChromeGlass] {
+    view.subviews.compactMap { $0 as? ChromeGlass }
+}
+
+@MainActor @Test func filmstripChromeUsesOneGlass() {
+    let tools = toolsView([FilmstripTool(symbol: "eye", help: "a", action: {})])
+    let reveal = FilmstripRevealView(frame: NSRect(x: 0, y: 0, width: 40, height: 18))
+    for view in [tools, reveal] {
+        let found = glasses(in: view)
+        #expect(found.count == 1)
+        let expected: ChromeGlass.Style = view === tools ? .overMedia(.regular) : .overMedia(.light)
+        #expect(found.first?.style == expected)
+    }
 }

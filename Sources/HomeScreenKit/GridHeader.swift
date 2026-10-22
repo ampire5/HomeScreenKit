@@ -1,4 +1,5 @@
 import AppKit
+import HomeChrome
 
 /// A section's heading over its cards: `Folders`, `Photos · 2 719`.
 final class GridHeader: NSView {
@@ -11,7 +12,7 @@ final class GridHeader: NSView {
 
     override init(frame: NSRect) {
         super.init(frame: frame)
-        label.font = .systemFont(ofSize: 15, weight: .semibold)
+        label.font = Chrome.Text.font(.title)
         label.textColor = .labelColor
         addSubview(label)
     }

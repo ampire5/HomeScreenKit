@@ -13,7 +13,7 @@ import AppKit
 
     public init(items: [(symbol: String, tip: String)]) {
         super.init(frame: .zero)
-        glass.cornerRadius = Self.height / 2
+        glass.cornerRadius = Chrome.Radius.capsule(Self.height)
         glass.contentView = content
         addSubview(glass)
         buttons = items.enumerated().map { i, item in

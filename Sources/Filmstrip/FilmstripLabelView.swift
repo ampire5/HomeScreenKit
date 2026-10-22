@@ -1,4 +1,5 @@
 import AppKit
+import HomeChrome
 
 /// The hover label: "137 / 200 · name" on a glass capsule, 12 pt, digits of one width. Takes no clicks.
 @MainActor public final class FilmstripLabelView: NSView {
@@ -12,9 +13,9 @@ import AppKit
 
     public override init(frame: NSRect) {
         super.init(frame: frame)
-        appearance = NSAppearance(named: .darkAqua)
-        field.font = .monospacedDigitSystemFont(ofSize: 12, weight: .regular)
-        field.textColor = .labelColor
+        Chrome.Palette.overMedia.apply(to: self)
+        field.font = Chrome.Text.digits(.label, weight: .regular)
+        field.textColor = Chrome.Palette.overMedia.text
         field.lineBreakMode = .byTruncatingMiddle
         field.translatesAutoresizingMaskIntoConstraints = false
         let content = NSView()
@@ -40,7 +41,7 @@ import AppKit
     public override func layout() {
         super.layout()
         glass.frame = bounds
-        glass.cornerRadius = bounds.height / 2
+        glass.cornerRadius = Chrome.Radius.capsule(bounds.height)
     }
 
     public override func hitTest(_ point: NSPoint) -> NSView? { nil }
