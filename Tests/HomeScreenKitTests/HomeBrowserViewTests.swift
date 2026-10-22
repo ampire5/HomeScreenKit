@@ -619,8 +619,9 @@ import Testing
         #expect(view.toolbar.cardSwitchSelection == 1)
     }
 
-    private func command(_ code: UInt16, _ chars: String) -> NSEvent {
-        NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.command], timestamp: 0, windowNumber: 0,
+    /// ⌃⌘ with a key: the card style's chord.
+    private func controlCommand(_ code: UInt16, _ chars: String) -> NSEvent {
+        NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.control, .command], timestamp: 0, windowNumber: 0,
                          context: nil, characters: chars, charactersIgnoringModifiers: chars, isARepeat: false,
                          keyCode: code)!
     }
@@ -632,14 +633,14 @@ import Testing
         for location in [BrowserLocation.places, .source("recent"), .source("stash")] {
             let view = make(source, at: location)
             #expect(!view.canChooseCardStyle)
-            #expect(!view.handleKey(command(19, "2")))   // the key goes on
+            #expect(!view.handleKey(controlCommand(19, "2")))   // the key goes on
             view.chooseCardStyle(.cards)
             #expect(view.cardStyle == .posters)
         }
         #expect(source.setCardStyles.isEmpty)
         let view = make(source)
         #expect(view.canChooseCardStyle)
-        #expect(view.handleKey(command(19, "2")))
+        #expect(view.handleKey(controlCommand(19, "2")))
         #expect(view.cardStyle == .cards && source.setCardStyles.count == 1)
     }
 

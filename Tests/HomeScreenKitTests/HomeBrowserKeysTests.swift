@@ -204,18 +204,20 @@ import Testing
         #expect(!view.handleKey(key(19, "2", [.option, .shift])))
     }
 
-    @Test func commandDigitsSwitchStyle() async {
+    @Test func controlCommandDigitsSwitchStyle() async {
         let source = FakeHomeSource()
         let view = await shown(source, [BrowserFixtures.folder("a"), BrowserFixtures.file("a.jpg", date: 1)])
-        #expect(view.handleKey(key(19, "2", [.command])))
-        #expect(view.handleKey(key(20, "3", [.command])))
-        #expect(view.handleKey(key(18, "1", [.command])))
+        #expect(view.handleKey(key(19, "2", [.control, .command])))
+        #expect(view.handleKey(key(20, "3", [.control, .command])))
+        #expect(view.handleKey(key(18, "1", [.control, .command])))
         #expect(source.setCardStyles.map(\.0) == [.cards, .list, .posters])
         #expect(view.toolbar.cardSwitchSelection == 0)
-        // ⌥1 is still the sort; ⌘⌥ and ⇧⌘ digits are not the switch
+        // ⌘ digits are the app's (a window's tabs by number); ⌥1 is still the sort; ⇧⌃⌘ digits are not the switch
+        #expect(!view.handleKey(key(19, "2", [.command])))
+        #expect(!view.handleKey(key(18, "1", [.command])))
         #expect(view.handleKey(key(18, "1", [.option])))
         #expect(source.setSorts.count == 1)
-        #expect(!view.handleKey(key(19, "2", [.command, .shift])))
+        #expect(!view.handleKey(key(19, "2", [.control, .command, .shift])))
         #expect(source.setCardStyles.count == 3)
     }
 

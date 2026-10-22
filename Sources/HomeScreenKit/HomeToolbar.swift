@@ -47,9 +47,9 @@ final class HomeToolbar: NSView, NSSearchFieldDelegate, NSMenuDelegate {
     let zoom = GlassGroup(items: [(symbol: "minus", tip: "Smaller (⌘−)"), (symbol: "plus", tip: "Larger (⌘=)")])
     let styleButton = GlassGroup(items: [(symbol: "rectangle.grid.2x2", tip: "Square or Aspect (⌥T)")])
     /// Posters / Cards / List, in `CardStyle.allCases` order; only a folder has folder cards, so it is off elsewhere.
-    let cardSwitch = GlassGroup(items: [(symbol: "square.grid.2x2", tip: "as Posters (⌘1)"),
-                                        (symbol: "rectangle.grid.1x2", tip: "as Cards (⌘2)"),
-                                        (symbol: "list.bullet", tip: "as List (⌘3)")])
+    let cardSwitch = GlassGroup(items: [(symbol: "square.grid.2x2", tip: "as Posters (⌃⌘1)"),
+                                        (symbol: "rectangle.grid.1x2", tip: "as Cards (⌃⌘2)"),
+                                        (symbol: "list.bullet", tip: "as List (⌃⌘3)")])
     let field = NSSearchField()
     private(set) var styleSymbol = "rectangle.grid.2x2"
 
