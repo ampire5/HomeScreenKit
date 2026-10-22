@@ -53,6 +53,8 @@ public struct BrowserEntry: Equatable, Sendable {
     public var badge: String?
     /// Kept first whatever the sort (Last Session).
     public var leads: Bool
+    /// The facts of a folder or archive card (counts, dates, how much was seen); nil until the app knows them.
+    public var summary: CardSummary?
 
     /// Folders, archives and places open as folders in the browser; the rest open in the app.
     public var isContainer: Bool { kind == .folder || kind == .archive || kind == .place }
@@ -60,7 +62,9 @@ public struct BrowserEntry: Equatable, Sendable {
 
     public init(url: URL, name: String, kind: Kind, date: Date? = nil, size: Int64? = nil, count: Int? = nil,
                 isDimmed: Bool = false, canRename: Bool = false, canTrash: Bool = false, key: String? = nil,
-                subtitle: String? = nil, progress: Double? = nil, badge: String? = nil, leads: Bool = false) {
+                subtitle: String? = nil, progress: Double? = nil, badge: String? = nil, leads: Bool = false,
+                summary: CardSummary? = nil) {
+        self.summary = summary
         self.key = key
         self.subtitle = subtitle
         self.progress = progress

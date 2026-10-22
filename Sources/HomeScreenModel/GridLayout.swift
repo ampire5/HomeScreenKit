@@ -19,6 +19,12 @@ public enum GridNames: String, CaseIterable, Sendable {
     }
 }
 
+/// How folders and archives are drawn: a big cover with a band of facts under it, a compact card with the cover at the
+/// left, or a row of a list. Photo sections ignore it.
+public enum CardStyle: String, CaseIterable, Sendable {
+    case posters, cards, list
+}
+
 /// One run of the grid: the folders and archives (collections, fewer and wider) or the photos, with an optional heading.
 public struct GridSection: Equatable, Sendable {
     public enum Kind: Sendable {
@@ -54,6 +60,24 @@ public struct GridMetrics: Equatable, Sendable {
     public var collectionTitle: CGFloat = 0
     /// Names and badges only on slots at least this wide.
     public var minNamed: CGFloat = 90
+    /// A poster's band, line by line. The heights are the caption's metrics from `CollectionCard` under a picture
+    /// (`.below`): 3 pt, the name line 17 pt, the facts line 15 pt — so one line is 20 pt and two are 35 pt (the 35 that
+    /// the caption draws and the grid used to reserve 22 for).
+    public var bandInset: CGFloat = 3
+    public var bandNameLine: CGFloat = 17
+    public var bandFactsLine: CGFloat = 15
+    /// A poster narrower than this has the name line only.
+    public var bandTwoLinesFrom: CGFloat = 200
+    /// A column narrower than this shows posters whatever the style.
+    public var minStyled: CGFloat = 320
+    /// A compact card: the cover is a square of `cardHeight` at its left. The columns are at least `cardWidth` wide
+    /// and share what is left over; the gap is 10 so that three fit a 960 pt window.
+    public var cardWidth: CGFloat = 300
+    public var cardHeight: CGFloat = 92
+    public var cardGap: CGFloat = 10
+    /// A list row: one column over the whole width, the cover a square of `listCover` in the middle of the row's height.
+    public var listRow: CGFloat = 44
+    public var listCover: CGFloat = 36
 
     public init() {}
 }
@@ -80,6 +104,9 @@ public struct GridLayout: Equatable, Sendable {
         var header: CGRect?
         /// The first row's top.
         var rowsTop: CGFloat
+        /// The cover's side and where it sits in the slot: the full width for a poster, a square at the left otherwise.
+        var cover: CGFloat
+        var coverInset: CGFloat
         var rows: Int { (count + columns - 1) / columns }
         var pitch: CGFloat { slotHeight + gap }
     }
@@ -89,24 +116,49 @@ public struct GridLayout: Equatable, Sendable {
     private let placed: [Placed]
     private let metrics: GridMetrics
 
-    public init(sections: [GridSection], width: CGFloat, target: CGFloat, names: GridNames, metrics: GridMetrics = .init()) {
+    /// `style` is for the collection sections (a narrow column falls back to posters); the photo sections do not use it.
+    public init(sections: [GridSection], width: CGFloat, target: CGFloat, names: GridNames, style: CardStyle = .posters,
+                metrics: GridMetrics = .init()) {
         self.metrics = metrics
         var y = metrics.top, first = 0, placed: [Placed] = []
         for section in sections {
             let isPhotos = section.kind == .photos
-            let gap = isPhotos ? metrics.photoGap : metrics.collectionGap
-            let edge = isPhotos ? metrics.photoEdge : metrics.collectionEdge
+            var gap = isPhotos ? metrics.photoGap : metrics.collectionGap
+            var edge = isPhotos ? metrics.photoEdge : metrics.collectionEdge
             let wanted = isPhotos ? target : target * metrics.collectionScale
-            let columns = Self.columns(width: width, target: wanted, gap: gap, edge: edge)
-            let slot = max(1, (width - 2 * edge - gap * CGFloat(columns - 1)) / CGFloat(columns))
-            let text = names == .below ? metrics.belowText : isPhotos ? 0 : metrics.collectionTitle
+            var columns = Self.columns(width: width, target: wanted, gap: gap, edge: edge)
+            var slot = max(1, (width - 2 * edge - gap * CGFloat(columns - 1)) / CGFloat(columns))
+            var slotHeight: CGFloat, cover = slot, coverInset: CGFloat = 0
+            let used = isPhotos || width < metrics.minStyled ? CardStyle.posters : style
+            if isPhotos {
+                slotHeight = slot + (names == .below ? metrics.belowText : 0)
+            } else {
+                switch used {
+                case .posters:
+                    slotHeight = slot + Self.bandHeight(width: slot, metrics: metrics)
+                case .cards:
+                    gap = metrics.cardGap
+                    columns = max(1, Int(((width - 2 * edge + gap) / (metrics.cardWidth + gap)).rounded(.down)))
+                    slot = max(1, (width - 2 * edge - gap * CGFloat(columns - 1)) / CGFloat(columns))
+                    slotHeight = metrics.cardHeight
+                    cover = metrics.cardHeight
+                case .list:
+                    gap = 0
+                    edge = 0
+                    columns = 1
+                    slot = max(1, width)
+                    slotHeight = metrics.listRow
+                    cover = metrics.listCover
+                    coverInset = (metrics.listRow - metrics.listCover) / 2
+                }
+            }
             var header: CGRect?
             if section.count > 0, let title = section.title, !title.isEmpty {
                 header = CGRect(x: 0, y: y, width: width, height: metrics.headerHeight)
                 y += metrics.headerHeight
             }
-            let p = Placed(first: first, count: section.count, columns: columns, slot: slot, slotHeight: slot + text,
-                           gap: gap, edge: edge, header: header, rowsTop: y)
+            let p = Placed(first: first, count: section.count, columns: columns, slot: slot, slotHeight: slotHeight,
+                           gap: gap, edge: edge, header: header, rowsTop: y, cover: cover, coverInset: coverInset)
             y += CGFloat(p.rows) * p.pitch
             first += section.count
             placed.append(p)
@@ -114,6 +166,13 @@ public struct GridLayout: Equatable, Sendable {
         self.placed = placed
         count = first
         footerFrame = CGRect(x: 0, y: y, width: width, height: metrics.footerHeight)
+    }
+
+    /// A folder poster's band under the cover at slot width `width`: the name line, and under 200 pt wide nothing
+    /// more; wider, the facts line too. The poster view draws exactly this.
+    public static func bandHeight(width: CGFloat, metrics: GridMetrics = .init()) -> CGFloat {
+        let lines = width < metrics.bandTwoLinesFrom ? metrics.bandNameLine : metrics.bandNameLine + metrics.bandFactsLine
+        return metrics.bandInset + lines
     }
 
     /// The column count nearest to `target` at `width`, at least one.
@@ -146,10 +205,10 @@ public struct GridLayout: Equatable, Sendable {
                       width: p.slot, height: p.slotHeight)
     }
 
-    /// The square picture area at the top of the slot.
+    /// The square cover: the slot's width at its top for a poster, the card's height at its left, a row's small one.
     public func pictureFrame(of index: Int) -> CGRect {
-        let f = frame(of: index)
-        return CGRect(x: f.minX, y: f.minY, width: f.width, height: f.width)
+        let f = frame(of: index), p = placed[section(of: index)]
+        return CGRect(x: f.minX + p.coverInset, y: f.minY + p.coverInset, width: p.cover, height: p.cover)
     }
 
     /// The cards whose rows meet `rect` grown by `margin` above and below, whole rows.

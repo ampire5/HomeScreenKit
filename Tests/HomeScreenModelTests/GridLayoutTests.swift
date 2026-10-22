@@ -118,4 +118,64 @@ import Testing
         #expect(GridNames.photo.next == .below)
         #expect(GridNames.below.next == .off)
     }
+
+    // MARK: Folder card styles
+
+    @Test func posterReservesItsBand() {
+        let grid = GridLayout(sections: [folders(10)], width: 1000, target: 100, names: .off)
+        let slot = grid.slotWidth(inSection: 0)
+        #expect(grid.frame(of: 0).height == slot + GridLayout.bandHeight(width: slot))
+        #expect(GridLayout.bandHeight(width: 180) == 20)    // name line only
+        #expect(GridLayout.bandHeight(width: 232) == 35)    // name and facts
+        #expect(GridLayout.bandHeight(width: 199.5) == 20)
+        #expect(GridLayout.bandHeight(width: 200) == 35)
+        // Whatever the name mode: the band does not depend on it.
+        let below = GridLayout(sections: [folders(10)], width: 1000, target: 100, names: .below)
+        #expect(below.frame(of: 0).height == grid.frame(of: 0).height)
+    }
+
+    @Test func photosKeepTheirLayoutInAnyStyle() {
+        let a = GridLayout(sections: [photos(100)], width: 1000, target: 200, names: .below)
+        for style in CardStyle.allCases {
+            #expect(GridLayout(sections: [photos(100)], width: 1000, target: 200, names: .below, style: style) == a)
+        }
+    }
+
+    @Test func cardsAreThreeHundredWide() {
+        let grid = GridLayout(sections: [folders(10)], width: 960, target: 220, names: .off, style: .cards)
+        #expect(grid.columns(inSection: 0) == 3)
+        #expect(grid.slotWidth(inSection: 0) == 300)
+        #expect(grid.frame(of: 0).height == 92)
+        #expect(grid.frame(of: 1).minX - grid.frame(of: 0).maxX == m.cardGap)
+        #expect(grid.pictureFrame(of: 0).size == CGSize(width: 92, height: 92))
+        #expect(grid.index(at: CGPoint(x: grid.frame(of: 4).midX, y: grid.frame(of: 4).midY)) == 4)
+        let wide = GridLayout(sections: [folders(10)], width: 1400, target: 220, names: .off, style: .cards)
+        #expect(wide.slotWidth(inSection: 0) >= 300)
+        #expect(abs(wide.frame(of: wide.columns(inSection: 0) - 1).maxX - (1400 - m.collectionEdge)) <= 0.5)
+    }
+
+    @Test func listRowsAre44() {
+        let grid = GridLayout(sections: [folders(10)], width: 800, target: 220, names: .off, style: .list)
+        #expect(grid.columns(inSection: 0) == 1)
+        #expect(grid.frame(of: 0).height == 44)
+        #expect(grid.frame(of: 0).width == 800)
+        #expect(grid.frame(of: 1).minY - grid.frame(of: 0).minY == 44)
+        #expect(grid.pictureFrame(of: 0) == CGRect(x: 4, y: 4, width: 36, height: 36))
+    }
+
+    @Test func narrowColumnIsPosters() {
+        let posters = GridLayout(sections: [folders(5)], width: 300, target: 220, names: .off)
+        for style in CardStyle.allCases {
+            #expect(GridLayout(sections: [folders(5)], width: 300, target: 220, names: .off, style: style) == posters)
+        }
+        #expect(GridLayout(sections: [folders(5)], width: 320, target: 220, names: .off, style: .list).columns(inSection: 0) == 1)
+    }
+
+    @Test func stylesMixWithPhotos() {
+        let grid = GridLayout(sections: [folders(3, title: "Folders"), photos(20, title: "Photos")],
+                              width: 900, target: 200, names: .off, style: .list)
+        #expect(grid.frame(of: 3).minY >= grid.frame(of: 2).maxY)
+        #expect(grid.section(of: 3) == 1)
+        #expect(grid.indices(in: CGRect(x: 0, y: 0, width: 900, height: 2000), margin: 0) == 0..<23)
+    }
 }
