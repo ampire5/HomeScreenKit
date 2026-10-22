@@ -27,8 +27,11 @@ import Testing
     }
 
     @Test func sizeText() {
-        #expect(CardSummaryText.size(CardSummary(bytes: 4_500_000_000)) == "4.2 GB")
-        #expect(CardSummaryText.size(CardSummary(bytes: 52_428_800)) == "50 MB")
+        #expect(CardSummaryText.size(CardSummary(bytes: 4_200_000_000)) == "4.2 GB")
+        #expect(CardSummaryText.size(CardSummary(bytes: 50_000_000)) == "50 MB")
+        #expect(CardSummaryText.size(CardSummary(bytes: 999_960_000)) == "1.0 GB")
+        #expect(CardSummaryText.size(CardSummary(bytes: 999_400_000)) == "999 MB")
+        #expect(CardSummaryText.size(CardSummary(bytes: 1_500)) == "1.5 KB")
         #expect(CardSummaryText.size(CardSummary(bytes: 0)) == nil)
         #expect(CardSummaryText.size(CardSummary()) == nil)
     }

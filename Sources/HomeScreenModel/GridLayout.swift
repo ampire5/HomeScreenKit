@@ -56,8 +56,6 @@ public struct GridMetrics: Equatable, Sendable {
     public var footerHeight: CGFloat = 72
     /// The name line under a slot in `.below` (collections always have it there).
     public var belowText: CGFloat = 22
-    /// The title under a collection otherwise.
-    public var collectionTitle: CGFloat = 0
     /// Names and badges only on slots at least this wide.
     public var minNamed: CGFloat = 90
     /// A poster's band, line by line. The heights are the caption's metrics from `CollectionCard` under a picture

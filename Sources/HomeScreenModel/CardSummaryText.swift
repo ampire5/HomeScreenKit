@@ -1,7 +1,7 @@
 import Foundation
 
-/// The words of a card's facts, in English like the rest of the interface. The same on every machine: the grouping is
-/// a space, whatever the locale.
+/// The words of a card's facts, in English like the rest of the interface. Numbers are grouped with a space whatever
+/// the locale; years are in the local calendar and time zone, like the Finder's dates.
 public enum CardSummaryText {
     /// `248 · 3 folders`; `248`; `+1 204 inside` (the subfolders' photos, `+1 204+ inside` while some are unknown),
     /// after the card's own photos when it has any.
@@ -18,7 +18,7 @@ public enum CardSummaryText {
         return parts.joined(separator: " · ")
     }
 
-    /// `2019–2023`, or `2021` when both dates are in one year; nil without a date.
+    /// `2019–2023` (local time zone), or `2021` when both dates are in one year; nil without a date.
     public static func years(_ s: CardSummary) -> String? {
         let calendar = Calendar(identifier: .gregorian)
         let years = [s.first, s.last].compactMap { $0 }.map { calendar.component(.year, from: $0) }
@@ -26,16 +26,20 @@ public enum CardSummaryText {
         return low == high ? "\(low)" : "\(low)–\(high)"
     }
 
-    /// `4.2 GB`, `50 MB`: 1024-based units like the Finder's older sizes; nil when unknown or empty.
+    /// `4.2 GB`, `50 MB`: decimal units like the Finder (1 GB = 10^9 bytes); nil when unknown or empty. A value that
+    /// rounds to 1000 of a unit is shown in the next one (`1.0 GB`, not `1000 MB`).
     public static func size(_ s: CardSummary) -> String? {
         guard let bytes = s.bytes, bytes > 0 else { return nil }
+        let units: [(name: String, size: Double)] = [("KB", 1e3), ("MB", 1e6), ("GB", 1e9), ("TB", 1e12)]
         let value = Double(bytes)
-        let units: [(String, Double)] = [("GB", 1_073_741_824), ("MB", 1_048_576), ("KB", 1024)]
-        for (name, unit) in units where value >= unit {
-            let n = value / unit
-            return n < 10 ? String(format: "%.1f %@", n, name) : String(format: "%.0f %@", n, name)
+        guard value >= 1e3 else { return "\(bytes) B" }
+        var i = units.lastIndex { value >= $0.size } ?? 0
+        while true {
+            let n = value / units[i].size
+            let rounded = n < 10 ? (n * 10).rounded() / 10 : n.rounded()
+            if rounded >= 1000, i + 1 < units.count { i += 1; continue }
+            return (n < 10 ? String(format: "%.1f", rounded) : String(format: "%.0f", rounded)) + " " + units[i].name
         }
-        return "\(bytes) B"
     }
 
     /// `137 / 248`: the photos seen of all; nil when nothing is known or the folder is empty.
