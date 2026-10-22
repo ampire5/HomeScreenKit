@@ -1,4 +1,5 @@
 import AppKit
+import HomeChrome
 import HomeScreenModel
 
 /// The home screen: a switch at the top (with two or more tabs), and on the first tab a grid of cards in sections;
@@ -92,7 +93,7 @@ public final class HomeScreenView: NSView {
         scroll.autohidesScrollers = true
         scroll.documentView = document
         scroll.onResize = { [weak self] step in self?.onResize?(step) }
-        hint.font = .systemFont(ofSize: 15)
+        hint.font = Chrome.Text.font(.title, weight: .regular)
         hint.textColor = .secondaryLabelColor
         hint.translatesAutoresizingMaskIntoConstraints = false
         for view in [bar, scroll, hint, message] { addSubview(view) }
@@ -187,7 +188,7 @@ public final class HomeScreenView: NSView {
         for section in sections where !section.items.isEmpty {
             if let title = section.title {
                 let heading = NSTextField(labelWithString: title)
-                heading.font = .systemFont(ofSize: 20, weight: .semibold)
+                heading.font = Chrome.Text.font(.hero)
                 heading.textColor = .white
                 document.addSubview(heading)
                 headings.append(heading)

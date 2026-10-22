@@ -1,4 +1,5 @@
 import AppKit
+import HomeChrome
 
 /// One button of the strip's tool capsule: the app supplies the symbol, the tip, whether it is lit and what it does.
 public struct FilmstripTool {
@@ -29,6 +30,10 @@ public struct FilmstripTool {
 
     /// The pill's white level: 20 % on, 10 % hovered, none otherwise.
     var pillAlpha: CGFloat { state == .on ? 0.2 : hovered ? 0.1 : 0 }
+    /// The pill's colour: `overMedia.pressed` on, `overMedia.hover` hovered, none otherwise.
+    var pillColor: NSColor? {
+        state == .on ? Chrome.Palette.overMedia.pressed : hovered ? Chrome.Palette.overMedia.hover : nil
+    }
     var symbolAlpha: CGFloat { state == .on || hovered ? 1 : 0.7 }
 
     func setHovered(_ hovered: Bool) { self.hovered = hovered }
@@ -47,8 +52,8 @@ public struct FilmstripTool {
 
     func refresh() {
         wantsLayer = true
-        layer?.cornerRadius = bounds.height / 2
-        layer?.backgroundColor = NSColor.white.withAlphaComponent(pillAlpha).cgColor
+        layer?.cornerRadius = Chrome.Radius.capsule(bounds.height)
+        layer?.backgroundColor = pillColor?.cgColor ?? NSColor.clear.cgColor
         alphaValue = symbolAlpha
     }
 
@@ -66,26 +71,17 @@ public struct FilmstripTool {
     static let separatorWidth: CGFloat = 1
     static let separatorMargin: CGFloat = 3
     static let symbolSize: CGFloat = 16
-    static let fade: TimeInterval = 0.15
-
+    
     public var tools: [FilmstripTool] = [] { didSet { rebuild() } }
 
-    private let glass = NSGlassEffectView()
-    private let rim = NSView()
+    private let glass = ChromeGlass(style: .overMedia(.regular), cornerRadius: Chrome.Radius.capsule(height))
     private(set) var buttons: [FilmstripToolButton] = []
     private var separators: [NSView] = []
     private var shown = true
 
     public override init(frame: NSRect) {
         super.init(frame: frame)
-        appearance = NSAppearance(named: .darkAqua)   // chrome over photos is always dark
-        glass.cornerRadius = Self.height / 2
-        glass.tintColor = NSColor(srgbRed: 22 / 255, green: 24 / 255, blue: 29 / 255, alpha: 0.62)
-        glass.contentView = rim
-        rim.wantsLayer = true
-        rim.layer?.cornerRadius = Self.height / 2
-        rim.layer?.borderWidth = 1                     // the 1 px inner light hairline
-        rim.layer?.borderColor = NSColor.white.withAlphaComponent(0.14).cgColor
+        Chrome.Palette.overMedia.apply(to: self)   // chrome over photos is always dark
         addSubview(glass)
     }
 
@@ -102,13 +98,14 @@ public struct FilmstripTool {
 
     public override var fittingSize: NSSize { intrinsicContentSize }
 
-    /// Fades the capsule in or out (0.15 s); hidden, it takes no clicks.
+    /// Fades the capsule in or out (`Chrome.Motion.show`); hidden, it takes no clicks.
     public func setShown(_ shown: Bool, animated: Bool) {
         self.shown = shown
         let alpha: CGFloat = shown ? 1 : 0
-        if animated, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+        let duration = Chrome.Motion.duration(Chrome.Motion.show)
+        if animated, duration > 0 {
             NSAnimationContext.runAnimationGroup { c in
-                c.duration = Self.fade
+                c.duration = duration
                 animator().alphaValue = alpha
             }
         } else {
@@ -132,14 +129,14 @@ public struct FilmstripTool {
             b.imagePosition = .imageOnly
             b.toolTip = tool.help
             b.state = tool.isOn ? .on : .off
-            b.contentTintColor = NSColor(srgbRed: 0xe8 / 255, green: 0xea / 255, blue: 0xee / 255, alpha: 1)
+            b.contentTintColor = Chrome.Palette.overMedia.text
             b.tag = i
-            rim.addSubview(b)
+            glass.contentView.addSubview(b)
             if i > 0, tool.separatorBefore {
                 let sep = NSView()
                 sep.wantsLayer = true
-                sep.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.18).cgColor
-                rim.addSubview(sep)
+                sep.layer?.backgroundColor = Chrome.Palette.overMedia.separator.cgColor
+                glass.contentView.addSubview(sep)
                 separators.append(sep)
             }
             b.refresh()
@@ -157,7 +154,7 @@ public struct FilmstripTool {
     public override func layout() {
         super.layout()
         glass.frame = bounds
-        rim.frame = bounds
+        glass.layoutSubtreeIfNeeded()
         var x = Self.padding
         var sepIndex = 0
         for (i, b) in buttons.enumerated() {

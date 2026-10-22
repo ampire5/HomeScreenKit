@@ -1,4 +1,5 @@
 import AppKit
+import HomeChrome
 
 /// Under the last row: what the folder holds, and under it a state (a slow listing, a filter), centred.
 final class GridFooter: NSView {
@@ -7,9 +8,9 @@ final class GridFooter: NSView {
 
     override init(frame: NSRect) {
         super.init(frame: frame)
-        line.font = .monospacedDigitSystemFont(ofSize: 12, weight: .regular)
+        line.font = Chrome.Text.digits(.label, weight: .regular)
         line.textColor = .secondaryLabelColor
-        state.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+        state.font = Chrome.Text.digits(.small, weight: .regular)
         state.textColor = .tertiaryLabelColor
         for label in [line, state] {
             label.alignment = .center

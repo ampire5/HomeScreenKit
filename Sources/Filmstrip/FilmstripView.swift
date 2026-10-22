@@ -1,4 +1,5 @@
 import AppKit
+import HomeChrome
 import FilmstripModel
 import QuartzCore
 
@@ -23,7 +24,7 @@ import QuartzCore
     private static let clickSlop: CGFloat = 3
     /// The settling, a click's move and a step to a neighbour.
     private static let moveDuration: CFTimeInterval = 0.2
-    private static let fadeDuration: CFTimeInterval = 0.15
+    private static let fadeDuration: CFTimeInterval = Chrome.Motion.show
     private static let placeholderBorder = CGColor(gray: 1, alpha: 0.38)
     private static let unavailableColor = CGColor(gray: 0x1c / 255, alpha: 1)
 
@@ -45,7 +46,7 @@ import QuartzCore
     }
 
     /// `strip-corner-radius`: the cells' corner radius in points.
-    public var cornerRadius: CGFloat = 3 {
+    public var cornerRadius: CGFloat = Chrome.Radius.cell {
         didSet {
             guard cornerRadius != oldValue else { return }
             withoutAnimation {

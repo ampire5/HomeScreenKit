@@ -1,4 +1,5 @@
 import AppKit
+import HomeChrome
 
 /// A centred message in place of a grid: a title, why, the details and a line of keys (the home screen's "could not
 /// open", the browser's "could not list").
@@ -17,7 +18,7 @@ final class HomeMessageView: NSStackView {
     func show(title text: String, reason: String, detail: String, hints keys: [String]) {
         arrangedSubviews.forEach { $0.removeFromSuperview() }
         let title = NSTextField(labelWithString: text)
-        title.font = .systemFont(ofSize: 18, weight: .medium)
+        title.font = Chrome.Text.font(.heading)
         title.textColor = .white
         title.lineBreakMode = .byTruncatingMiddle
         title.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -25,7 +26,7 @@ final class HomeMessageView: NSStackView {
         why.textColor = .white
         why.alignment = .center
         let more = NSTextField(wrappingLabelWithString: detail)
-        more.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        more.font = Chrome.Text.font(.small)
         more.textColor = .secondaryLabelColor
         more.alignment = .center
         let line = NSTextField(labelWithString: keys.joined(separator: "   ·   "))

@@ -1,4 +1,5 @@
 import AppKit
+import HomeChrome
 import HomeScreenModel
 
 /// A photo in the grid, as Photos draws it. Square: the picture fills the slot's square, cropped, and the selection is
@@ -89,17 +90,17 @@ final class PhotoCard: GridCard {
         nameLabel.isHidden = !named
         shade.isHidden = !(named && names == .photo)
         if names == .photo {
-            nameLabel.font = .systemFont(ofSize: 12, weight: .medium)
-            nameLabel.textColor = .white
+            nameLabel.font = Chrome.Text.font(.label, weight: .medium)
+            nameLabel.textColor = Chrome.Palette.overMedia.text
             let shadow = NSShadow()
-            shadow.shadowColor = NSColor(white: 0, alpha: 0.6)
+            shadow.shadowColor = Chrome.Palette.overMedia.mediaShadow
             shadow.shadowBlurRadius = 2
             nameLabel.shadow = shadow
             let band = min(rect.height, 32)
             shade.frame = CGRect(x: rect.minX, y: rect.maxY - band, width: rect.width, height: band)
             nameLabel.frame = CGRect(x: rect.minX + 6, y: rect.maxY - 20, width: max(0, rect.width - 12), height: 16)
         } else {
-            nameLabel.font = .systemFont(ofSize: 12)
+            nameLabel.font = Chrome.Text.font(.label)
             nameLabel.textColor = .secondaryLabelColor
             nameLabel.shadow = nil
             nameLabel.frame = CGRect(x: 0, y: side + 3, width: side, height: 16)
