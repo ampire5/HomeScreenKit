@@ -155,7 +155,9 @@ public final class HomeBrowserView: NSView {
     private var lastVisibleSent: [String] = []
     private var marginTask: Task<Void, Never>?
     /// Scrolling must pause this long before the margin around the view is asked for.
-    static let marginDelay: Duration = .milliseconds(150)
+    var marginDelay: Duration = .milliseconds(150)
+    /// The margin ask waiting for `marginDelay`, for tests to send at once (`sendMarginNow`).
+    private var pendingMargin: (all: [String], visible: Int)?
 
     public init(source: HomeSource) {
         self.source = source
@@ -1119,6 +1121,7 @@ public final class HomeBrowserView: NSView {
         let marginWanted = rest.filter(lacksImage)
         marginTask?.cancel()
         marginTask = nil
+        pendingMargin = nil
         if visibleWanted != lastVisibleSent {
             lastVisibleSent = visibleWanted
             if !visibleWanted.isEmpty, visibleWanted + marginWanted != lastWanted {
@@ -1127,14 +1130,25 @@ public final class HomeBrowserView: NSView {
             }
         }
         guard !marginWanted.isEmpty, visibleWanted + marginWanted != lastWanted else { return }
+        let all = visibleWanted + marginWanted
+        pendingMargin = (all, visibleWanted.count)
         marginTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: Self.marginDelay)
-            guard !Task.isCancelled, let self else { return }
-            let all = visibleWanted + marginWanted
-            guard all != self.lastWanted else { return }
-            self.lastWanted = all
-            self.source?.wantImages(all, visible: visibleWanted.count, width: self.slotWidth)
+            guard let delay = self?.marginDelay else { return }
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled else { return }
+            self?.sendMarginNow()
         }
+    }
+
+    /// Sends the margin ask waiting for scrolling to stop now (the delay's end, or a test).
+    func sendMarginNow() {
+        marginTask?.cancel()
+        marginTask = nil
+        guard let (all, visible) = pendingMargin else { return }
+        pendingMargin = nil
+        guard all != lastWanted else { return }
+        lastWanted = all
+        source?.wantImages(all, visible: visible, width: slotWidth)
     }
 
     /// Size steps from a wheel the app hears itself (a mouse's thumb wheel): positive larger; a step a whole notch.
