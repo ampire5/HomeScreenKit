@@ -31,6 +31,7 @@ public struct FilmstripTool {
 
     public override init(frame: NSRect) {
         super.init(frame: frame)
+        appearance = NSAppearance(named: .darkAqua)   // chrome over photos is always dark
         addSubview(glass)
     }
 

@@ -13,9 +13,10 @@ import AppKit
 
     public override init(frame: NSRect) {
         super.init(frame: frame)
+        appearance = NSAppearance(named: .darkAqua)   // chrome over photos is always dark
         image.image = NSImage(systemSymbolName: "chevron.up", accessibilityDescription: "Show filmstrip")?
             .withSymbolConfiguration(.init(pointSize: 9, weight: .semibold))
-        image.contentTintColor = .secondaryLabelColor
+        image.contentTintColor = .white.withAlphaComponent(0.75)
         image.imageScaling = .scaleProportionallyUpOrDown
         addSubview(image)
     }
