@@ -145,6 +145,69 @@ import Testing
         #expect(view.entries.map(\.name) == ["b.jpg", "a.jpg"])
     }
 
+    /// A new order moves each card with its entry: no picture goes back to a symbol, none is asked for again.
+    @Test func resortKeepsPictures() async {
+        let source = FakeHomeSource()
+        let view = await shown(source, [BrowserFixtures.folder("f0"), BrowserFixtures.folder("f1")]
+                                       + BrowserFixtures.files(20))   // all live
+        let before = view.entries.map(\.id)
+        let pictured = view.liveIDs
+        #expect(pictured.count == before.count)
+        for id in pictured { view.setImage(HomeScreenViewTests.image(), for: id) }
+        let asked = source.wanted.count
+        view.toolbar.clickSort(1)   // date ↓
+        #expect(view.entries.map(\.id) != before)
+        #expect(Set(view.liveIDs) == Set(pictured))
+        for id in pictured { #expect(view.card(for: id)?.image != nil, "\(id)") }
+        #expect(Set(source.wanted.dropFirst(asked).joined()).isDisjoint(with: pictured))
+        // Each card in its new slot: in the entries' order, row by row.
+        let frames = view.entries.compactMap { view.card(for: $0.id)?.frame }
+        #expect(frames.count == before.count)
+        #expect(zip(frames, frames.dropFirst()).allSatisfy { $0.minY < $1.minY || ($0.minY == $1.minY && $0.minX < $1.minX) })
+    }
+
+    /// A sort by date chosen while only names are listed keeps the grid as it is, in name order, until the dates come.
+    @Test func resortToDateBeforeCompleteKeepsGrid() async {
+        let source = FakeHomeSource()
+        let names = (0..<12).map { BrowserFixtures.file("img\($0).jpg") }   // no dates yet
+        let view = await shown(source, names, complete: false)
+        let order = view.entries.map(\.id)
+        view.toolbar.clickSort(1)   // date ↓: waits for the dates
+        await settle()
+        #expect(view.toolbar.sortTitles == ["Name", "Date ↓", "Size"])
+        #expect(view.entries.map(\.id) == order)
+        #expect(!view.liveIDs.isEmpty)
+        #expect(Set(view.liveIDs) == Set(order))
+        #expect(view.visibleIDs == Array(order.prefix(view.visibleIDs.count)))
+        // More names meanwhile join the grid in its old order.
+        source.yield(x, names + [BrowserFixtures.file("aaa.jpg")], complete: false)
+        await settle { view.entries.count == 13 }
+        #expect(view.entries.first?.name == "aaa.jpg")
+        source.yield(x, BrowserFixtures.files(12) + [BrowserFixtures.file("aaa.jpg", date: -1)])
+        await settle { view.entries.first?.name == "img11.jpg" }
+        let dated = (0..<12).reversed().map { "img\($0).jpg" } + ["aaa.jpg"]
+        #expect(view.entries.map(\.name) == dated)
+        #expect(Set(view.liveIDs) == Set(view.entries.map(\.id)))
+        #expect(view.visibleIDs == Array(view.entries.map(\.id).prefix(view.visibleIDs.count)))
+    }
+
+    /// The same over a listing ordered off the main actor: the grid stays, then the dates' order comes.
+    @Test func bigResortBeforeCompleteKeepsGrid() async {
+        let source = FakeHomeSource()
+        let count = HomeBrowserView.orderInlineLimit + 500
+        let view = await shown(source, (0..<count).map { BrowserFixtures.file("img\($0).jpg") }, complete: false)
+        let order = view.entries.map(\.id)
+        #expect(order.count == count)
+        view.toolbar.clickSort(1)   // date ↓
+        await settle()
+        #expect(view.entries.map(\.id) == order)
+        #expect(!view.liveIDs.isEmpty)
+        source.yield(x, BrowserFixtures.files(count))
+        await settle(seconds: 10) { view.entries.first?.name == "img\(count - 1).jpg" }
+        #expect(isDateOrdered(view.entries, ascending: false))
+        #expect(view.visibleIDs == Array(view.entries.map(\.id).prefix(view.visibleIDs.count)))
+    }
+
     @Test func relistKeepsSelectionById() async {
         let source = FakeHomeSource()
         let view = await shown(source, BrowserFixtures.files(5))
@@ -189,7 +252,7 @@ import Testing
         #expect(view.toolbar.sortTitles == ["Name ↑", "Date", "Size"])
         view.toolbar.clickSort(1)
         #expect(view.toolbar.sortTitles == ["Name", "Date ↓", "Size"])
-        #expect(view.entries.isEmpty)
+        #expect(view.entries.map(\.name) == ["img0.jpg", "img1.jpg", "img2.jpg"])   // the grid stays until the dates
         #expect(view.toolbar.subtitleText == "Loading…")
     }
 
