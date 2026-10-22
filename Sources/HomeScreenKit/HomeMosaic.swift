@@ -4,20 +4,23 @@ import Foundation
 /// Up to four pictures in one, with thin gaps: a session card's picture, and a folder's in the file browser. The
 /// layout says how they sit: `grid` (one fills, two side by side, three a large one on the left and two stacked, four
 /// 2×2), `hero` (a large one on top, up to three under it), `stack` (three prints with a slight turn and a shadow) or
-/// `single` (the first fills). Each picture is cropped to its cell, unless that would enlarge it more than
-/// `fillLimit` (a panorama's thumbnail in a square cell): then it is fitted whole, the card's fill around it.
+/// `single` (the first fills). Each picture is cropped to its cell, unless its shape is too far from the cell's
+/// (`shapeLimit`: a panorama in a square cell): then it is fitted whole, the card's fill around it.
 public enum HomeMosaic {
     public static let gap: CGFloat = 2
-    /// How much a picture may be enlarged to fill its cell. A photo's thumbnail is kept at a fixed long side (Loupe's
-    /// `thumb-size`, 512 px), so an ordinary photo fills a large card's cell enlarged up to about 1.6 times; a
-    /// panorama's (2880 × 810 kept 512 × 144) would be enlarged almost four times, its short side smeared over the
-    /// cell and most of it cropped away. Past this it is fitted: whole, at about its own pixels.
-    public static let fillLimit: CGFloat = 2
+    /// How far a picture's shape may be from its cell's for it to fill the cell, cropped: the larger of the two
+    /// aspect ratios over the smaller. Past it, filling would throw away more than half of the picture (a 2880 × 810
+    /// panorama is 3.6 times as wide as a square cell), so it is fitted whole instead. Enlargement alone never
+    /// decides: a 512 px thumbnail of an ordinary 3:2 photo needs about 2 × to fill a poster's 704 px cell on a
+    /// Retina screen, and it fills it as photos always did.
+    public static let shapeLimit: CGFloat = 2
 
-    /// Whether a picture of `size` pixels fills a cell of `cell` pixels (cropped) rather than being fitted in it.
+    /// Whether a picture of `size` fills a cell of `cell` (cropped) rather than being fitted in it: by their shapes,
+    /// so the units do not matter.
     public static func fills(_ size: CGSize, cell: CGSize) -> Bool {
-        guard size.width > 0, size.height > 0 else { return true }
-        return max(cell.width / size.width, cell.height / size.height) <= fillLimit
+        guard size.width > 0, size.height > 0, cell.width > 0, cell.height > 0 else { return true }
+        let picture = size.width / size.height, slot = cell.width / cell.height
+        return max(picture / slot, slot / picture) <= shapeLimit
     }
 
     public enum Layout: String, CaseIterable, Sendable { case grid, hero, stack, single }
@@ -44,16 +47,16 @@ public enum HomeMosaic {
         if effective(layout, width: size.width) == .stack, cells.count > 1 {
             drawStack(Array(images.prefix(cells.count)), cells: cells, pixelsPerPoint: pixelsPerPoint, in: context)
         } else {
-            for (image, cell) in zip(images, cells) { draw(image, in: cell, pixelsPerPoint: pixelsPerPoint, context) }
+            for (image, cell) in zip(images, cells) { draw(image, in: cell, context) }
         }
         return context.makeImage()
     }
 
-    /// `image` cropped to `cell`, or fitted in it when filling would enlarge it past `fillLimit` (the context is
+    /// `image` cropped to `cell`, or fitted in it when its shape is past `shapeLimit` from the cell's (the context is
     /// top-down, so the picture is flipped back).
-    private static func draw(_ image: CGImage, in cell: CGRect, pixelsPerPoint: CGFloat, _ context: CGContext) {
+    private static func draw(_ image: CGImage, in cell: CGRect, _ context: CGContext) {
         let pixels = CGSize(width: image.width, height: image.height)
-        let fill = fills(pixels, cell: CGSize(width: cell.width * pixelsPerPoint, height: cell.height * pixelsPerPoint))
+        let fill = fills(pixels, cell: cell.size)
         let scale = fill ? max(cell.width / pixels.width, cell.height / pixels.height)
                          : min(cell.width / pixels.width, cell.height / pixels.height)
         let drawn = CGSize(width: CGFloat(image.width) * scale, height: CGFloat(image.height) * scale)
@@ -82,7 +85,7 @@ public enum HomeMosaic {
             context.setFillColor(CGColor(gray: 1, alpha: 1))
             context.fill(local)
             context.restoreGState()
-            draw(images[i], in: local, pixelsPerPoint: pixelsPerPoint, context)
+            draw(images[i], in: local, context)
             context.setStrokeColor(CGColor(gray: 1, alpha: 0.7))
             context.setLineWidth(1)
             context.stroke(local.insetBy(dx: 0.5, dy: 0.5))

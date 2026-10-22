@@ -113,4 +113,23 @@ import Testing
         #expect(HomeMosaic.fills(CGSize(width: 300, height: 200), cell: CGSize(width: 400, height: 400)))
         #expect(!HomeMosaic.fills(CGSize(width: 288, height: 81), cell: CGSize(width: 400, height: 400)))
     }
+
+    /// At the default poster size on a Retina screen a cell is about 704 px, and a 512 px thumbnail of an ordinary
+    /// 3:2 or 16:9 photo must be enlarged about 2–2.5 times to fill it: it still fills (cropped), as a photo always
+    /// did. Only a picture whose shape is far from the cell's (more than 2:1 apart: the crop would throw away more
+    /// than half of it) is fitted, whatever the enlargement.
+    @Test func shapeNotEnlargementDecidesFit() throws {
+        let cell = CGSize(width: 704, height: 704)
+        #expect(HomeMosaic.fills(CGSize(width: 512, height: 341), cell: cell))
+        #expect(HomeMosaic.fills(CGSize(width: 512, height: 288), cell: cell))
+        #expect(HomeMosaic.fills(CGSize(width: 341, height: 512), cell: cell))
+        #expect(!HomeMosaic.fills(CGSize(width: 512, height: 144), cell: cell))   // a 2880 × 810 panorama's thumbnail
+        #expect(!HomeMosaic.fills(CGSize(width: 2880, height: 810), cell: cell))
+        // a wide cell (a hero's top) takes a wide photo filled
+        #expect(HomeMosaic.fills(CGSize(width: 512, height: 144), cell: CGSize(width: 704, height: 234)))
+        // drawn: the 3:2 thumbnail reaches the cell's top and bottom edges
+        let mosaic = try #require(HomeMosaic.make([red(512, 341)], size: CGSize(width: 352, height: 352),
+                                                  layout: .single, scale: 2))
+        #expect(alpha(mosaic, 352, 2) == 255 && alpha(mosaic, 352, 701) == 255)
+    }
 }
