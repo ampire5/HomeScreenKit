@@ -14,6 +14,9 @@ class FolderCard: GridCard {
     let viewedLabel = NSTextField(labelWithString: "")
     /// The photo count at the end of a narrow poster's only line.
     let countLabel = NSTextField(labelWithString: "")
+    /// The facts line's count in its two forms: with the folders part (`248 · 3 folders`) and the photo count alone.
+    private(set) var insideFull = ""
+    private(set) var insideShort = ""
     /// The subtitle, when there is no summary.
     let fallbackLabel = NSTextField(labelWithString: "")
     let rtlLabel = NSTextField(labelWithString: "RTL")
@@ -36,6 +39,11 @@ class FolderCard: GridCard {
     private static let ringGap = Chrome.Ring.gap
     static let nameFont = Chrome.Text.font(.body, weight: .semibold)
     static let factsFont = Chrome.Text.font(.small)
+
+    /// The band and card measurements (the kit's defaults: the browser only changes the grid's top, which cards do not use).
+    var metrics = GridMetrics() { didSet { needsLayout = true } }
+    var nameLineHeight: CGFloat { metrics.bandNameLine }
+    var factsLineHeight: CGFloat { metrics.bandFactsLine }
 
     /// The summary on the card now.
     var summary: CardSummary? { item.summary }
@@ -69,7 +77,7 @@ class FolderCard: GridCard {
         }
         rtlLabel.font = Chrome.Text.font(.badge)
         rtlLabel.textColor = Chrome.Palette.window.tertiaryLabel
-        twoPagesIcon.image = NSImage(systemSymbolName: "square.on.square", accessibilityDescription: "Two pages")
+        twoPagesIcon.image = Self.symbol("square.on.square", "Two pages")
         twoPagesIcon.symbolConfiguration = .init(pointSize: 11, weight: .regular)
         twoPagesIcon.contentTintColor = Chrome.Palette.window.tertiaryLabel
         problemIcon.symbolConfiguration = .init(pointSize: 12, weight: .semibold)
@@ -88,7 +96,6 @@ class FolderCard: GridCard {
     /// The square cover; the subclasses say where.
     var pictureFrame: CGRect { .zero }
     /// Where the rename field goes over the name, in the card's coordinates.
-    override var nameFrame: CGRect { .zero }
     var progressFrame: CGRect { convert(progressBar.frame, from: progressBar.superview) }
     var isShowingSymbol: Bool { !placeholder.isHidden }
 
@@ -96,20 +103,24 @@ class FolderCard: GridCard {
     var shownProgress: Double? { summary?.viewed ?? item.progress }
 
     override func itemChanged() {
-        placeholder.image = NSImage(systemSymbolName: item.symbol, accessibilityDescription: nil)
+        placeholder.image = Self.symbol(item.symbol)
         imageChanged()
         nameLabel.stringValue = item.title
         badgePill.text = item.badge ?? ""
         badgePill.isHidden = item.badge == nil
         let s = item.summary
         if let s {
-            insideLabel.stringValue = CardSummaryText.inside(s)
+            insideFull = CardSummaryText.inside(s)
+            insideShort = (s.photos ?? 0) > 0 ? CardSummaryText.inside(CardSummary(photos: s.photos)) : insideFull
+            insideLabel.stringValue = insideFull
             yearsLabel.stringValue = CardSummaryText.years(s) ?? ""
             sizeLabel.stringValue = CardSummaryText.size(s) ?? ""
             viewedLabel.stringValue = CardSummaryText.viewed(s) ?? ""
             countLabel.stringValue = s.photos.map { CardSummaryText.inside(CardSummary(photos: $0)) } ?? ""
             histogram.bins = s.histogram
         } else {
+            insideFull = ""
+            insideShort = ""
             for label in [insideLabel, yearsLabel, sizeLabel, viewedLabel] { label.stringValue = "" }
             countLabel.stringValue = item.count.map { CardSummaryText.inside(CardSummary(photos: $0)) } ?? ""
             histogram.bins = []
@@ -119,10 +130,10 @@ class FolderCard: GridCard {
         twoPagesIcon.isHidden = !(s?.twoPages ?? false)
         switch s?.problem {
         case .broken?:
-            problemIcon.image = NSImage(systemSymbolName: "exclamationmark.triangle.fill", accessibilityDescription: "Damaged")
+            problemIcon.image = Self.symbol("exclamationmark.triangle.fill", "Damaged")
             problemIcon.contentTintColor = .systemOrange
         case .offline?:
-            problemIcon.image = NSImage(systemSymbolName: "wifi.slash", accessibilityDescription: "Not reachable")
+            problemIcon.image = Self.symbol("wifi.slash", "Not reachable")
             problemIcon.contentTintColor = Chrome.Palette.window.secondaryLabel
         case nil:
             problemIcon.image = nil
@@ -181,31 +192,55 @@ class FolderCard: GridCard {
         CATransaction.commit()
     }
 
+    /// Symbols by name: a card is shown again for every scroll step, the image is made once.
+    private static var symbols: [String: NSImage] = [:]
+    static func symbol(_ name: String, _ description: String? = nil) -> NSImage? {
+        if let image = symbols[name] { return image }
+        guard let image = NSImage(systemSymbolName: name, accessibilityDescription: description) else { return nil }
+        symbols[name] = image
+        return image
+    }
+
+    /// A string's width in the facts font, with a little room against truncation.
+    static func textWidth(_ text: String) -> CGFloat {
+        ceil(NSAttributedString(string: text, attributes: [.font: factsFont]).size().width) + 6
+    }
+
     static func width(of view: NSView) -> CGFloat {
         if let label = view as? NSTextField { return ceil(label.attributedStringValue.size().width) + 6 }
         return view.intrinsicContentSize.width
     }
 
-    /// Lays the name line: the name takes what the badges at its right leave.
-    func layoutNameLine(x: CGFloat, y: CGFloat, width: CGFloat, trailing: [NSView]) {
-        var right = x + width
-        for view in trailing where !view.isHidden {
-            let w = Self.width(of: view), h = Self.nameLineHeight
-            let size = view is NSTextField ? CGSize(width: w, height: h) : CGSize(width: w, height: view.intrinsicContentSize.height)
+    /// The name must keep this much of its line; a badge that would squeeze it further is left out.
+    static let minName: CGFloat = 48
+
+    /// Lays the name line: the name takes what the badges at its right leave. `trailing` are the badges the card has
+    /// (view, whether it has one), nearest the end first.
+    func layoutNameLine(_ line: CGRect, trailing: [(view: NSView, wanted: Bool)]) {
+        var right = line.maxX
+        for (view, wanted) in trailing {
+            let w = Self.width(of: view)
+            let size = view is NSTextField ? CGSize(width: w, height: line.height)
+                                           : CGSize(width: w, height: view.intrinsicContentSize.height)
+            let fits = right - size.width - 5 - line.minX >= Self.minName
+            view.isHidden = !(wanted && fits)
+            guard !view.isHidden else { continue }
             right -= size.width
-            view.frame = CGRect(x: right, y: y + (h - size.height) / 2, width: size.width, height: size.height)
+            view.frame = CGRect(x: right, y: line.minY + (line.height - size.height) / 2, width: size.width, height: size.height)
             right -= 5
         }
-        nameLabel.frame = CGRect(x: x, y: y, width: max(0, right - x + (right < x + width ? 0 : 5)), height: Self.nameLineHeight)
+        let end = right < line.maxX ? right : line.maxX   // the gap after the last badge is not the name's
+        nameLabel.frame = CGRect(x: line.minX, y: line.minY, width: max(Self.minName, end - line.minX), height: line.height)
     }
 
-    static let nameLineHeight = GridMetrics().bandNameLine
-    static let factsLineHeight = GridMetrics().bandFactsLine
+    /// The name line in the card's coordinates: the rename field goes here, and `layout` puts the name here.
+    var nameLine: CGRect { .zero }
+    override var nameFrame: CGRect { nameLine }
 }
 
 /// The bars of a folder's dates: 12 bins, heights scaled to the largest bin so that a spread histogram stays visible.
 final class HistogramView: NSView {
-    static let barWidth: CGFloat = 2.5, barGap: CGFloat = 1, height: CGFloat = 12
+    static let barWidth: CGFloat = 2, barGap: CGFloat = 1, height: CGFloat = 12
 
     var bins: [UInt8] = [] {
         didSet {

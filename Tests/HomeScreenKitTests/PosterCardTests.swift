@@ -35,7 +35,7 @@ import Testing
         #expect(!c.twoPagesIcon.isHidden && !c.rtlLabel.isHidden)
         for badge in [c.twoPagesIcon, c.rtlLabel] as [NSView] {
             #expect(badge.frame.intersects(c.nameLabel.frame) == false)
-            #expect(badge.frame.midY == c.nameLabel.frame.midY || abs(badge.frame.midY - c.nameLabel.frame.midY) < 6)
+            #expect(abs(badge.frame.midY - c.nameLabel.frame.midY) <= 3)   // on the name line, centred
             #expect(badge.frame.minY >= 270)
         }
         #expect(c.insideLabel.stringValue == "248 · 3 folders")
@@ -49,15 +49,59 @@ import Testing
         #expect(abs(c.progressFrame.width - (270 * 0.55).rounded()) < 1)
     }
 
-    @Test func whatDoesNotFitIsDropped() {
-        // 200 pt: the count and the size first, the years with their bars only if there is room
-        let c = card(summary, width: 200)
-        #expect(!c.insideLabel.isHidden && !c.sizeLabel.isHidden)
+    @Test func posterAtDefaultSizeKeepsDates() {
+        let c = card(summary, width: 232)
+        #expect(!c.insideLabel.isHidden && c.insideLabel.stringValue.hasPrefix("248"))
+        #expect(!c.histogram.isHidden && !c.yearsLabel.isHidden)
+        #expect(c.yearsLabel.stringValue == "2019–2023")
         let shown = [c.insideLabel, c.histogram, c.yearsLabel, c.sizeLabel].filter { !$0.isHidden }.map(\.frame)
             .sorted { $0.minX < $1.minX }
         for (a, b) in zip(shown, shown.dropFirst()) { #expect(a.maxX <= b.minX) }
-        #expect(shown.last!.maxX <= 200)
-        #expect(c.histogram.isHidden == c.yearsLabel.isHidden)
+        #expect(shown.last!.maxX <= 232)
+    }
+
+    @Test func shortOfRoomTheCountLosesItsFoldersFirst() {
+        // 200 pt: "248 · 3 folders" is too long beside the dates; the count alone stays, with the size
+        let c = card(summary, width: 200)
+        #expect(c.insideLabel.stringValue == "248")
+        #expect(!c.sizeLabel.isHidden && !c.yearsLabel.isHidden && !c.histogram.isHidden)
+    }
+
+    @Test func dropOrder() {
+        func pick(_ room: CGFloat) -> PosterFacts {
+            PosterFacts.pick(room: room, full: 89, short: 22, size: 39, years: 50, bars: 35, viewed: 60)
+        }
+        // 22 | 35 + 5 + 50 | 39 with 8 between = 167; the full count 89 makes it 234; the progress text 60 + 8 more
+        #expect(pick(320) == PosterFacts(shortInside: false, size: true, years: true, bars: true, viewed: true))
+        #expect(pick(240) == PosterFacts(shortInside: false, size: true, years: true, bars: true, viewed: false))
+        #expect(pick(200) == PosterFacts(shortInside: true, size: true, years: true, bars: true, viewed: false))
+        #expect(pick(150) == PosterFacts(shortInside: true, size: false, years: true, bars: true, viewed: false))
+        #expect(pick(110) == PosterFacts(shortInside: true, size: false, years: false, bars: true, viewed: false))
+        #expect(pick(40) == PosterFacts(shortInside: true, size: false, years: false, bars: false, viewed: false))
+    }
+
+    @Test func renameFieldSitsOnTheName() {
+        var s = summary
+        s.twoPages = true
+        let poster = card(s, width: 270)
+        #expect(poster.nameFrame.minY == poster.nameLabel.frame.minY && poster.nameFrame.height == poster.nameLabel.frame.height)
+        #expect(poster.nameFrame.minX == poster.nameLabel.frame.minX && poster.nameFrame.width >= poster.nameLabel.frame.width)
+        let item = HomeCardItem(id: "a", title: "Holiday", tooltip: "a", symbol: "folder", summary: s, count: 248)
+        let compact = CompactCard(item: item)
+        compact.frame = CGRect(x: 0, y: 0, width: 300, height: 92)
+        compact.layoutSubtreeIfNeeded()
+        #expect(compact.nameFrame.minY == compact.nameLabel.frame.minY && compact.nameFrame.height == compact.nameLabel.frame.height)
+        #expect(compact.nameFrame.minX == compact.nameLabel.frame.minX && compact.nameFrame.width >= compact.nameLabel.frame.width)
+    }
+
+    @Test func badgesNeverSqueezeTheNameAway() {
+        var s = summary
+        s.twoPages = true
+        s.rightToLeft = true
+        s.problem = .broken
+        let c = card(s, width: 100)
+        #expect(c.nameLabel.frame.width >= FolderCard.minName)
+        #expect(c.nameLabel.frame.maxX <= 100)
     }
 
     @Test func doneShowsCheck() {
@@ -138,7 +182,7 @@ import Testing
         }
         let ys = lines.map { $0.frame.minY }
         #expect(ys == ys.sorted())
-        #expect(c.insideLabel.stringValue == "248 · 3 folders · 4.2 GB")
+        #expect(c.insideLabel.stringValue == "248 photos · 3 folders · 4.2 GB")
         #expect(c.flagPill.text == "+3" && c.bounds.contains(c.flagPill.frame))
         #expect(c.flagPill.frame.minX >= 92)
         #expect(c.bounds.contains(c.progressFrame) && c.progressFrame.minX >= 92)
