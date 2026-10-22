@@ -15,7 +15,7 @@ struct ListColumns: Equatable {
     /// The gap between the cover and the name.
     static let coverGap: CGFloat = 10
     static let minName: CGFloat = 160
-    /// The fixed columns' widths: "248 · +1 204+ inside", "Oct 22, 2026" or bars with "2019–2023", "137 / 248", "4.2 GB".
+    /// The fixed columns' widths (layout values, not performance limits; picked to fit the texts below): "248 · +1 204+ inside", "Oct 22, 2026" or bars with "2019–2023", "137 / 248", "4.2 GB".
     static let widths: [Column: CGFloat] = [.inside: 140, .dates: 150, .viewed: 90, .size: 70]
     /// Which columns are kept first when the width is short.
     private static let priority: [Column] = [.size, .dates, .inside, .viewed]

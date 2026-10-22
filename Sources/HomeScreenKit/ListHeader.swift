@@ -10,6 +10,8 @@ final class ListHeader: NSView {
     /// A click on a sortable column.
     var onSort: ((BrowserSort.Key) -> Void)?
     /// The sort shown: its column is lit and carries ↑ or ↓.
+    /// The sorts the place offers (the capsule's keys); the other heads are plain text.
+    var sortable: [BrowserSort.Key] = [.name, .date, .size] { didSet { if sortable != oldValue { showTitles() } } }
     var sort = BrowserSort.standard { didSet { if sort != oldValue { showTitles() } } }
 
     private static let names: [ListColumns.Column: String] = [.name: "Name", .inside: "Inside", .dates: "Dates",
@@ -47,7 +49,9 @@ final class ListHeader: NSView {
             let label = labels[column]!
             let active = Self.keys[column] == sort.key
             label.stringValue = Self.names[column]! + (active ? (sort.ascending ? " ↑" : " ↓") : "")
-            label.textColor = active ? Chrome.Palette.window.label : Chrome.Palette.window.secondaryLabel
+            let canSort = Self.keys[column].map(sortable.contains) ?? false
+            label.textColor = active ? Chrome.Palette.window.label
+                                     : canSort ? Chrome.Palette.window.secondaryLabel : Chrome.Palette.window.tertiaryLabel
         }
     }
 
@@ -67,7 +71,7 @@ final class ListHeader: NSView {
 
     /// What a click on `column` does: the sortable ones call `onSort`.
     func click(_ column: ListColumns.Column) {
-        if let key = Self.keys[column] { onSort?(key) }
+        if let key = Self.keys[column], sortable.contains(key) { onSort?(key) }
     }
 
     private func column(at point: CGPoint) -> ListColumns.Column? {

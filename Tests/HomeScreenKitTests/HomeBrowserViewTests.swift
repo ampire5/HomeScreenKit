@@ -618,4 +618,92 @@ import Testing
         view.show(.folder(x), selecting: nil)
         #expect(view.toolbar.cardSwitchSelection == 1)
     }
+
+    private func command(_ code: UInt16, _ chars: String) -> NSEvent {
+        NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.command], timestamp: 0, windowNumber: 0,
+                         context: nil, characters: chars, charactersIgnoringModifiers: chars, isARepeat: false,
+                         keyCode: code)!
+    }
+
+    @Test func styleIsForFoldersOnly() async {
+        let source = FakeHomeSource()
+        source.infos["stash"] = HomeSourceInfo(title: "Stash", page: NSView(), pageFilters: ["Scenes"])
+        source.infos["recent"] = HomeSourceInfo(title: "Recent")
+        for location in [BrowserLocation.places, .source("recent"), .source("stash")] {
+            let view = make(source, at: location)
+            #expect(!view.canChooseCardStyle)
+            #expect(!view.handleKey(command(19, "2")))   // the key goes on
+            view.chooseCardStyle(.cards)
+            #expect(view.cardStyle == .posters)
+        }
+        #expect(source.setCardStyles.isEmpty)
+        let view = make(source)
+        #expect(view.canChooseCardStyle)
+        #expect(view.handleKey(command(19, "2")))
+        #expect(view.cardStyle == .cards && source.setCardStyles.count == 1)
+    }
+
+    @Test func headerOffersOnlyTheSortsThereAre() async {
+        let source = FakeHomeSource()
+        let view = await shown(source, [BrowserFixtures.folder("a")])
+        #expect(view.listHeader?.sortable == [.name, .date, .size])
+        view.listHeader?.sortable = [.name]
+        let count = source.setSorts.count
+        view.listHeader?.click(.dates)
+        view.listHeader?.click(.size)
+        #expect(source.setSorts.count == count)
+        view.listHeader?.click(.name)
+        #expect(source.setSorts.count == count + 1)
+    }
+
+    @Test func headerClickWhileHeldBehavesLikeTheCapsule() async {
+        func run(_ click: (HomeBrowserView) -> Void) async -> ([String], String, [BrowserSort]) {
+            let source = FakeHomeSource()
+            source.cardStyles[.folder(x)] = .list
+            let view = make(source)
+            source.yield(x, [BrowserFixtures.file("b.jpg", date: 1), BrowserFixtures.file("a.jpg", date: 2)], complete: false)
+            await settle(seconds: 5) { !view.entries.isEmpty }
+            view.layoutSubtreeIfNeeded()
+            click(view)
+            view.layoutSubtreeIfNeeded()
+            return (view.entries.map(\.name), view.toolbar.subtitleText, source.setSorts.map(\.0))
+        }
+        let header = await run { $0.listHeader?.click(.dates) }
+        let capsule = await run { $0.toolbar.clickSort(1) }
+        #expect(header.0 == capsule.0)       // the grid stays as it is until the complete listing
+        #expect(header.1 == capsule.1 && header.1 == "Loading…")
+        #expect(header.2 == capsule.2)
+    }
+
+    @Test func reusedRowLeavesNothingBehind() {
+        let folder = HomeCardItem(id: "a", title: "a", tooltip: "a", symbol: "folder",
+                                  summary: CardSummary(photos: 248, folders: 3, bytes: 4_200_000_000,
+                                                       first: Date(timeIntervalSince1970: 1_560_000_000),
+                                                       last: Date(timeIntervalSince1970: 1_690_000_000),
+                                                       histogram: [10, 40, 90, 20, 0, 0, 5, 5, 30, 25, 20, 10],
+                                                       viewed: 0.5, new: 4, twoPages: true, rightToLeft: true))
+        let file = HomeCardItem(id: "b", title: "b.png", tooltip: "b", symbol: "doc", format: "PNG", bytes: 2_000)
+        let row = ListRow(item: folder)
+        row.frame = CGRect(x: 0, y: 0, width: 1000, height: 44)
+        row.layoutSubtreeIfNeeded()
+        #expect(!row.histogram.isHidden && !row.flagPill.isHidden && !row.twoPagesIcon.isHidden)
+        row.show(file)
+        row.layoutSubtreeIfNeeded()
+        #expect(row.insideLabel.stringValue == "PNG" && row.sizeLabel.stringValue == "2.0 KB")
+        #expect(row.yearsLabel.isHidden && row.yearsLabel.stringValue.isEmpty)
+        #expect(row.viewedLabel.isHidden && row.histogram.isHidden && row.flagPill.isHidden)
+        #expect(row.twoPagesIcon.isHidden && row.rtlLabel.isHidden && row.problemIcon.isHidden)
+    }
+
+    @Test func styledLayoutFrom320() async {
+        for (width, isRow) in [(CGFloat(320), true), (319, false)] {
+            let source = FakeHomeSource()
+            source.cardStyles[.folder(x)] = .list
+            let view = make(source, width: width)
+            source.yield(x, [BrowserFixtures.folder("a")])
+            await settle(seconds: 5) { !view.entries.isEmpty }
+            view.layoutSubtreeIfNeeded()
+            #expect((view.card(for: view.entries[0].id) is ListRow) == isRow, "width \(width) -> \(view.gridContentWidth)")
+        }
+    }
 }
