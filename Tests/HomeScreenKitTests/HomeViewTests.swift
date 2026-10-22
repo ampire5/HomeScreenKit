@@ -291,4 +291,17 @@ import Testing
         #expect(view.browser.frame.minX == 320)
         #expect(!view.resizeHandle.isHidden)
     }
+
+    /// The sidebar's row menus are the source's (`HomeSource.sidebarMenu(for:)`), the choice goes back to it.
+    @Test func sidebarMenuIsTheSources() {
+        let source = FakeHomeSource()
+        let view = HomeView(source: source)
+        let folder = HomeSidebarRow(id: "/Volumes/T", title: "T", symbol: "externaldrive",
+                                    location: .folder(URL(fileURLWithPath: "/Volumes/T", isDirectory: true)))
+        let recent = HomeSidebarRow(id: "recent", title: "Recent", symbol: "clock", location: .source("recent"))
+        #expect(view.sidebarView.menuItems?(folder) == source.menuItems)
+        #expect(view.sidebarView.menuItems?(recent) == [])
+        view.sidebarView.onMenu?("reveal", folder)
+        #expect(source.sidebarPerformed.map(\.0) == ["reveal"] && source.sidebarPerformed.map(\.1) == ["/Volumes/T"])
+    }
 }

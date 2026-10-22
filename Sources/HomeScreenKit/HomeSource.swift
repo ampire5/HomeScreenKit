@@ -54,6 +54,11 @@ public struct HomeSourceInfo {
     func wantImages(_ ids: [String], visible: Int, width: CGFloat)
     func menu(for entry: BrowserEntry, in location: BrowserLocation) -> [HomeMenuItem]
     func perform(_ item: String, on entry: BrowserEntry, in location: BrowserLocation)
+    /// A sidebar row's context menu, as `menu(for:in:)` is a card's (a folder's or an archive's Show in Finder and
+    /// Copy Path); the default is none, and a row without items shows no menu.
+    func sidebarMenu(for row: HomeSidebarRow) -> [HomeMenuItem]
+    /// An item of `sidebarMenu(for:)` chosen on `row`.
+    func performSidebar(_ item: String, on row: HomeSidebarRow)
     /// A file or a collection opened (a folder or an archive is entered by the browser itself).
     func open(_ entry: BrowserEntry, in location: BrowserLocation, sort: BrowserSort, how: HomeClick)
     func rename(_ entry: BrowserEntry, to name: String) async throws -> BrowserEntry
@@ -74,6 +79,8 @@ public struct HomeSourceInfo {
 }
 
 public extension HomeSource {
+    func sidebarMenu(for row: HomeSidebarRow) -> [HomeMenuItem] { [] }
+    func performSidebar(_ item: String, on row: HomeSidebarRow) {}
     func cardStyle(for location: BrowserLocation) -> CardStyle { .posters }
     func setCardStyle(_ style: CardStyle, for location: BrowserLocation) {}
     func wantImages(_ ids: [String], visible: Int, width: CGFloat) { wantImages(ids, width: width) }

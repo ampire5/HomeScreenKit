@@ -40,6 +40,10 @@ final class HomeSidebar: NSView {
     var onEndKeys: (() -> Void)?
     /// A click on a row: the keys stay with (or go to) the browser.
     var onClickKeys: (() -> Void)?
+    /// A row's context menu (`HomeSource.sidebarMenu(for:)`); none, or no items: no menu.
+    var menuItems: ((HomeSidebarRow) -> [HomeMenuItem])?
+    /// An item of a row's menu was chosen.
+    var onMenu: ((String, HomeSidebarRow) -> Void)?
     /// How long a row lists before its spinner shows.
     var slowAfter: Duration = .milliseconds(300)
 
@@ -203,6 +207,28 @@ final class HomeSidebar: NSView {
         }
     }
 
+    override func menu(for event: NSEvent) -> NSMenu? {
+        let point = document.convert(event.locationInWindow, from: nil)
+        guard let view = lineViews.first(where: { $0.frame.contains(point) }) else { return nil }
+        return menu(forLine: view.tag)
+    }
+
+    /// The context menu of a row (the app's items for it); nil for a heading or a row without items.
+    func menu(forLine line: Int) -> NSMenu? {
+        let lines = tree.lines
+        guard lines.indices.contains(line), case .row(let row, _, _, _) = lines[line],
+              let items = menuItems?(row), !items.isEmpty else { return nil }
+        let menu = NSMenu()
+        for item in items {
+            let menuItem = menu.addItem(withTitle: item.title, action: #selector(SidebarMenuTarget.chose(_:)),
+                                        keyEquivalent: "")
+            let target = SidebarMenuTarget { [weak self] in self?.onMenu?(item.id, row) }
+            menuItem.target = target
+            menuItem.representedObject = target   // a menu item holds its target weakly
+        }
+        return menu
+    }
+
     /// A click on a line: a heading folds its section, a row opens.
     func click(line: Int) {
         let lines = tree.lines
@@ -275,6 +301,13 @@ final class HomeSidebar: NSView {
     var panelFrame: CGRect { panel.frame }
     var highlightedLine: Int? { selected }
     func isSpinning(line: Int) -> Bool { lineViews.indices.contains(line) && !lineViews[line].spinner.isHidden }
+}
+
+/// A sidebar menu item's action: the item and its row, kept by the item.
+private final class SidebarMenuTarget: NSObject {
+    private let action: () -> Void
+    init(_ action: @escaping () -> Void) { self.action = action }
+    @objc func chose(_ sender: NSMenuItem) { action() }
 }
 
 /// One line of the sidebar: a heading (small, grey, with a fold chevron on hover) or a row (triangle, symbol, title,

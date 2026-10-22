@@ -196,6 +196,8 @@ public final class HomeView: NSView {
             self?.tree.toggleSection(id)
             self?.showTree()
         }
+        sidebarView.menuItems = { [weak self] row in self?.source?.sidebarMenu(for: row) ?? [] }
+        sidebarView.onMenu = { [weak self] item, row in self?.source?.performSidebar(item, on: row) }
         sidebarView.onEndKeys = { [weak self] in self?.browser.takeFocus() }
         sidebarView.onClickKeys = { [weak self] in self?.browser.takeFocus() }
         reloadSidebar()

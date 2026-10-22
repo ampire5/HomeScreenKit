@@ -113,6 +113,13 @@ import AppKit
     func perform(_ item: String, on entry: BrowserEntry, in location: BrowserLocation) {
         performed.append((item, entry.id))
     }
+    /// The sidebar rows' menu: `menuItems` for folders, none for the rest.
+    func sidebarMenu(for row: HomeSidebarRow) -> [HomeMenuItem] {
+        if case .folder = row.location { return menuItems }
+        return []
+    }
+    private(set) var sidebarPerformed: [(String, String)] = []
+    func performSidebar(_ item: String, on row: HomeSidebarRow) { sidebarPerformed.append((item, row.id)) }
     func open(_ entry: BrowserEntry, in location: BrowserLocation, sort: BrowserSort, how: HomeClick) {
         opened.append((entry, how))
     }

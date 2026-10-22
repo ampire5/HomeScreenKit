@@ -150,4 +150,25 @@ import Testing
         let line = view.highlightedLine!
         #expect(view.visibleLineRect.contains(view.lineFrames[line]))
     }
+
+    /// A row's context menu: what the app gives for it (a folder's Show in Finder, Copy Path), the item chosen going
+    /// back with the row; a heading has none.
+    @Test func rowMenuComesFromTheApp() throws {
+        let view = sidebar(tree)
+        var asked: [String] = [], chosen: [(String, String)] = []
+        view.menuItems = { row in
+            asked.append(row.id)
+            guard case .folder = row.location else { return [] }
+            return [HomeMenuItem(id: "reveal", title: "Show in Finder"), HomeMenuItem(id: "copyPath", title: "Copy Path")]
+        }
+        view.onMenu = { item, row in chosen.append((item, row.id)) }
+        let menu = try #require(view.menu(forLine: 3))
+        #expect(menu.items.map(\.title) == ["Show in Finder", "Copy Path"])
+        let copy = try #require(menu.items.last)
+        _ = (copy.target as? NSObject)?.perform(copy.action, with: copy)
+        #expect(chosen.map(\.0) == ["copyPath"] && chosen.map(\.1) == [url("/Volumes/T/a").path])
+        #expect(view.menu(forLine: 0) == nil)   // Recent: the app gives none
+        #expect(view.menu(forLine: 1) == nil)   // a heading: never asked
+        #expect(asked == [url("/Volumes/T/a").path, "recent"])
+    }
 }
