@@ -124,6 +124,15 @@ import Testing
         #expect(c.nameLabel.frame.maxY <= c.bounds.height)
     }
 
+    /// A narrow poster of a folder with only subfolders says how many ("3 folders"), not "0"; nothing when both are 0.
+    @Test func narrowFolderOfFoldersCountsFolders() {
+        let folders = card(CardSummary(photos: 0, folders: 3), width: 180)
+        #expect(folders.countLabel.stringValue == "3 folders" && !folders.countLabel.isHidden)
+        #expect(card(CardSummary(photos: 0, folders: 1), width: 180).countLabel.stringValue == "1 folder")
+        let empty = card(CardSummary(photos: 0, folders: 0), width: 180)
+        #expect(empty.countLabel.stringValue.isEmpty && empty.countLabel.isHidden)
+    }
+
     @Test func widthDecidesWhatTheSecondLineHolds() {
         let two = card(summary, width: 270)
         #expect(two.viewedLabel.isHidden)

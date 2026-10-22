@@ -116,7 +116,7 @@ class FolderCard: GridCard {
             yearsLabel.stringValue = CardSummaryText.years(s) ?? ""
             sizeLabel.stringValue = CardSummaryText.size(s) ?? ""
             viewedLabel.stringValue = CardSummaryText.viewed(s) ?? ""
-            countLabel.stringValue = s.photos.map { CardSummaryText.inside(CardSummary(photos: $0)) } ?? ""
+            countLabel.stringValue = Self.narrowCount(s)
             histogram.bins = s.histogram
         } else {
             insideFull = ""
@@ -149,6 +149,13 @@ class FolderCard: GridCard {
         flagPill.isHidden = flagPill.text.isEmpty
         progressBar.isHidden = shownProgress == nil
         progressTrack.isHidden = progressBar.isHidden || !showsTrack
+    }
+
+    /// A narrow poster's count: the photos (`248`), else the subfolders (`3 folders`), else nothing.
+    static func narrowCount(_ s: CardSummary) -> String {
+        if let photos = s.photos, photos > 0 { return CardSummaryText.inside(CardSummary(photos: photos)) }
+        if let folders = s.folders, folders > 0 { return CardSummaryText.inside(CardSummary(folders: folders)) }
+        return ""
     }
 
     /// Cards draw the progress in a track; posters only a line.
