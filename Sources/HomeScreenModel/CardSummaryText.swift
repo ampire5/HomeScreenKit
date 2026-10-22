@@ -78,15 +78,15 @@ public enum CardSummaryText {
         return parts.joined(separator: " · ")
     }
 
-    /// The dates' span in months: `Jun – Aug 2024`, `Mar 2023` (one month), `2009 – 2024` (over years); nil without
-    /// a date. Month names are English, like the rest of the interface; local calendar and time zone.
+    /// The dates' span in months: `Jun – Aug 2024`, `Mar 2023` (one month), `2009–2024` (over years: the same
+    /// year range as `years`); nil without a date. Month names are English, like the rest of the interface; local calendar and time zone.
     public static func span(_ s: CardSummary) -> String? {
         let dates = [s.first, s.last].compactMap { $0 }
         guard let low = dates.min(), let high = dates.max() else { return nil }
         let calendar = Calendar(identifier: .gregorian)
         let a = calendar.dateComponents([.year, .month], from: low), b = calendar.dateComponents([.year, .month], from: high)
         guard let y1 = a.year, let y2 = b.year, let m1 = a.month, let m2 = b.month else { return nil }
-        if y1 != y2 { return "\(y1) – \(y2)" }
+        if y1 != y2 { return "\(y1)–\(y2)" }
         if m1 == m2 { return "\(months[m1 - 1]) \(y1)" }
         return "\(months[m1 - 1]) – \(months[m2 - 1]) \(y1)"
     }

@@ -31,7 +31,7 @@ import Testing
     @Test func span() {
         #expect(CardSummaryText.span(CardSummary(first: date(2024, 6), last: date(2024, 8))) == "Jun – Aug 2024")
         #expect(CardSummaryText.span(CardSummary(first: date(2023, 3), last: date(2023, 3))) == "Mar 2023")
-        #expect(CardSummaryText.span(CardSummary(first: date(2009, 2), last: date(2024, 11))) == "2009 – 2024")
+        #expect(CardSummaryText.span(CardSummary(first: date(2009, 2), last: date(2024, 11))) == "2009–2024")   // as `years`
         #expect(CardSummaryText.span(CardSummary(last: date(2022, 5))) == "May 2022")
         #expect(CardSummaryText.span(CardSummary()) == nil)
     }

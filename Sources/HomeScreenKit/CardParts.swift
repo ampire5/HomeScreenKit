@@ -20,11 +20,15 @@ final class CardText: NSView {
     /// Overrides `stringValue`'s look when set (a part at another opacity); `stringValue` stays the plain text.
     var attributedValue: NSAttributedString? { didSet { if attributedValue != oldValue { changed() } } }
     var font = CardFont.text(11.5) { didSet { if font != oldValue { changed() } } }
-    var textColor: NSColor = Chrome.Palette.card.secondary { didSet { needsDisplay = true } }
+    var textColor: NSColor = Chrome.Palette.card.secondary { didSet { if textColor != oldValue { changed() } } }
     var alignRight = false { didSet { needsDisplay = true } }
-    var kern: CGFloat = 0 { didSet { changed() } }
+    var kern: CGFloat = 0 { didSet { if kern != oldValue { changed() } } }
 
-    private var line: CTLine?
+    /// The natural width, measured once per text.
+    private var measured: CGFloat?
+    /// The line as drawn: made in this view's appearance (its colours resolved there) and cut to `width`; kept until
+    /// the text, the look, the appearance or the width changes.
+    private var drawn: (line: CTLine, width: CGFloat, fitted: CGFloat)?
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -35,17 +39,28 @@ final class CardText: NSView {
     override var isFlipped: Bool { true }
     override var isOpaque: Bool { false }
 
+    private var isEmpty: Bool { stringValue.isEmpty && attributedValue == nil }
+
     /// The text's natural width, rounded up.
     var textWidth: CGFloat {
-        guard !stringValue.isEmpty || attributedValue != nil else { return 0 }
-        return ceil(CTLineGetTypographicBounds(makeLine(), nil, nil, nil))
+        guard !isEmpty else { return 0 }
+        if let measured { return measured }
+        let width = ceil(CTLineGetTypographicBounds(CTLineCreateWithAttributedString(attributed()), nil, nil, nil))
+        measured = width
+        return width
     }
 
     var lineHeight: CGFloat { ceil(CardFont.lineHeight(font)) }
 
     private func changed() {
-        line = nil
+        measured = nil
+        drawn = nil
         needsDisplay = true
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        if newSize.width != frame.width { drawn = nil }
+        super.setFrameSize(newSize)
     }
 
     private func attributed() -> NSAttributedString {
@@ -55,39 +70,38 @@ final class CardText: NSView {
         return NSAttributedString(string: stringValue, attributes: attributes)
     }
 
-    private func makeLine() -> CTLine {
-        if let line { return line }
-        let made = CTLineCreateWithAttributedString(attributed())
-        line = made
-        return made
-    }
-
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
-        changed()
+        drawn = nil
+        needsDisplay = true
+    }
+
+    /// The line cut with "…" to the view's width, made in the current drawing appearance.
+    private func makeDrawn() -> (line: CTLine, width: CGFloat, fitted: CGFloat) {
+        let full = CTLineCreateWithAttributedString(attributed())
+        var line = full, width = CGFloat(CTLineGetTypographicBounds(full, nil, nil, nil))
+        if width > bounds.width + 0.5 {
+            var attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: textColor]
+            if let a = attributedValue, a.length > 0 { attributes = a.attributes(at: a.length - 1, effectiveRange: nil) }
+            let token = CTLineCreateWithAttributedString(NSAttributedString(string: "…", attributes: attributes))
+            if let cut = CTLineCreateTruncatedLine(full, Double(bounds.width), .end, token) {
+                line = cut
+                width = CGFloat(CTLineGetTypographicBounds(cut, nil, nil, nil))
+            }
+        }
+        return (line, width, bounds.width)
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        guard !stringValue.isEmpty || attributedValue != nil, let context = NSGraphicsContext.current?.cgContext else { return }
-        // The colours resolve in this view's appearance: the line is made here, not kept across appearances.
+        guard !isEmpty, let context = NSGraphicsContext.current?.cgContext else { return }
         effectiveAppearance.performAsCurrentDrawingAppearance {
-            line = nil
-            var drawn = makeLine()
-            var width = CGFloat(CTLineGetTypographicBounds(drawn, nil, nil, nil))
-            if width > bounds.width + 0.5 {
-                var attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: textColor]
-                if let a = attributedValue, a.length > 0 { attributes = a.attributes(at: a.length - 1, effectiveRange: nil) }
-                let token = CTLineCreateWithAttributedString(NSAttributedString(string: "…", attributes: attributes))
-                if let cut = CTLineCreateTruncatedLine(drawn, Double(bounds.width), .end, token) {
-                    drawn = cut
-                    width = CGFloat(CTLineGetTypographicBounds(drawn, nil, nil, nil))
-                }
-            }
+            let made = drawn.flatMap { $0.fitted == bounds.width ? $0 : nil } ?? makeDrawn()
+            drawn = made
             let baseline = (bounds.height - CardFont.lineHeight(font)) / 2 + font.ascender
             context.saveGState()
             context.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
-            context.textPosition = CGPoint(x: alignRight ? bounds.width - width : 0, y: baseline)
-            CTLineDraw(drawn, context)
+            context.textPosition = CGPoint(x: alignRight ? bounds.width - made.width : 0, y: baseline)
+            CTLineDraw(made.line, context)
             context.restoreGState()
         }
     }
@@ -107,8 +121,10 @@ final class TextChip: NSView {
         var text: NSColor
     }
 
-    var text = "" { didSet { if text != oldValue { invalidateIntrinsicContentSize(); needsDisplay = true } } }
-    var style: Style { didSet { invalidateIntrinsicContentSize(); needsDisplay = true } }
+    var text = "" { didSet { if text != oldValue { sized = nil; invalidateIntrinsicContentSize(); needsDisplay = true } } }
+    var style: Style { didSet { sized = nil; invalidateIntrinsicContentSize(); needsDisplay = true } }
+    /// The size for `text` and `style`, measured once.
+    private var sized: NSSize?
 
     init(_ style: Style) {
         self.style = style
@@ -129,11 +145,14 @@ final class TextChip: NSView {
     }
 
     override var intrinsicContentSize: NSSize {
+        if let sized { return sized }
         let line = CTLineCreateWithAttributedString(attributed())
         var width = CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
         if style.kern != 0 { width -= style.kern }   // CSS letter-spacing trails the last letter too; keep it tight
-        return NSSize(width: ceil(width + 2 * (style.padX + borderWidth)),
-                      height: (CardFont.lineHeight(style.font) + 2 * (style.padY + borderWidth)).rounded())
+        let size = NSSize(width: ceil(width + 2 * (style.padX + borderWidth)),
+                          height: (CardFont.lineHeight(style.font) + 2 * (style.padY + borderWidth)).rounded())
+        sized = size
+        return size
     }
 
     override var fittingSize: NSSize { intrinsicContentSize }

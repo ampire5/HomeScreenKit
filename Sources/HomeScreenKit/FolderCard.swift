@@ -154,7 +154,7 @@ class FolderCard: GridCard {
     /// The warning line's words: the short ones under a poster's cover, the long ones in a compact card.
     static func warning(_ problem: CardSummary.Problem, short: Bool) -> String {
         switch problem {
-        case .offline: short ? "Volume not connected · from the catalog" : "Network volume not connected · facts from the catalog"
+        case .offline: short ? "Not connected · facts from the catalog" : "Network volume not connected · facts from the catalog"
         case .broken: short ? "Archive is damaged" : "Archive is damaged: couldn't open it"
         }
     }

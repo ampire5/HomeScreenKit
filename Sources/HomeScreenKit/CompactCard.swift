@@ -164,12 +164,11 @@ final class CompactCard: FolderCard {
         // Row 4: the track, its text and `+12`; or the warning line.
         let y4 = tops[3], h4 = rows[3]
         checkIcon.isHidden = true
-        if let problem = s?.problem {
+        if s?.problem != nil {
             for view in [progressTrack, progressBar, viewedLabel, newPill] as [NSView] { view.isHidden = true }
             problemIcon.isHidden = false
             problemIcon.frame = CGRect(x: x, y: (y4 + (h4 - 12) / 2).rounded(), width: 12, height: 12)
             warningLabel.isHidden = false
-            warningLabel.stringValue = Self.warning(problem, short: false)
             warningLabel.frame = CGRect(x: x + 12 + 5, y: y4, width: max(0, width - 17), height: h4)
             return
         }

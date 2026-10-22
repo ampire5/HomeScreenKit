@@ -117,13 +117,15 @@ import Testing
         let c = card(off, width: 232)
         #expect(c.alphaValue == 1 && c.picture.alphaValue == 0.4)
         #expect(!c.coverAlert.isHidden && c.coverAlert.frame.size == CGSize(width: 34, height: 34))
-        #expect(!c.warningLabel.isHidden && c.warningLabel.stringValue == "Volume not connected · from the catalog")
+        #expect(!c.warningLabel.isHidden && c.warningLabel.stringValue == "Not connected · facts from the catalog")
         #expect(c.insideLabel.isHidden && c.histogram.isHidden && c.yearsLabel.isHidden)
+        #expect(c.warningLabel.textWidth <= c.warningLabel.frame.width)   // whole at the default size
         var broken = CardSummary(bytes: 310_000_000)
         broken.problem = .broken
         let b = card(broken, width: 232, badge: "CBZ")
         #expect(b.picture.alphaValue == 0.25 && !b.coverAlert.isHidden)
         #expect(b.warningLabel.stringValue == "Archive is damaged")
+        #expect(b.warningLabel.textWidth <= b.warningLabel.frame.width)
         #expect(card(summary, width: 232).coverAlert.isHidden)
     }
 
