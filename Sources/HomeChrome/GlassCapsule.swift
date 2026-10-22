@@ -23,7 +23,7 @@ import AppKit
         glass.contentView = content
         addSubview(glass)
         light.wantsLayer = true
-        light.layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.25).cgColor
+        paintLight()
         light.layer?.cornerRadius = Chrome.Radius.capsule(Self.height - 4)
         light.isHidden = true
         content.addSubview(light)
@@ -63,6 +63,19 @@ import AppKit
         placeLight(animated: false)
     }
 
+    private func paintLight() {
+        // The accent is the same blue in both appearances; the tint is a little weaker on a light window, where the
+        // title on it is dark.
+        let dark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        light.layer?.backgroundColor = Chrome.resolve(NSColor.controlAccentColor.withAlphaComponent(dark ? 0.25 : 0.18),
+                                                      in: self)
+    }
+
+    public override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        paintLight()
+    }
+
     @objc private func clicked(_ sender: NSButton) { choose(sender.tag) }
 
     public override func layout() {
@@ -79,7 +92,7 @@ import AppKit
 
     private func placeLight(animated: Bool) {
         for (i, b) in buttons.enumerated() {
-            b.contentTintColor = i == selected ? .white : .labelColor
+            b.contentTintColor = i == selected ? Chrome.Palette.window.label : .labelColor
         }
         guard let s = selected, buttons.indices.contains(s) else { light.isHidden = true; return }
         let target = buttons[s].frame

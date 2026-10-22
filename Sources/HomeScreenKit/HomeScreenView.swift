@@ -78,6 +78,9 @@ public final class HomeScreenView: NSView {
 
     /// `background` nil: transparent, and only the cards and the switch take the mouse (what is under the screen gets
     /// the rest); else filled with it.
+    ///
+    /// Home follows the window's appearance (light or dark): its text, cards and the switch use dynamic colours. A host
+    /// that draws Home over its own dark content sets `appearance` (for example `.darkAqua`) on the view itself.
     public init(background: CGColor?) {
         transparent = background == nil
         super.init(frame: .zero)

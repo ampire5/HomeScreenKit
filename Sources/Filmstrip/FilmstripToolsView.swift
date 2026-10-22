@@ -154,7 +154,6 @@ public struct FilmstripTool {
     public override func layout() {
         super.layout()
         glass.frame = bounds
-        glass.layoutSubtreeIfNeeded()
         var x = Self.padding
         var sepIndex = 0
         for (i, b) in buttons.enumerated() {

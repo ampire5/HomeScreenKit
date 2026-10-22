@@ -53,6 +53,23 @@ import Testing
         #expect(!toast.isShowing)
     }
 
+    @Test func toastHidesAfterFadeAndReshowStaysVisible() async throws {
+        let toast = ChromeToastView(style: .window)
+        toast.show("a", for: 5)
+        #expect(!toast.isHidden)
+        toast.hide()
+        for _ in 0..<40 where !toast.isHidden { try await Task.sleep(for: .milliseconds(50)) }
+        #expect(toast.isHidden)
+        toast.show("b", for: 5)
+        #expect(!toast.isHidden)
+        toast.hide()
+        toast.show("c", for: 5)
+        try await Task.sleep(for: .milliseconds(600))
+        #expect(!toast.isHidden)
+        #expect(toast.isShowing)
+        toast.hide()
+    }
+
     @Test func toastSizesFromText() {
         let toast = ChromeToastView(style: .window)
         toast.show("Some text", for: 5)

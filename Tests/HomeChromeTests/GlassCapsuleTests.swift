@@ -13,6 +13,24 @@ import Testing
         #expect(capsule.selected == 1)
     }
 
+    @Test func lightColourFollowsAppearance() {
+        func lightColour(_ name: NSAppearance.Name) -> NSColor? {
+            let capsule = GlassCapsule(titles: ["A", "B"])
+            capsule.selected = 0
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 40), styleMask: [.titled],
+                                  backing: .buffered, defer: true)
+            window.appearance = NSAppearance(named: name)
+            window.contentView?.addSubview(capsule)
+            capsule.viewDidChangeEffectiveAppearance()
+            let light = capsule.subviews.first { $0 is NSGlassEffectView }.flatMap { ($0 as? NSGlassEffectView)?.contentView }?
+                .subviews.first { !($0 is NSButton) }
+            return light?.layer?.backgroundColor.flatMap { NSColor(cgColor: $0)?.usingColorSpace(.sRGB) }
+        }
+        let aqua = lightColour(.aqua), dark = lightColour(.darkAqua)
+        #expect(aqua != nil && dark != nil)
+        #expect(aqua != dark)
+    }
+
     @Test func titlesRebuildSegments() {
         let capsule = GlassCapsule(titles: ["All", "Folders", "Photos"])
         capsule.selected = 2

@@ -53,7 +53,7 @@ public final class HomeView: NSView {
             if window?.isVisible == true, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
                 sidebarView.isHidden = false
                 NSAnimationContext.runAnimationGroup({ context in
-                    context.duration = 0.2
+                    context.duration = Chrome.Motion.select
                     context.allowsImplicitAnimation = true
                     sidebarColumn.animator().constant = width
                     layoutSubtreeIfNeeded()
