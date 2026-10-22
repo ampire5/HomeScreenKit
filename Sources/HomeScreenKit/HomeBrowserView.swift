@@ -49,6 +49,10 @@ public final class HomeBrowserView: NSView {
     /// The last places or folder shown: where the app's "Folders" goes back to.
     public private(set) var lastBrowsed = BrowserLocation.places
 
+    /// The cards laid out now (in view and a screen either side), in order; a card's facts set while it is not among
+    /// them show when it is laid out, and one laid out anew asks for its picture.
+    public var liveIDs: [String] { live.keys.sorted().map { entries[$0].id } }
+
     /// The cards in view now, in order: their pictures are wanted first.
     public var visibleIDs: [String] {
         let visible = scroll.contentView.documentVisibleRect
@@ -1290,7 +1294,6 @@ public final class HomeBrowserView: NSView {
     var headerTitles: [String] { headers.filter { !$0.isHidden }.map(\.title) }
     var footerLines: [String] { footer.lines }
     var scrollOffset: CGFloat { scroll.contentView.bounds.origin.y }
-    var liveIDs: [String] { live.values.map(\.item.id) }
     var gridContentHeight: CGFloat { document.frame.height }
     var gridContentWidth: CGFloat { document.frame.width }
 

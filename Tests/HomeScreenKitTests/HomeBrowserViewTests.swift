@@ -30,6 +30,7 @@ import Testing
         view.scrollGrid(to: view.gridContentHeight)
         #expect(view.liveCardCount <= 80)
         #expect(view.liveIDs.contains(view.entries.last!.id))
+        #expect(view.liveIDs.count == view.liveCardCount && Set(view.visibleIDs).isSubset(of: view.liveIDs))
     }
 
     @Test func staleListingIsDropped() async {
@@ -567,6 +568,7 @@ import Testing
         view.scrollGrid(to: view.gridContentHeight)
         #expect(view.liveCardCount <= 80)
         #expect(view.liveIDs.contains(view.entries.last!.id))
+        #expect(view.liveIDs.count == view.liveCardCount && Set(view.visibleIDs).isSubset(of: view.liveIDs))
     }
 
     @Test func listArrowsMoveByOneRow() async {
