@@ -11,7 +11,8 @@ import QuartzCore
 /// thumbnails as `layer.contents`, so nothing is drawn on the main thread and the layer count follows the window,
 /// not the folder.
 ///
-/// What to show comes from the owner (`show(offset:current:expansion:animated:)`, the pictures by item);
+/// What to show comes from the owner (`show(offset:current:expansion:animated:)`, the pictures by item; a run of
+/// current items, such as two pages shown side by side, expands together);
 /// this view reports the cursor (`onHover`), a click on a cell (`onPress`), a drag across the cells (`onDrag` /
 /// `onDragEnd`), a drag of its top edge (`onResize*`) and trackpad scrolling (`onStripScroll`; the wheel goes on
 /// to the owner).
@@ -116,7 +117,7 @@ import QuartzCore
     /// The cells, moved as one: its x is the view x of base x 0.
     private let contentLayer = CALayer()
     /// What `show` was last asked to show.
-    private var offset = 0.0, current = 0, expansion = 1.0
+    private var offset = 0.0, current = 0..<1, expansion = 1.0
     /// The cells shown, left to right, in view x.
     private var shownCells: [FilmstripCell] = []
     /// The items on screen, from the centre outwards.
@@ -196,6 +197,13 @@ import QuartzCore
     /// proportions). `animated`: the cells move there in `moveDuration`, ease-out (the settling, a click, a step);
     /// otherwise at once (a gesture, a jump).
     public func show(offset: Double, current: Int, expansion: Double, animated: Bool) {
+        show(offset: offset, current: current..<(current + 1), expansion: expansion, animated: animated)
+    }
+
+    /// `show(offset:current:expansion:animated:)` with a run of current items (two pages side by side), expanded
+    /// together around the run's centre (`FilmstripLayout.cells(offset:current:expansion:)`); `offset` is usually
+    /// `layout.centre(of: current)`.
+    public func show(offset: Double, current: Range<Int>, expansion: Double, animated: Bool) {
         let previous = self.offset
         guard offset != previous || current != self.current || expansion != self.expansion else { return }
         self.offset = offset
@@ -245,7 +253,12 @@ import QuartzCore
         } else {
             withoutAnimation(place)
         }
-        let items = target.map(\.item).sorted { abs($0 - current) < abs($1 - current) }
+        // From the current run outwards.
+        let run = current
+        func distance(_ item: Int) -> Int {
+            item < run.lowerBound ? run.lowerBound - item : item >= run.upperBound ? item - run.upperBound + 1 : 0
+        }
+        let items = target.map(\.item).sorted { distance($0) < distance($1) }
         if items != visibleItems {
             visibleItems = items
             onVisibleChange?()

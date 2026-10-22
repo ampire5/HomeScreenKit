@@ -214,3 +214,50 @@ private func medianMicroseconds(_ body: () -> Void) -> Double {
 @Test func axisDefaultsToHorizontal() {
     #expect(FilmstripLayout(itemCount: 3, length: 800, thickness: 68, maxAspect: 1.5, aspects: []).axis == .horizontal)
 }
+
+/// Two pages side by side: both cells current, each at its own proportions, the plain gap between them and the
+/// current padding outside, the pair's middle at the strip's centre; one item as a run is the single current cell.
+@Test func runOfCurrentItemsExpandsTogether() throws {
+    var aspects = [Double?](repeating: nil, count: 100)
+    aspects[10] = 0.7
+    aspects[11] = 0.75
+    let l = layout(100, aspects: aspects)
+    let pair = 10..<12
+    let cells = l.cells(offset: l.centre(of: pair), current: pair, expansion: 1)
+    func cell(_ item: Int) throws -> FilmstripCell { try #require(cells.first { $0.item == item }) }
+    let a = try cell(10), b = try cell(11)
+    let padding = FilmstripLayout.currentPaddingRatio * h, gap = FilmstripLayout.gapRatio * h
+    #expect(near(a.length, 0.7 * h) && near(b.length, 0.75 * h))
+    #expect(near(b.start - a.start - a.length, gap))
+    #expect(near((a.start + b.start + b.length) / 2, stripWidth / 2))
+    #expect(near(a.start - (try cell(9)).start - (try cell(9)).length, padding))
+    #expect(near((try cell(12)).start - b.start - b.length, padding))
+    #expect(near((try cell(13)).start - (try cell(12)).start - (try cell(12)).length, gap))
+    // Narrow (a moving strip): the run is the base line, its middle between the two cells.
+    let narrow = l.cells(offset: l.centre(of: pair), current: pair, expansion: 0)
+    let na = try #require(narrow.first { $0.item == 10 }), nb = try #require(narrow.first { $0.item == 11 })
+    #expect(near((na.start + nb.start + nb.length) / 2, stripWidth / 2))
+    #expect(near(l.centre(of: pair), (l.centre(of: 10) + l.centre(of: 11)) / 2))
+    // One item as a run is the single current cell, to the point.
+    #expect(l.cells(offset: l.centre(of: 10), current: 10..<11, expansion: 0.6)
+            == l.cells(offset: l.centre(of: 10), current: 10, expansion: 0.6))
+    #expect(l.centre(of: 10..<11) == l.centre(of: 10))
+    // The fade never covers either page.
+    let short = layout(100, length: 140, aspects: aspects)
+    let shortCells = short.cells(offset: short.centre(of: pair), current: pair, expansion: 1)
+    let fades = short.fades(cells: shortCells, current: pair)
+    let first = try #require(shortCells.first { $0.item == 10 }), last = try #require(shortCells.last { $0.item == 11 })
+    #expect(fades.start <= max(0, first.start) && fades.end <= max(0, 140 - last.start - last.length))
+}
+
+/// A run wider than the strip grows only as far as the strip allows; items outside the list are ignored.
+@Test func runNeverOutgrowsTheStrip() throws {
+    let l = layout(10, length: 200, aspects: [Double?](repeating: 2.5, count: 10))
+    let cells = l.cells(offset: l.centre(of: 4..<6), current: 4..<6, expansion: 1)
+    let a = try #require(cells.first { $0.item == 4 }), b = try #require(cells.first { $0.item == 5 })
+    #expect(near(b.start + b.length - a.start, 200))
+    #expect(near(a.length, b.length))
+    let clipped = l.cells(offset: l.centre(of: 9), current: 9..<11, expansion: 1)
+    #expect(clipped == l.cells(offset: l.centre(of: 9), current: 9, expansion: 1))
+    #expect(l.centre(of: 20..<22) == 0)
+}
