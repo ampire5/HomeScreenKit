@@ -1,4 +1,5 @@
 import AppKit
+import HomeChrome
 import HomeScreenKit
 
 /// Home on made-up data, for trying it by hand: the sidebar, the sources and the browser (`HomeView`); with
@@ -7,7 +8,7 @@ import HomeScreenKit
 @MainActor final class Demo: NSObject, NSApplicationDelegate {
     let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 1100, height: 760),
                           styleMask: [.titled, .closable, .resizable, .miniaturizable], backing: .buffered, defer: false)
-    let home = HomeScreenView(background: CGColor(gray: 0.06, alpha: 1))
+    let home = HomeScreenView(background: Chrome.Palette.window.background.cgColor)
     let source = DemoBrowserSource()
     lazy var browser = HomeBrowserView(source: source)
     lazy var homeView = HomeView(source: source)

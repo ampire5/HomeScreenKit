@@ -164,7 +164,7 @@ public final class HomeBrowserView: NSView {
                                                object: scroll.contentView)
         toast.translatesAutoresizingMaskIntoConstraints = false
         skeleton.translatesAutoresizingMaskIntoConstraints = false
-        hint.font = .systemFont(ofSize: 15)
+        hint.font = Chrome.Text.font(.title, weight: .regular)
         hint.textColor = .secondaryLabelColor
         hint.isHidden = true
         hint.translatesAutoresizingMaskIntoConstraints = false

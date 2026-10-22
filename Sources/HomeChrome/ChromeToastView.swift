@@ -50,6 +50,7 @@ import AppKit
         hideTask?.cancel()
         label.stringValue = text
         isShowing = true
+        isHidden = false
         invalidateIntrinsicContentSize()
         fade(to: 1, duration: Chrome.Motion.duration(Chrome.Motion.show))
         hideTask = Task { [weak self] in
@@ -64,17 +65,21 @@ import AppKit
         hideTask?.cancel()
         hideTask = nil
         isShowing = false
-        fade(to: 0, duration: Chrome.Motion.duration(Chrome.Motion.hide))
+        fade(to: 0, duration: Chrome.Motion.duration(Chrome.Motion.hide)) { [weak self] in
+            guard let self, !self.isShowing else { return }
+            self.isHidden = true
+        }
     }
 
-    private func fade(to alpha: CGFloat, duration: TimeInterval) {
+    private func fade(to alpha: CGFloat, duration: TimeInterval, completion: (@MainActor () -> Void)? = nil) {
         if duration == 0 {
             alphaValue = alpha
+            completion?()
         } else {
-            NSAnimationContext.runAnimationGroup { c in
+            NSAnimationContext.runAnimationGroup({ c in
                 c.duration = duration
                 animator().alphaValue = alpha
-            }
+            }, completionHandler: { MainActor.assumeIsolated { completion?() } })
         }
     }
 }
