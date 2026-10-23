@@ -222,12 +222,16 @@ public struct SidebarTree: Sendable {
         children[path] = rows
     }
 
+    /// Whether `folder`'s subfolders were listed (`setChildren`).
+    public func isListed(_ folder: URL) -> Bool { known.contains(Self.path(folder)) }
+
     public mutating func setLoading(_ isLoading: Bool, of folder: URL) {
         if isLoading { loading.insert(Self.path(folder)) } else { loading.remove(Self.path(folder)) }
     }
 
     /// The browser moved to `location`: its row lights. A folder under a root opens the path to it (the longest root
-    /// wins); the ancestors whose subfolders are still unknown come back, top first.
+    /// wins); the ancestors whose subfolders are still unknown come back, top first, and the folder itself last when
+    /// it is open and unlisted (back from a subfolder before its listing came: the path's row alone under it).
     public mutating func follow(_ location: BrowserLocation) -> [URL] {
         current = location
         currentRoot = nil
@@ -240,7 +244,8 @@ public struct SidebarTree: Sendable {
         }
         currentRoot = root
         collapsed.remove(section)
-        guard target != root else { return [] }
+        let itself = expanded.contains(target) && !known.contains(target) ? [URL(fileURLWithPath: target, isDirectory: true)] : []
+        guard target != root else { return itself }
         let names = Self.components(of: target, under: root)
         var unknown: [URL] = []
         var parent = root
@@ -256,7 +261,7 @@ public struct SidebarTree: Sendable {
             parent = child
         }
         updateReroot()
-        return unknown
+        return unknown + itself
     }
 
     /// The tree starts again when the current folder is `rerootDepth` levels down or deeper, so that it lands on the

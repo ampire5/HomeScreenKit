@@ -45,8 +45,9 @@ public struct HomeSourceInfo {
     /// nothing). Nil when none is kept (the default).
     func lastListing(for location: BrowserLocation) -> BrowserListing?
     /// The folders and archives in `folder` (names are enough), for the path's sibling menus and the sidebar's tree: from
-    /// the source's cache when it has the listing, so the menu fills at once.
-    func folders(in folder: URL) async -> [BrowserEntry]
+    /// the source's cache when it has the listing, so the menu fills at once. Throws when the folder could not be
+    /// listed (a share's error): the tree then leaves it unlisted, to be asked again, not empty for good.
+    func folders(in folder: URL) async throws -> [BrowserEntry]
     /// Where Up goes from `folder`: its parent, or the places from a volume's root.
     func parent(of folder: URL) -> BrowserLocation
     /// The SF Symbol on a card that has no picture yet.

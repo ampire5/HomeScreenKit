@@ -185,7 +185,7 @@ public final class HomeView: NSView {
             self.onSidebarWidthChange?(self.sidebarWidth)
         }
         browser.onMoved = { [weak self] location in self?.moved(to: location) }
-        browser.onListingComplete = { [weak self] location in self?.listingComplete(location) }
+        browser.onListingComplete = { [weak self] location, entries in self?.listingComplete(location, entries: entries) }
         sidebarView.onOpen = { [weak self] location in self?.browser.show(location, selecting: nil) }
         sidebarView.onExpand = { [weak self] folder in self?.expand(folder) }
         sidebarView.onCollapse = { [weak self] folder in
@@ -217,7 +217,7 @@ public final class HomeView: NSView {
             // would have had them, unless a listing of them is on its way.
             guard !self.isFollowing, !unknown.isEmpty else { return }
             self.pending = (location, unknown)
-            if self.browser.hasCompleteListing { self.listingComplete(location) }
+            if self.browser.hasCompleteListing { self.listingComplete(location, entries: self.browser.completeEntries) }
         }
     }
 
@@ -235,19 +235,26 @@ public final class HomeView: NSView {
         showTree()
     }
 
-    /// The folder's own listing is in: now the path's other folders, top first, one at a time.
-    private func listingComplete(_ location: BrowserLocation) {
-        guard let pending, pending.location == location, !pending.folders.isEmpty else { return }
+    /// The folder's own listing is in: its entries are its node's children (the browser's listing is the one that
+    /// counts, no listing of its own); then the path's other folders still unlisted, top first, one at a time.
+    private func listingComplete(_ location: BrowserLocation, entries: [BrowserEntry]) {
+        if case .folder(let folder) = location {
+            tree.setChildren(entries, of: folder)
+            showTree()
+        }
+        guard let pending, pending.location == location else { return }
         self.pending = nil
+        let folders = pending.folders.filter { !tree.isListed($0) }
+        guard !folders.isEmpty else { return }
         let generation = generation
         isFollowing = true
         followTask = Task { @MainActor [weak self] in
             defer { if self?.generation == generation { self?.isFollowing = false } }
-            for folder in pending.folders {
+            for folder in folders {
                 guard let source = self?.source else { return }
                 self?.tree.setLoading(true, of: folder)
                 self?.showTree()
-                let entries = await source.folders(in: folder)
+                let entries = try? await source.folders(in: folder)
                 guard let self else { return }
                 guard !Task.isCancelled, self.generation == generation else {
                     // Left before the answer: the row stops spinning, and is asked again when opened.
@@ -255,7 +262,8 @@ public final class HomeView: NSView {
                     self.showTree()
                     return
                 }
-                self.tree.setChildren(entries, of: folder)
+                // A share's error: the row stops spinning, unlisted (asked again when opened or followed).
+                if let entries { self.tree.setChildren(entries, of: folder) } else { self.tree.setLoading(false, of: folder) }
                 self.showTree()
             }
         }
@@ -268,9 +276,10 @@ public final class HomeView: NSView {
         guard asks else { return }
         Task { @MainActor [weak self] in
             guard let source = self?.source else { return }
-            let entries = await source.folders(in: folder)
+            let entries = try? await source.folders(in: folder)
             guard let self else { return }
-            self.tree.setChildren(entries, of: folder)
+            // A share's error: the row stops spinning, unlisted (asked again when opened).
+            if let entries { self.tree.setChildren(entries, of: folder) } else { self.tree.setLoading(false, of: folder) }
             self.showTree()
         }
     }

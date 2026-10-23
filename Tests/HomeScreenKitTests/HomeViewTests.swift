@@ -304,4 +304,56 @@ import Testing
         view.sidebarView.onMenu?("reveal", folder)
         #expect(source.sidebarPerformed.map(\.0) == ["reveal"] && source.sidebarPerformed.map(\.1) == ["/Volumes/T"])
     }
+
+    /// The browser's complete listing of the folder on screen is its node's children in the tree at once: opened, it
+    /// shows them without a `folders(in:)` of its own.
+    @Test func listingCompleteFillsTheFolderItself() async {
+        let source = source()
+        let (view, _) = await make(source)
+        let b = url("/Volumes/T/A/B")
+        view.browser.show(.folder(b), selecting: nil)
+        source.yield(b, [BrowserFixtures.folder("C", in: b.path), BrowserFixtures.folder("D", in: b.path)]
+                        + BrowserFixtures.files(2, in: b.path))
+        await settle { view.browser.hasCompleteListing }
+        let row = view.sidebarView.titles.firstIndex { $0.hasSuffix("B") }!
+        view.sidebarView.clickDisclosure(line: row)
+        await settle { view.sidebarView.titles.contains("D") }
+        #expect(view.sidebarView.titles.contains("C"))
+        #expect(!source.foldersAsked.contains(b))
+    }
+
+    /// Back to the parent within a second of opening a subfolder (its listing cut short, the tree showing it with the
+    /// path's row alone): its complete listing fills it.
+    @Test func backWithinASecondListsTheOpenFolder() async {
+        let source = source()
+        source.holdsFolders = true
+        let (view, _) = await make(source)
+        let a = url("/Volumes/T/A"), b = url("/Volumes/T/A/B")
+        view.browser.show(.folder(a), selecting: nil)
+        view.browser.show(.folder(b), selecting: nil)
+        view.browser.goBack()
+        #expect(view.browser.location == .folder(a))
+        source.yield(a, ["B", "C", "D"].map { BrowserFixtures.folder($0, in: a.path) })
+        await settle { view.sidebarView.titles.contains("D") }
+        #expect(view.sidebarView.titles.contains("C"))
+    }
+
+    /// A share's error from `folders(in:)`: the row stops spinning and is not taken as listed (empty): opened again,
+    /// it is asked again.
+    @Test func failedFolderListingIsAskedAgain() async {
+        let source = source()
+        source.folderErrors = ["/Volumes/T"]
+        let (view, _) = await make(source)
+        let t = view.sidebarView.titles.firstIndex(of: "T")!
+        view.sidebarView.clickDisclosure(line: t)
+        await settle { source.foldersAsked.count == 1 }
+        await settle { view.loadingFolders.isEmpty }
+        #expect(view.loadingFolders.isEmpty)
+        source.folderErrors = []
+        source.folderReplies["/Volumes/T"] = [BrowserFixtures.folder("A", in: "/Volumes/T")]
+        view.sidebarView.clickDisclosure(line: t)   // closes
+        view.sidebarView.clickDisclosure(line: t)   // opens: asked again
+        await settle { view.sidebarView.titles.contains("A") }
+        #expect(source.foldersAsked.count == 2)
+    }
 }

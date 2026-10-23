@@ -35,8 +35,9 @@ public final class HomeBrowserView: NSView {
     public var onResize: ((HomeResize) -> Void)?
     /// After every move: the app keeps the last folder.
     public var onLocation: ((BrowserLocation) -> Void)?
-    /// The location on screen got its first complete listing (`HomeView` lists the tree's folders only after it).
-    var onListingComplete: ((BrowserLocation) -> Void)?
+    /// The location on screen got its first complete listing, with its entries (`HomeView` gives them to the tree's
+    /// node of the folder and lists the path's other folders only after it).
+    var onListingComplete: ((BrowserLocation, [BrowserEntry]) -> Void)?
     /// After every move, for `HomeView` (the sidebar follows).
     var onMoved: ((BrowserLocation) -> Void)?
     /// A mouse's other buttons (down: true) for the app to route (Loupe's button layout, a Logitech mouse's own
@@ -329,7 +330,7 @@ public final class HomeBrowserView: NSView {
         onLocation?(location)
         onMoved?(location)
         // Its listing is complete as it is: the sidebar may list the path now.
-        onListingComplete?(location)
+        onListingComplete?(location, listing?.entries ?? [])
     }
 
     /// The source's listings of the place on screen, as they come, until the next move (`generation`).
@@ -561,7 +562,7 @@ public final class HomeBrowserView: NSView {
             // it knows.
             lastWanted = []
             lastVisibleSent = []
-            onListingComplete?(location)
+            onListingComplete?(location, new.entries)
         }
         defer { updateLoading() }
         guard let shownSort else { return }
@@ -704,6 +705,8 @@ public final class HomeBrowserView: NSView {
 
     /// The location on screen has had its complete listing.
     var hasCompleteListing: Bool { hasComplete }
+    /// The entries of that complete listing (none before it), unfiltered.
+    var completeEntries: [BrowserEntry] { hasComplete ? listing?.entries ?? [] : [] }
     var isShowingLoadingLine: Bool { toolbar.loading.isRunning }
     var isSkeletonMoving: Bool { skeleton.isMoving }
     var isShowingSkeleton: Bool { !skeleton.isHidden }
@@ -1086,7 +1089,7 @@ public final class HomeBrowserView: NSView {
             let entries: [BrowserEntry]
             switch parent {
             case .places, .source: entries = await source.places()
-            case .folder(let url): entries = source.sort(for: parent).order(await source.folders(in: url))
+            case .folder(let url): entries = source.sort(for: parent).order((try? await source.folders(in: url)) ?? [])   // an error: none
             }
             guard let self, !Task.isCancelled, self.generation == generation else { return }
             self.toolbar.updateSiblings(entries.map { (title: $0.name, location: .folder($0.url),

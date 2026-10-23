@@ -234,4 +234,33 @@ import Testing
         _ = t.follow(.folder(url("/Volumes/T/a/b/c/d/e/f/g")))
         #expect(shape(t)[5] == "  a ▾")
     }
+
+    /// Back from a subfolder before its parent's listing came: the parent is open with the path's row alone and
+    /// unlisted, so following it hands it back to be asked (with its unlisted ancestors); listed, it is not.
+    @Test func backToAnUnlistedOpenFolderAsksIt() {
+        var t = tree
+        _ = t.follow(.folder(url("/Volumes/T/A/B")))
+        let back = t.follow(.folder(url("/Volumes/T/A")))
+        #expect(back.map(\.path) == ["/Volumes/T", "/Volumes/T/A"])
+        t.setChildren([folder("B", in: "/Volumes/T/A"), folder("C", in: "/Volumes/T/A")], of: url("/Volumes/T/A"))
+        let listed = t.follow(.folder(url("/Volumes/T/A")))
+        #expect(listed.map(\.path) == ["/Volumes/T"])
+        #expect(shape(t).contains("    C"))
+    }
+
+    /// A folder whose listing failed (a share's error) stops spinning and stays unlisted: not the path's row alone
+    /// for good, but asked again when it is opened or followed.
+    @Test func failedListingLeavesTheFolderUnlisted() {
+        var t = tree
+        let asked = t.expand(url("/Volumes/T"))
+        #expect(asked)
+        t.setLoading(false, of: url("/Volumes/T"))   // the error
+        #expect(t.loadingPaths.isEmpty)
+        #expect(!t.isListed(url("/Volumes/T")))
+        let followed = t.follow(.folder(url("/Volumes/T")))
+        #expect(followed.map(\.path) == ["/Volumes/T"])
+        t.collapse(url("/Volumes/T"))
+        let again = t.expand(url("/Volumes/T"))
+        #expect(again)
+    }
 }

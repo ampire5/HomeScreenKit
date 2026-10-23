@@ -142,7 +142,7 @@ import Testing
         let source = source()
         var completed: [BrowserLocation] = []
         let view = make(source, at: .folder(x))
-        view.onListingComplete = { completed.append($0) }
+        view.onListingComplete = { location, _ in completed.append(location) }
         source.yieldPartial(x, BrowserFixtures.files(2))
         await settle()
         #expect(completed.isEmpty)

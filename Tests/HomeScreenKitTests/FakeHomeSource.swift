@@ -89,8 +89,12 @@ import AppKit
     private var heldFolders: [CheckedContinuation<[BrowserEntry], Never>] = []
     private(set) var foldersAsked: [URL] = []
 
-    func folders(in folder: URL) async -> [BrowserEntry] {
+    /// Paths whose `folders(in:)` fails (a share's error).
+    var folderErrors: Set<String> = []
+
+    func folders(in folder: URL) async throws -> [BrowserEntry] {
         foldersAsked.append(folder)
+        if folderErrors.contains(folder.standardizedFileURL.path) { throw CocoaError(.fileReadUnknown) }
         let reply = folderReplies[folder.standardizedFileURL.path] ?? []
         guard holdsFolders else { return reply }
         return await withCheckedContinuation { heldFolders.append($0) }
