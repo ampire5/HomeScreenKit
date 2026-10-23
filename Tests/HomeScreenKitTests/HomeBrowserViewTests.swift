@@ -21,6 +21,22 @@ import Testing
         return view
     }
 
+    /// A live window resize changes the slot width on every pass; pictures still pending are not asked for again
+    /// each time (the app restarts its decoding on a new ask).
+    @Test func resizingDoesNotAskAgainPerPass() async {
+        let source = FakeHomeSource()
+        let view = await shown(source, ["p.jpg", "q.jpg", "r.jpg"].map { BrowserFixtures.file($0) })
+        let asks = source.wanted.count
+        #expect(asks > 0)
+        for width in stride(from: 1190.0, through: 1100.0, by: -10.0) {
+            view.frame = CGRect(x: 0, y: 0, width: width, height: 800)
+            view.layoutSubtreeIfNeeded()
+            view.tile()
+        }
+        view.sendMarginNow()
+        #expect(source.wanted.count == asks)
+    }
+
     @Test func poolStaysBounded() async {
         let source = FakeHomeSource()
         let view = await shown(source, BrowserFixtures.files(10_000))

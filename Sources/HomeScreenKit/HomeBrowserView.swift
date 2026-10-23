@@ -191,8 +191,6 @@ public final class HomeBrowserView: NSView {
     private var headers: [GridHeader] = []
     private let footer = GridFooter()
     private var lastWanted: [String] = []
-    /// The width `lastWanted` was asked at: another width is a new ask, though the ids are the same.
-    private var lastWantedWidth: CGFloat = 0
     /// The visible ids last sent, and the send of the margin that waits for scrolling to stop.
     private var lastVisibleSent: [String] = []
     private var marginTask: Task<Void, Never>?
@@ -1253,10 +1251,6 @@ public final class HomeBrowserView: NSView {
         func lacksImage(_ id: String) -> Bool { indexByID[id].flatMap { live[$0] }?.image == nil }
         let visibleWanted = visible.filter(lacksImage)
         let marginWanted = rest.filter(lacksImage)
-        if slotWidth != lastWantedWidth {
-            lastWanted = []
-            lastVisibleSent = []
-        }
         marginTask?.cancel()
         marginTask = nil
         pendingMargin = nil
@@ -1264,7 +1258,6 @@ public final class HomeBrowserView: NSView {
             lastVisibleSent = visibleWanted
             if !visibleWanted.isEmpty, visibleWanted + marginWanted != lastWanted {
                 lastWanted = visibleWanted
-                lastWantedWidth = slotWidth
                 source?.wantImages(visibleWanted, visible: visibleWanted.count, width: slotWidth)
             }
         }
@@ -1287,7 +1280,6 @@ public final class HomeBrowserView: NSView {
         pendingMargin = nil
         guard all != lastWanted else { return }
         lastWanted = all
-        lastWantedWidth = slotWidth
         source?.wantImages(all, visible: visible, width: slotWidth)
     }
 
