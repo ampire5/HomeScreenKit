@@ -73,6 +73,42 @@ import Testing
         }
     }
 
+    /// The right group of the toolbar (sort, zoom, the aspect toggle, the card switch, the filter) with and without
+    /// the card switch, the pill running: the order of the controls. The glass is left out off screen, so each icon
+    /// group gets the board's glass under it and its symbols drawn over it (30 pt a button, as `GlassGroup` lays them).
+    @Test(.enabled(if: folder != nil)) func toolbarControls() throws {
+        let width: CGFloat = 1400
+        for dark in [false, true] {
+            try CardSnapshots.write("V-toolbar", size: CGSize(width: width, height: 2 * HomeToolbar.height + 30), dark: dark) { host in
+                for (i, cards) in [true, false].enumerated() {
+                    let bar = Self.toolbar(Self.running, width: width)
+                    bar.show(cardStyle: .posters, visible: cards)
+                    bar.frame.origin = CGPoint(x: 0, y: 10 + CGFloat(i) * (HomeToolbar.height + 10))
+                    bar.layoutSubtreeIfNeeded()
+                    let y = bar.frame.minY
+                    Self.standIn(bar.sortFrame.offsetBy(dx: 0, dy: y), in: host, light: Self.boardTrack.light,
+                                 dark: Self.boardTrack.dark, isDark: dark)
+                    Self.standIn(bar.progressFrame.offsetBy(dx: 0, dy: y), in: host, light: Self.boardGlass.light,
+                                 dark: Self.boardGlass.dark, isDark: dark)
+                    let groups: [(GlassGroup, [String])] = [(bar.zoom, ["minus", "plus"]), (bar.styleButton, [bar.styleSymbol]),
+                                                            (bar.cardSwitch, ["square.grid.2x2", "rectangle.grid.1x2", "list.bullet"])]
+                    for (group, symbols) in groups where !group.isHidden {
+                        let frame = group.frame.offsetBy(dx: 0, dy: y)
+                        Self.standIn(frame, in: host, light: Self.boardGlass.light, dark: Self.boardGlass.dark, isDark: dark)
+                        for (j, symbol) in symbols.enumerated() {
+                            let icon = NSImageView(image: NSImage(systemSymbolName: symbol, accessibilityDescription: nil)!)
+                            icon.contentTintColor = .labelColor
+                            icon.frame = CGRect(x: frame.minX + CGFloat(j) * 30, y: frame.minY, width: 30, height: frame.height)
+                            host.addSubview(icon)
+                        }
+                    }
+                    Self.hideGlass(in: bar)
+                    host.addSubview(bar)
+                }
+            }
+        }
+    }
+
     /// The compact step (a toolbar of 1150 pt, no card switch): the ring alone, running and paused.
     @Test(.enabled(if: folder != nil)) func pillCompact() throws {
         let width: CGFloat = 1150

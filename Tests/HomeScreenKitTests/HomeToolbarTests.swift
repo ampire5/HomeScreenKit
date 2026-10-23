@@ -106,6 +106,24 @@ import Testing
         #expect(pressed == 1)
     }
 
+    /// The right group, left to right: progress pill, sort, zoom, the aspect toggle, the card switch (when shown), the
+    /// filter, 10 pt apart; without the card switch the aspect toggle sits beside the filter.
+    @Test func rightGroupOrder() {
+        let bar = toolbar()
+        bar.frame.size.width = 1400
+        bar.show(path: [("Places", .places), ("x", .folder(x))], canBack: true, canForward: false, canUp: true)
+        bar.show(progress: Self.running)
+        bar.show(cardStyle: .posters, visible: true)
+        bar.layoutSubtreeIfNeeded()
+        let withCards: [CGRect] = [bar.progressFrame, bar.sortFrame, bar.zoom.frame, bar.styleButton.frame,
+                                   bar.cardSwitch.frame, bar.field.frame]
+        for (a, b) in zip(withCards, withCards.dropFirst()) { #expect(a.maxX + 10 == b.minX) }
+        bar.show(cardStyle: .posters, visible: false)
+        bar.layoutSubtreeIfNeeded()
+        #expect(bar.zoom.frame.maxX + 10 == bar.styleButton.frame.minX)
+        #expect(bar.styleButton.frame.maxX + 10 == bar.field.frame.minX)
+    }
+
     @Test func siblingArrowCallsBack() {
         let bar = toolbar()
         bar.popUp = { _, _ in }

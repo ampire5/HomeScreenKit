@@ -82,7 +82,8 @@ final class HomeToolbar: NSView, NSSearchFieldDelegate, NSMenuDelegate {
     /// Compact while it keeps 60 pt (one short crumb).
     /// Measured (`narrowToolbarHidesThePillFirst`, nav shown, "Thumbnails 120 / 480", kind filter All · Folders · Photos;
     /// toolbar widths, 10 pt steps): without the card switch full ≥ 1240, compact 1020–1230, hidden ≤ 1010; with it
-    /// full ≥ 1350, compact 1120–1340, hidden ≤ 1110.
+    /// full ≥ 1350, compact 1120–1340, hidden ≤ 1110. Measured again after the aspect toggle and the card switch traded
+    /// places (2026-10-23): the same widths, as the right group's width did not change.
     static let pathRoomForFullProgress: CGFloat = 140
     static let pathRoomForCompactProgress: CGFloat = 60
     enum ProgressStep: Equatable { case full, compact, hidden }
@@ -184,7 +185,7 @@ final class HomeToolbar: NSView, NSSearchFieldDelegate, NSMenuDelegate {
             field.frame = CGRect(x: right - 180, y: (h - 24) / 2, width: 180, height: 24)
             right = field.frame.minX - Self.spacing
         }
-        for v in [styleButton, cardSwitch, zoom, sortCapsule] as [NSView] where !v.isHidden {
+        for v in [cardSwitch, styleButton, zoom, sortCapsule] as [NSView] where !v.isHidden {
             let s = size(v)
             v.frame = CGRect(x: right - s.width, y: controlY, width: s.width, height: s.height)
             right = v.frame.minX - Self.spacing
