@@ -256,6 +256,14 @@ public final class HomeBrowserView: NSView {
         toolbar.onFilterText = { [weak self] text in self?.filterChanged { $0.text = text } }
         toolbar.onSiblings = { [weak self] i in self?.siblingsAsked(i) }
         toolbar.onSiblingsClosed = { [weak self] in self?.siblingTask?.cancel() }
+        toolbar.progress.onPause = { [weak self] on in
+            guard let self else { return }
+            self.source?.pauseThumbs(on, in: self.location)
+        }
+        toolbar.progress.onPrepare = { [weak self] in
+            guard let self else { return }
+            self.source?.prepareSubtree(of: self.location)
+        }
         toolbar.onFilterEnd = { [weak self] in
             guard let self else { return }
             self.window?.makeFirstResponder(self)
@@ -303,6 +311,7 @@ public final class HomeBrowserView: NSView {
         toolbar.loading.run(false)
         skeleton.stop()
         endRename()
+        resetProgress()
     }
 
     /// The places again (a volume came or went), if they are on screen.
@@ -369,10 +378,12 @@ public final class HomeBrowserView: NSView {
         heldSort = nil
         footerText = ("", nil)
         containerCount = 0
-        // A filter is for the place it was set in: a move starts with everything shown.
+        // A filter is for the place it was set in: a move starts with everything shown. The progress pill was the old
+        // folder's: it goes out at once (a reload of the same place keeps both).
         if !keepingFilter {
             filter = BrowserFilter()
             toolbar.filterText = ""
+            resetProgress()
         }
         dateSections = nil
         selectedID = nil
@@ -666,6 +677,67 @@ public final class HomeBrowserView: NSView {
 
     var isShowingMessage: Bool { !message.isHidden }
     var messageTexts: [String] { message.texts }
+
+    // MARK: Progress
+
+    /// The pill goes out this long after the work is done (the spec's 1 s).
+    var progressHideAfter: Duration = .seconds(1)
+    /// The latest state while the pill waits for its delay.
+    private var pendingProgress: ThumbsProgressState?
+    /// The wait before the pill shows, or, once it shows, before it goes out; one cancellable task, no timer.
+    private var progressTask: Task<Void, Never>?
+
+    /// Whether the pill is lit (a narrow toolbar may still leave it out).
+    var isShowingProgress: Bool { toolbar.progressState != nil }
+
+    /// How far the thumbnails of the folder on screen are; nil: all done. The pill shows only after `delay` of
+    /// continuous work (a folder served from the catalog finishes sooner and never lights it), follows every state
+    /// while lit, and goes out `progressHideAfter` (1 s) after nil. A move to another folder puts it out at once.
+    public func setProgress(_ state: ThumbsProgressState?, delay: Duration) {
+        let lit = isShowingProgress
+        guard let state else {
+            pendingProgress = nil
+            progressTask?.cancel()
+            progressTask = nil
+            guard lit else { return }
+            let after = progressHideAfter
+            progressTask = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: after)
+                guard let self, !Task.isCancelled else { return }
+                self.progressTask = nil
+                self.toolbar.show(progress: nil)
+            }
+            return
+        }
+        if lit {
+            // Lit (perhaps counting down to going out): new work keeps it.
+            progressTask?.cancel()
+            progressTask = nil
+            toolbar.show(progress: state)
+            return
+        }
+        pendingProgress = state
+        guard progressTask == nil else { return }   // the delay runs from the first state, not the latest
+        guard delay > .zero else {
+            pendingProgress = nil
+            toolbar.show(progress: state)
+            return
+        }
+        progressTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: delay)
+            guard let self, !Task.isCancelled, let state = self.pendingProgress else { return }
+            self.progressTask = nil
+            self.pendingProgress = nil
+            self.toolbar.show(progress: state)
+        }
+    }
+
+    private func resetProgress() {
+        progressTask?.cancel()
+        progressTask = nil
+        pendingProgress = nil
+        if isShowingProgress { toolbar.show(progress: nil) }
+    }
 
     // MARK: Toast
 

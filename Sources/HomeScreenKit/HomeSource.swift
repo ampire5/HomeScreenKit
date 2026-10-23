@@ -80,6 +80,11 @@ public struct HomeSourceInfo {
     /// (`HomeBrowserView.setSummary`, `setImage`): their cards then wait for them, shimmering, until they come or the
     /// source gives up (`HomeBrowserView.stopWaiting`). False by default: the cards show their subtitle as before.
     var sendsCardFacts: Bool { get }
+    /// The progress popover's Pause (true) or Resume (false): the user's pause of the work ahead, asked in `location`.
+    /// The default does nothing.
+    func pauseThumbs(_ on: Bool, in location: BrowserLocation)
+    /// The progress popover's Prepare subfolders: the subtree of `location` to be prepared. The default does nothing.
+    func prepareSubtree(of location: BrowserLocation)
 }
 
 public extension HomeSource {
@@ -90,4 +95,6 @@ public extension HomeSource {
     func wantImages(_ ids: [String], visible: Int, width: CGFloat) { wantImages(ids, width: width) }
     func moved(from old: BrowserLocation?, to new: BrowserLocation) {}
     var sendsCardFacts: Bool { false }
+    func pauseThumbs(_ on: Bool, in location: BrowserLocation) {}
+    func prepareSubtree(of location: BrowserLocation) {}
 }

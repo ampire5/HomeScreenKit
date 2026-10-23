@@ -927,4 +927,85 @@ import Testing
             #expect((view.card(for: view.entries[0].id) is ListRow) == isRow, "width \(width) -> \(view.gridContentWidth)")
         }
     }
+
+    // MARK: Progress pill
+
+    static let progress = ThumbsProgressState(fraction: 0.25, text: "Thumbnails 120 / 480", paused: false,
+                                              rows: [.init(title: "In view", done: 24, total: 24)])
+
+    /// A folder served from the catalog finishes before the delay: the pill never shows.
+    @Test func pillWaitsForTheDelay() async {
+        let source = FakeHomeSource()
+        let view = make(source)
+        view.setProgress(Self.progress, delay: .seconds(1))
+        #expect(!view.isShowingProgress)
+        try? await Task.sleep(for: .milliseconds(300))
+        #expect(!view.isShowingProgress)
+        await settle(seconds: 5) { view.isShowingProgress }
+        #expect(view.isShowingProgress)
+        #expect(view.toolbar.progress.text == "Thumbnails 120 / 480")
+        // Work that stops before the delay never lights it.
+        let other = make(FakeHomeSource())
+        other.setProgress(Self.progress, delay: .milliseconds(200))
+        other.setProgress(nil, delay: .milliseconds(200))
+        try? await Task.sleep(for: .milliseconds(400))
+        #expect(!other.isShowingProgress)
+        // Updates while waiting keep the clock: the latest state shows once the delay is over.
+        let third = make(FakeHomeSource())
+        third.setProgress(Self.progress, delay: .milliseconds(200))
+        var later = Self.progress
+        later.text = "Thumbnails 130 / 480"
+        third.setProgress(later, delay: .milliseconds(200))
+        await settle(seconds: 5) { third.isShowingProgress }
+        #expect(third.toolbar.progress.text == "Thumbnails 130 / 480")
+    }
+
+    @Test func pillGoesOutOnANewFolder() async {
+        let source = FakeHomeSource()
+        let view = make(source)
+        view.setProgress(Self.progress, delay: .zero)
+        await settle { view.isShowingProgress }
+        #expect(view.isShowingProgress)
+        view.show(.folder(x.appendingPathComponent("y")), selecting: nil)
+        #expect(!view.isShowingProgress)
+        // A show still waiting for its delay is dropped too.
+        view.setProgress(Self.progress, delay: .milliseconds(100))
+        view.show(.folder(x), selecting: nil)
+        try? await Task.sleep(for: .milliseconds(300))
+        #expect(!view.isShowingProgress)
+    }
+
+    @Test func pillHidesOneSecondAfterDone() async {
+        let source = FakeHomeSource()
+        let view = make(source)
+        #expect(view.progressHideAfter == .seconds(1))
+        view.setProgress(Self.progress, delay: .zero)
+        await settle { view.isShowingProgress }
+        view.setProgress(nil, delay: .zero)
+        try? await Task.sleep(for: .milliseconds(300))
+        #expect(view.isShowingProgress)
+        await settle(seconds: 5) { !view.isShowingProgress }
+        #expect(!view.isShowingProgress)
+        // New work within the second keeps it lit.
+        view.progressHideAfter = .milliseconds(150)
+        view.setProgress(Self.progress, delay: .zero)
+        await settle { view.isShowingProgress }
+        view.setProgress(nil, delay: .zero)
+        view.setProgress(Self.progress, delay: .zero)
+        try? await Task.sleep(for: .milliseconds(400))
+        #expect(view.isShowingProgress)
+    }
+
+    @Test func popoverButtonsReachTheSource() async {
+        let source = FakeHomeSource()
+        let view = make(source)
+        view.setProgress(Self.progress, delay: .zero)
+        await settle { view.isShowingProgress }
+        let panel = view.toolbar.progress.makePanel()
+        panel.pauseButton.performClick(nil)
+        panel.prepareButton.performClick(nil)
+        #expect(source.thumbPauses.map(\.0) == [true])
+        #expect(source.thumbPauses.map(\.1) == [.folder(x)])
+        #expect(source.preparedSubtrees == [.folder(x)])
+    }
 }

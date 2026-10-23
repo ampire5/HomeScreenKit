@@ -1,5 +1,6 @@
 import AppKit
 import Testing
+@testable import HomeChrome
 @testable import HomeScreenKit
 @testable import HomeScreenModel
 
@@ -195,5 +196,102 @@ import Testing
         #expect(bar.field.isHidden && bar.zoom.isHidden && bar.styleButton.isHidden)
         bar.show(controls: true)
         #expect(!bar.field.isHidden && !bar.zoom.isHidden && !bar.styleButton.isHidden)
+    }
+
+    // MARK: Progress pill
+
+    static let running = ThumbsProgressState(fraction: 0.25, text: "Thumbnails 120 / 480", paused: false,
+                                             rows: [.init(title: "In view", done: 24, total: 24),
+                                                    .init(title: "Rest of folder", done: 96, total: 216),
+                                                    .init(title: "Subfolders", done: 0, total: 48)])
+
+    @Test func pillTextAndRingFollowTheState() {
+        let pill = ThumbsProgressPill()
+        pill.show(Self.running)
+        #expect(!pill.isHidden)
+        #expect(pill.text == "Thumbnails 120 / 480")
+        #expect(pill.ringEnd == 0.25)
+        #expect(pill.ringColor == Chrome.Palette.card.accent)
+        #expect(pill.glyph == .pause)
+        var paused = Self.running
+        paused.paused = true
+        paused.text = "Paused · 120 / 480"
+        paused.fraction = 0.5
+        pill.show(paused)
+        #expect(pill.text == "Paused · 120 / 480")
+        #expect(pill.ringEnd == 0.5)
+        #expect(pill.ringColor == ThumbsProgressPill.pausedRing)
+        #expect(pill.glyph == .play)
+        // Height 28, 6 before the 20 pt ring, 8 to the text, 12 after it (the board's button).
+        let size = pill.intrinsicContentSize
+        #expect(size.height == 28)
+        #expect(size.width == 6 + 20 + 8 + ceil(pill.textWidth) + 12)
+        pill.show(nil)
+        #expect(pill.isHidden)
+    }
+
+    @Test func pillSitsBesideTheSort() {
+        let bar = toolbar()
+        bar.frame.size.width = 1400
+        #expect(!bar.isProgressVisible)
+        bar.show(progress: Self.running)
+        bar.layoutSubtreeIfNeeded()
+        #expect(bar.isProgressVisible)
+        // As on the board: just before the sort capsule, centred on the same line.
+        #expect(bar.progressFrame.maxX + 10 == bar.sortFrame.minX)
+        #expect(bar.progressFrame.midY == bar.sortFrame.midY)
+        bar.show(progress: nil)
+        bar.layoutSubtreeIfNeeded()
+        #expect(!bar.isProgressVisible)
+    }
+
+    @Test func narrowToolbarHidesThePillFirst() {
+        let bar = toolbar()
+        bar.frame.size.width = 1400
+        bar.show(progress: Self.running)
+        bar.layoutSubtreeIfNeeded()
+        #expect(bar.isProgressVisible && bar.isSortVisible && bar.isFilterVisible)
+        // The path keeps its room beside the kind filter: the pill goes, the sort and the filter stay.
+        bar.frame.size.width = 1100
+        bar.layoutSubtreeIfNeeded()
+        #expect(!bar.isProgressVisible)
+        #expect(bar.isSortVisible && bar.isFilterVisible)
+        #expect(bar.kindFrame.minX - 10 - (bar.navFrame.maxX + 14) >= HomeToolbar.pathRoomForProgress)
+        // Room again: it comes back with the state it holds.
+        bar.frame.size.width = 1400
+        bar.layoutSubtreeIfNeeded()
+        #expect(bar.isProgressVisible)
+    }
+
+    @Test func popoverShowsRowsNoteAndButtons() {
+        let pill = ThumbsProgressPill()
+        var state = Self.running
+        state.pauseNote = "Paused while you browse"
+        state.paused = true
+        pill.show(state)
+        let panel = pill.makePanel()
+        #expect(panel.title == "Thumbnails")
+        #expect(panel.rowTexts == ["In view 24 / 24", "Rest of folder 96 / 216", "Subfolders 0 / 48"])
+        #expect(panel.barFractions == [1, 96.0 / 216, 0])
+        #expect(panel.note == "Paused while you browse")
+        // The viewer's pause leaves the user's button at Pause; the user's own pause turns it to Resume.
+        #expect(panel.pauseButton.title == "Pause")
+        #expect(panel.prepareButton.title == "Prepare subfolders")
+        var pauses: [Bool] = [], prepares = 0
+        pill.onPause = { pauses.append($0) }
+        pill.onPrepare = { prepares += 1 }
+        panel.pauseButton.performClick(nil)
+        state.pausedByUser = true
+        state.pauseNote = "Paused"
+        pill.show(state)
+        #expect(panel.pauseButton.title == "Resume")
+        #expect(panel.note == "Paused")
+        panel.pauseButton.performClick(nil)
+        panel.prepareButton.performClick(nil)
+        #expect(pauses == [true, false])
+        #expect(prepares == 1)
+        state.pauseNote = nil
+        pill.show(state)
+        #expect(panel.note == nil)
     }
 }

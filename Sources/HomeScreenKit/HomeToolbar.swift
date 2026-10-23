@@ -4,8 +4,8 @@ import HomeScreenModel
 
 /// The browser's toolbar, drawn over the grid as in Photos: a backdrop fading from the background into the grid,
 /// the sidebar button, the start page button, ‹ › ↑ and the path (or a source's title) with the subtitle under it on the left, the kind filter
-/// (or a page's own filter) in the middle, and the sort, − | +, the style and a name field on the right. Only its
-/// controls take clicks; the rest goes to the grid under it.
+/// (or a page's own filter) in the middle, and the thumbnails' progress pill, the sort, − | +, the style and a name field on
+/// the right. Only its controls take clicks; the rest goes to the grid under it.
 final class HomeToolbar: NSView, NSSearchFieldDelegate, NSMenuDelegate {
     static let height: CGFloat = 56
 
@@ -51,6 +51,8 @@ final class HomeToolbar: NSView, NSSearchFieldDelegate, NSMenuDelegate {
                                         (symbol: "rectangle.grid.1x2", tip: "as Cards (⌥⌘2)"),
                                         (symbol: "list.bullet", tip: "as List (⌥⌘3)")])
     let field = NSSearchField()
+    /// The thumbnails being prepared (`show(progress:)`), just before the sort as on the progress board.
+    let progress = ThumbsProgressPill()
     private(set) var styleSymbol = "rectangle.grid.2x2"
 
     private let backdrop = CAGradientLayer()
@@ -72,6 +74,12 @@ final class HomeToolbar: NSView, NSSearchFieldDelegate, NSMenuDelegate {
     private static let keyTitles: [(BrowserSort.Key, String)] = [(.name, "Name"), (.date, "Date"), (.size, "Size")]
     private static let edge: CGFloat = 20
     private static let spacing: CGFloat = 10
+    /// The narrow window's priority order: the progress pill goes first, as soon as it would leave the path less than
+    /// this much beside the kind filter (the path's last crumb, about 14 characters of 15 pt semibold). The sort, the
+    /// kind filter and the rest stay; the progress stays in the View menu's window.
+    static let pathRoomForProgress: CGFloat = 140
+    /// The state the pill shows while there is room for it.
+    private(set) var progressState: ThumbsProgressState?
 
     init() {
         super.init(frame: .zero)
@@ -105,7 +113,7 @@ final class HomeToolbar: NSView, NSSearchFieldDelegate, NSMenuDelegate {
         field.sendsSearchStringImmediately = true
         field.delegate = self
         field.controlSize = .regular
-        for view in [sidebarButton, homeButton, nav, crumbs, subtitle, kind, sortCapsule, zoom, styleButton, cardSwitch, field, loading] as [NSView] {
+        for view in [sidebarButton, homeButton, nav, crumbs, subtitle, kind, progress, sortCapsule, zoom, styleButton, cardSwitch, field, loading] as [NSView] {
             addSubview(view)
         }
         showSort()
@@ -154,12 +162,23 @@ final class HomeToolbar: NSView, NSSearchFieldDelegate, NSMenuDelegate {
             v.frame = CGRect(x: right - s.width, y: controlY, width: s.width, height: s.height)
             right = v.frame.minX - Self.spacing
         }
+        let left = (nav.isHidden ? homeButton.frame.maxX : nav.frame.maxX) + 14
         let k = size(kind)
+        if progressState != nil {
+            // Shown only while the path keeps its room beside the kind filter: the first to go in a narrow window.
+            let p = size(progress)
+            let filterRoom = kind.isHidden ? 0 : k.width + Self.spacing
+            let fits = right - p.width - Self.spacing - filterRoom - left >= Self.pathRoomForProgress
+            progress.isHidden = !fits
+            if fits {
+                progress.frame = CGRect(x: right - p.width, y: controlY, width: p.width, height: p.height)
+                right = progress.frame.minX - Self.spacing
+            }
+        }
         // Centred, unless the right group reaches the middle: then just left of it.
         let kindX = min(((w - k.width) / 2).rounded(), right - k.width)
         kind.frame = CGRect(x: kindX, y: controlY, width: k.width, height: k.height)
         let pathRight = (kind.isHidden ? right : min(right, kind.frame.minX - Self.spacing))
-        let left = (nav.isHidden ? homeButton.frame.maxX : nav.frame.maxX) + 14
         crumbs.frame = CGRect(x: left, y: 8, width: max(0, pathRight - left), height: 22)
         subtitle.frame = CGRect(x: left + 4, y: 32, width: max(0, pathRight - left - 4), height: 15)
         loading.frame = CGRect(x: 0, y: h - 2, width: w, height: 2)
@@ -178,6 +197,8 @@ final class HomeToolbar: NSView, NSSearchFieldDelegate, NSMenuDelegate {
     var isFilterVisible: Bool { !kind.isHidden }
     var kindFrame: CGRect { kind.frame }
     var sortFrame: CGRect { sortCapsule.frame }
+    var isProgressVisible: Bool { !progress.isHidden }
+    var progressFrame: CGRect { progress.frame }
     var isCardSwitchVisible: Bool { !cardSwitch.isHidden }
     /// The lit segment: 0 posters, 1 cards, 2 list.
     var cardSwitchSelection: Int? { cardSwitch.selected }
@@ -290,6 +311,13 @@ final class HomeToolbar: NSView, NSSearchFieldDelegate, NSMenuDelegate {
         cardSwitch.selected = CardStyle.allCases.firstIndex(of: style)
         guard cardSwitch.isHidden == visible else { return }
         cardSwitch.isHidden = !visible
+        needsLayout = true
+    }
+
+    /// The thumbnails' progress pill with `state`; nil hides it. A narrow window hides it too (`layout`).
+    func show(progress state: ThumbsProgressState?) {
+        progressState = state
+        progress.show(state)
         needsLayout = true
     }
 

@@ -162,6 +162,11 @@ import AppKit
         setCardStyles.append((style, location))
     }
 
+    /// The progress popover's buttons: the pauses asked for and the subtrees to prepare, with their locations.
+    private(set) var thumbPauses: [(Bool, BrowserLocation)] = []
+    private(set) var preparedSubtrees: [BrowserLocation] = []
+    func pauseThumbs(_ on: Bool, in location: BrowserLocation) { thumbPauses.append((on, location)) }
+    func prepareSubtree(of location: BrowserLocation) { preparedSubtrees.append(location) }
     func setSort(_ sort: BrowserSort, for location: BrowserLocation) {
         switch location {
         case .places: break
