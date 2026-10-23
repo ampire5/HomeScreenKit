@@ -619,8 +619,9 @@ public final class HomeBrowserView: NSView {
         hint.isHidden = !empty
         toolbar.loading.run(!hasComplete && !failed)
         let showSkeleton = entries.isEmpty && !hasComplete && !failed
-        if showSkeleton != !skeleton.isHidden {
-            skeleton.isHidden = !showSkeleton
+        skeleton.isHidden = !showSkeleton
+        // Started on the first load too: the skeleton is not hidden before it.
+        if showSkeleton != skeleton.isActive {
             if showSkeleton { skeleton.start() } else { skeleton.stop() }
         }
         skeleton.cardSize = cardSize
@@ -658,6 +659,7 @@ public final class HomeBrowserView: NSView {
     /// The location on screen has had its complete listing.
     var hasCompleteListing: Bool { hasComplete }
     var isShowingLoadingLine: Bool { toolbar.loading.isRunning }
+    var isSkeletonMoving: Bool { skeleton.isMoving }
     var isShowingSkeleton: Bool { !skeleton.isHidden }
     var skeletonPictureFrames: [CGRect] { skeleton.pictureFrames }
     var slowText: String? { slowCaption.map { "\($0.0)\n\($0.1)" } }
@@ -799,7 +801,7 @@ public final class HomeBrowserView: NSView {
         toolbar.show(progressDetail: nil)
     }
 
-    // MARK: Shimmer
+    // MARK: Motion
 
     /// Waiting cards that shimmer at once at most, the first in view in the grid's order; the others in view keep
     /// still (the Reduce Motion look) until a slot frees or they scroll first. Basis: every shimmering card is a layer
@@ -809,7 +811,8 @@ public final class HomeBrowserView: NSView {
     /// Tests have no window: whether to count it as on screen.
     var windowVisibleForTests: Bool?
 
-    /// The window is on screen (not minimized, not hidden with the app, not covered whole): only then do cards move.
+    /// The window is on screen (not minimized, not hidden with the app, not covered whole): only then does anything
+    /// move (the cards' shimmer, the loading line, the skeleton's shine).
     private var isWindowVisible: Bool {
         windowVisibleForTests ?? (window?.occlusionState.contains(.visible) == true)
     }
@@ -822,15 +825,30 @@ public final class HomeBrowserView: NSView {
             center.addObserver(self, selector: #selector(windowVisibilityChanged),
                                name: NSWindow.didChangeOcclusionStateNotification, object: window)
         }
-        updateShimmers()
+        updateMotion()
     }
 
-    @objc func windowVisibilityChanged() { updateShimmers() }
+    @objc func windowVisibilityChanged() { updateMotion() }
 
-    /// Which waiting cards may shimmer: those in view, the first `shimmerCap` of them in the grid's order, while the
-    /// window is on screen; the margin's and the pool's keep still.
-    private func updateShimmers() {
-        var slots = isWindowVisible && !isHiddenOrHasHiddenAncestor ? Self.shimmerCap : 0
+    /// Home's other tab shows in a visible window: the browser hidden keeps still.
+    public override func viewDidHide() {
+        super.viewDidHide()
+        updateMotion()
+    }
+
+    public override func viewDidUnhide() {
+        super.viewDidUnhide()
+        updateMotion()
+    }
+
+    /// What may move: nothing while the window is off screen or the browser hidden; else the loading line, the
+    /// skeleton, and the waiting cards in view, the first `shimmerCap` of them in the grid's order (the margin's and
+    /// the pool's keep still).
+    private func updateMotion() {
+        let onScreen = isWindowVisible && !isHiddenOrHasHiddenAncestor
+        toolbar.loading.mayMove = onScreen
+        skeleton.mayMove = onScreen
+        var slots = onScreen ? Self.shimmerCap : 0
         let visible = scroll.contentView.documentVisibleRect
         for i in live.keys.sorted() {
             guard let card = live[i] as? FolderCard else { continue }
@@ -1283,7 +1301,7 @@ public final class HomeBrowserView: NSView {
         footer.frame = grid.footerFrame
         placeRenameField()
         askImages()
-        updateShimmers()
+        updateMotion()
     }
 
     private func isCollection(_ i: Int) -> Bool { !entries[i].isFile }
@@ -1441,7 +1459,7 @@ public final class HomeBrowserView: NSView {
             let item = item(for: entries[i])
             if card.item != item { card.show(item) }
         }
-        updateShimmers()
+        updateMotion()
     }
 
     /// The source works on these cards again (a refreshed cover): those it gave up on wait again, shimmering, until
@@ -1452,7 +1470,7 @@ public final class HomeBrowserView: NSView {
             let item = item(for: entries[i])
             if card.item != item { card.show(item) }
         }
-        updateShimmers()
+        updateMotion()
     }
 
     /// The live cards without a picture, those in view first. The visible ones go to the source at once; the margin
@@ -1510,7 +1528,7 @@ public final class HomeBrowserView: NSView {
         let item = item(for: entries[i])
         if card.item != item {
             card.show(item)
-            updateShimmers()   // a card done waiting frees its slot
+            updateMotion()   // a card done waiting frees its slot
         }
     }
 
@@ -1519,7 +1537,7 @@ public final class HomeBrowserView: NSView {
         guard let card = card(for: id) else { return }
         let waited = (card as? FolderCard)?.isWaiting == true
         card.image = image
-        if waited, (card as? FolderCard)?.isWaiting == false { updateShimmers() }
+        if waited, (card as? FolderCard)?.isWaiting == false { updateMotion() }
     }
 
     func card(for id: String) -> GridCard? {

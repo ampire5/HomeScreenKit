@@ -3,7 +3,7 @@ import HomeChrome
 import HomeScreenModel
 
 /// A thin accent line under the path bar while a folder loads: a glint runs along it (still, at half strength, with
-/// Reduce motion).
+/// Reduce motion, while the window is off screen, and once it has run `moveLimit`).
 final class LoadingLine: NSView {
     private let glint = CAGradientLayer()
 
@@ -16,16 +16,34 @@ final class LoadingLine: NSView {
         glint.endPoint = CGPoint(x: 1, y: 0.5)
         layer?.addSublayer(glint)
         isHidden = true
+        budget.onSpent = { [weak self] in self?.animate() }
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
     var isRunning: Bool { !isHidden }
+    /// How long the glint runs in one load at most; then the line keeps still until the next. Basis: a local folder
+    /// lists in well under a second, and past `HomeBrowserView.slowAfter` (3 s) the skeleton or the bar says what it
+    /// waits for, so 8 s of glint (as long as a card's shimmer, `FolderCard.defaultShimmerLimit`) covers every load
+    /// that is not stuck, while a share that does not answer stops costing the window server a redraw 60 times a
+    /// second.
+    static let defaultMoveLimit: Duration = .seconds(8)
+    var moveLimit: Duration {
+        get { budget.limit }
+        set { budget.limit = newValue }
+    }
+    /// The browser's word: the window is on screen and the browser shown. False keeps the line still.
+    var mayMove = true {
+        didSet { if mayMove != oldValue, isRunning { animate() } }
+    }
+    private(set) var isMoving = false
+    var glintFrame: CGRect { glint.frame }
+    private let budget = MotionBudget(limit: LoadingLine.defaultMoveLimit)
 
     /// The accent in the line's appearance: still and half strength with Reduce motion, else a glint fading at both ends.
     private func paintGlint() {
         let accent = NSColor(cgColor: Chrome.resolve(Chrome.Palette.window.accent, in: self)) ?? Chrome.Palette.window.accent
-        if isRunning, Chrome.Motion.reduced {
+        if isRunning, !isMoving {
             glint.colors = [accent.withAlphaComponent(0.5).cgColor, accent.withAlphaComponent(0.5).cgColor]
         } else {
             glint.colors = [accent.withAlphaComponent(0).cgColor, accent.cgColor, accent.withAlphaComponent(0).cgColor]
@@ -40,12 +58,19 @@ final class LoadingLine: NSView {
     func run(_ on: Bool) {
         guard on != isRunning else { return }
         isHidden = !on
+        budget.reset()
+        animate()
+    }
+
+    /// The glint running or still, as the line runs, may move, Reduce Motion and the time left say.
+    private func animate() {
         glint.removeAllAnimations()
-        guard on else { return }
+        isMoving = isRunning && budget.update(wanted: isRunning && mayMove && !Chrome.Motion.reduced)
+        guard isRunning else { return }
+        paintGlint()
         needsLayout = true
         layoutSubtreeIfNeeded()
-        paintGlint()
-        if Chrome.Motion.reduced { return }   // Reduce motion
+        guard isMoving else { return }
         let sweep = CABasicAnimation(keyPath: "position.x")
         sweep.fromValue = -bounds.width * 0.2
         sweep.toValue = bounds.width * 1.2
@@ -59,19 +84,34 @@ final class LoadingLine: NSView {
         super.layout()
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        glint.frame = Chrome.Motion.reduced ? bounds : CGRect(x: 0, y: 0, width: bounds.width * 0.4, height: bounds.height)
+        glint.frame = isMoving ? CGRect(x: 0, y: 0, width: bounds.width * 0.4, height: bounds.height) : bounds
         CATransaction.commit()
     }
 }
 
-/// Grey cards where a folder's cards will be, with a slow shine across them (still with Reduce motion), while nothing
-/// of the folder has come yet; and, once it is slow, a calm line in the middle saying what it waits for.
+/// Grey cards where a folder's cards will be, with a slow shine across them (still with Reduce motion, while the window
+/// is off screen, and once it has run `moveLimit`), while nothing of the folder has come yet; and, once it is slow, a calm line in the middle saying what it waits for.
 final class BrowserSkeleton: NSView {
     private let shapes = CALayer()
     private let shine = CAGradientLayer()
     private let title = NSTextField(labelWithString: "")
     private let detail = NSTextField(labelWithString: "")
     private var plate: NSView?
+    /// How long the shine runs in one wait at most (the loading line's basis, `LoadingLine.defaultMoveLimit`); then
+    /// the cards keep still until the next start.
+    static let defaultMoveLimit: Duration = .seconds(8)
+    var moveLimit: Duration {
+        get { budget.limit }
+        set { budget.limit = newValue }
+    }
+    /// The browser's word: the window is on screen and the browser shown. False keeps the cards still.
+    var mayMove = true {
+        didSet { if mayMove != oldValue, isActive { animate() } }
+    }
+    /// Started and not stopped: the browser shows the skeleton.
+    private(set) var isActive = false
+    private(set) var isMoving = false
+    private let budget = MotionBudget(limit: BrowserSkeleton.defaultMoveLimit)
     /// The wanted slot width: the skeleton lays its slots out at its own width, as the grid will.
     var cardSize: CGFloat = 220 { didSet { if cardSize != oldValue { needsLayout = true } } }
 
@@ -111,6 +151,7 @@ final class BrowserSkeleton: NSView {
             plate.topAnchor.constraint(equalTo: topAnchor, constant: 120),
         ])
         show(title: nil, detail: nil)
+        budget.onSpent = { [weak self] in self?.animate() }
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
@@ -148,8 +189,16 @@ final class BrowserSkeleton: NSView {
     }
 
     func start() {
+        isActive = true
+        budget.reset()
+        animate()
+    }
+
+    /// The shine moving or still, as the skeleton is shown, may move, Reduce Motion and the time left say.
+    private func animate() {
         shine.removeAllAnimations()
-        guard !Chrome.Motion.reduced else { return }   // Reduce motion
+        isMoving = isActive && budget.update(wanted: isActive && mayMove && !Chrome.Motion.reduced)
+        guard isMoving else { return }
         let move = CABasicAnimation(keyPath: "locations")
         move.fromValue = [-1, -0.5, 0]
         move.toValue = [1, 1.5, 2]
@@ -158,7 +207,11 @@ final class BrowserSkeleton: NSView {
         shine.add(move, forKey: "shine")
     }
 
-    func stop() { shine.removeAllAnimations() }
+    func stop() {
+        isActive = false
+        budget.reset()
+        animate()
+    }
 
     /// The pictures' places, for tests.
     var pictureFrames: [CGRect] { (shapes.sublayers ?? []).filter { $0.name == "picture" }.map(\.frame) }

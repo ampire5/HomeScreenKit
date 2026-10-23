@@ -5,8 +5,8 @@ import HomeScreenModel
 /// The browser's toolbar, drawn over the grid as in Photos: a backdrop fading from the background into the grid,
 /// the sidebar button, the start page button, ‹ › ↑ and the path (or a source's title) with the subtitle under it on the left, the kind filter
 /// (or a page's own filter) in the middle, and the thumbnails' progress pill, the sort, − | +, the style and a name field on
-/// the right. Its controls take their clicks and the rest of it keeps them (it drags the window); only the wheel and a
-/// pinch go to the grid under it.
+/// the right. Its controls take their clicks and the rest of it keeps them; only the wheel and a pinch go to the grid
+/// under it.
 final class HomeToolbar: NSView, NSSearchFieldDelegate, NSMenuDelegate {
     static let height: CGFloat = 56
 
@@ -133,16 +133,23 @@ final class HomeToolbar: NSView, NSSearchFieldDelegate, NSMenuDelegate {
     override var isFlipped: Bool { true }
 
     /// Every click inside the toolbar stays in it: a control takes its own, and an empty stretch (the glass, the space
-    /// around the path) is the toolbar's, which drags the window (`mouseDownCanMoveWindow`) and does nothing else; a
-    /// press where a control was a moment ago (the pill went out, or moved as its text changed) never opens the card
-    /// under the glass. Only the wheel and a pinch go through to the grid, as `HomeScreenView.hitTest` lets them.
+    /// around the path) is the toolbar's, which does nothing with it; a press where a control was a moment ago (the
+    /// pill went out, or moved as its text changed) never opens the card under the glass. Only the wheel and a pinch go
+    /// through to the grid, as `HomeScreenView.hitTest` lets them. The window is not dragged from here: Loupe's titled
+    /// window (no full-size content view, not movable by its background) ignores `mouseDownCanMoveWindow`, as before
+    /// this; dragging and double-clicking the toolbar belong to the move to `NSToolbar`.
     override func hitTest(_ point: NSPoint) -> NSView? {
         guard let hit = super.hitTest(point) else { return nil }
         guard hit === self || hit === crumbs else { return hit }
-        if let type = NSApp.currentEvent?.type, type == .scrollWheel || type == .magnify { return nil }
+        if let type = eventType(), type == .scrollWheel || type == .magnify { return nil }
         return self
     }
 
+    /// The type of the event being dispatched (tests set their own).
+    var eventType: () -> NSEvent.EventType? = { NSApp.currentEvent?.type }
+
+    /// Left as AppKit's default for a see-through view, said outright: a window that can be moved by its content would
+    /// be dragged from the empty stretches (Loupe's cannot).
     override var mouseDownCanMoveWindow: Bool { true }
 
     /// An empty stretch takes the click and keeps it: not the browser's (`HomeBrowserView.mouseDown` takes the keys).

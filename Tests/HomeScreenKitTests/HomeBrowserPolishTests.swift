@@ -1,4 +1,5 @@
 import AppKit
+import HomeChrome
 import Testing
 @testable import HomeScreenKit
 
@@ -58,6 +59,69 @@ import Testing
         source.yieldPartial(x, BrowserFixtures.files(1))
         await settle { !view.entries.isEmpty }
         #expect(!view.isShowingSkeleton)
+    }
+
+    /// The loading line's glint runs at most `moveLimit`, then the line keeps still (the Reduce Motion look: the whole
+    /// line at half strength) until the next load; nothing moves while it may not (the window hidden).
+    @Test func loadingGlintEndsAfterItsTime() async {
+        guard !Chrome.Motion.reduced else { return }   // the system's Reduce Motion: it never moves
+        #expect(LoadingLine.defaultMoveLimit == .seconds(8))
+        let line = LoadingLine()
+        line.frame = CGRect(x: 0, y: 0, width: 400, height: 2)
+        line.moveLimit = .milliseconds(150)
+        line.run(true)
+        #expect(line.isMoving)
+        line.mayMove = false
+        #expect(line.isRunning && !line.isMoving)
+        line.mayMove = true
+        #expect(line.isMoving)
+        await settle(seconds: 5) { !line.isMoving }
+        #expect(line.isRunning && !line.isMoving)
+        #expect(line.glintFrame == line.bounds)   // still: the whole line
+        // A new load moves again.
+        line.run(false)
+        line.run(true)
+        #expect(line.isMoving)
+    }
+
+    /// The skeleton's shine likewise: at most `moveLimit`, then still until the next start.
+    @Test func skeletonShineEndsAfterItsTime() async {
+        guard !Chrome.Motion.reduced else { return }
+        #expect(BrowserSkeleton.defaultMoveLimit == .seconds(8))
+        let skeleton = BrowserSkeleton()
+        skeleton.frame = CGRect(x: 0, y: 0, width: 800, height: 600)
+        skeleton.moveLimit = .milliseconds(150)
+        skeleton.start()
+        #expect(skeleton.isMoving)
+        skeleton.mayMove = false
+        #expect(!skeleton.isMoving)
+        skeleton.mayMove = true
+        #expect(skeleton.isMoving)
+        await settle(seconds: 5) { !skeleton.isMoving }
+        #expect(!skeleton.isMoving)
+        skeleton.stop()
+        skeleton.start()
+        #expect(skeleton.isMoving)
+    }
+
+    /// The window off screen (minimized, hidden, covered) or the browser hidden in it: the line and the skeleton keep
+    /// still; back on screen, they move again.
+    @Test func loadingMovesOnlyWhileOnScreen() async {
+        guard !Chrome.Motion.reduced else { return }
+        let view = make(FakeHomeSource())
+        view.windowVisibleForTests = true
+        view.windowVisibilityChanged()
+        #expect(view.isShowingLoadingLine && view.toolbar.loading.isMoving && view.isSkeletonMoving)
+        view.windowVisibleForTests = false
+        view.windowVisibilityChanged()
+        #expect(view.isShowingLoadingLine && !view.toolbar.loading.isMoving && !view.isSkeletonMoving)
+        view.windowVisibleForTests = true
+        view.windowVisibilityChanged()
+        #expect(view.toolbar.loading.isMoving && view.isSkeletonMoving)
+        view.isHidden = true
+        #expect(!view.toolbar.loading.isMoving && !view.isSkeletonMoving)
+        view.isHidden = false
+        #expect(view.toolbar.loading.isMoving && view.isSkeletonMoving)
     }
 
     @Test func skeletonCardsAreCardSized() {

@@ -65,16 +65,17 @@ class FolderCard: GridCard {
     /// server a redraw of its layer 60 times a second (the owner's report: ~30 % of WindowServer CPU with a Home
     /// window of waiting cards visible).
     static let defaultShimmerLimit: Duration = .seconds(8)
-    var shimmerLimit = FolderCard.defaultShimmerLimit
+    var shimmerLimit: Duration {
+        get { shimmerBudget.limit }
+        set { shimmerBudget.limit = newValue }
+    }
     /// Whether the browser lets the card move (in view, among the first `HomeBrowserView.shimmerCap`, the window on
     /// screen); false keeps a waiting card still. True for a card on its own.
     var mayShimmer = true {
         didSet { if mayShimmer != oldValue { waitingChanged() } }
     }
-    /// The time this wait has shimmered so far, and since when it shimmers now; the end of `shimmerLimit` stills it.
-    private var shimmered: Duration = .zero
-    private var shimmerSince: ContinuousClock.Instant?
-    private var shimmerEnd: Task<Void, Never>?
+    /// The time this wait may still shimmer; once spent the card keeps still.
+    private let shimmerBudget = MotionBudget(limit: FolderCard.defaultShimmerLimit)
     /// The board's lines: 10 pt high, radius 4, 70 % and 45 % of their room.
     static let waitingLineHeight: CGFloat = 10
     static let waitingLineRadius: CGFloat = 4
@@ -106,6 +107,7 @@ class FolderCard: GridCard {
 
     override init(item: HomeCardItem) {
         super.init(item: item)
+        shimmerBudget.onSpent = { [weak self] in self?.waitingChanged() }
         layer?.addSublayer(plate)
         plate.cornerCurve = .continuous
         edge.borderWidth = 0.5
@@ -153,7 +155,7 @@ class FolderCard: GridCard {
     /// is for the other cards.
     override func show(_ item: HomeCardItem) {
         // Another card's item (the pool's card reused): a new wait, with its own time to shimmer.
-        if item.id != self.item.id { endWait() }
+        if item.id != self.item.id { shimmerBudget.reset() }
         super.show(item)
         alphaValue = item.isDimmed && item.summary?.problem == nil ? 0.45 : 1
     }
@@ -234,45 +236,17 @@ class FolderCard: GridCard {
     /// there is no cover, the lines while there are no facts.
     private func waitingChanged() {
         guard isWaiting else {
-            endWait()
+            shimmerBudget.reset()
             skeleton?.remove()
             return
         }
         let k = skeleton ?? CardSkeleton()
         skeleton = k
         if let cover = coverClip.layer, let layer { k.insert(in: layer, above: cover) }
-        k.show(cover: image == nil, lines: isWaitingForFacts, moving: shimmerClock())
+        let moving = shimmerBudget.update(wanted: mayShimmer && !Self.reduceMotion())
+        k.show(cover: image == nil, lines: isWaitingForFacts, moving: moving)
         colorSkeleton()
         needsLayout = true
-    }
-
-    /// Whether the shimmer runs now, its clock kept: it may (`mayShimmer`, no Reduce Motion) and this wait has time
-    /// left; while it runs, a task stills it when the time is up.
-    private func shimmerClock() -> Bool {
-        let now = ContinuousClock.now
-        if let since = shimmerSince {
-            shimmered += now - since
-            shimmerSince = nil
-        }
-        shimmerEnd?.cancel()
-        shimmerEnd = nil
-        let left = shimmerLimit - shimmered
-        guard mayShimmer, !Self.reduceMotion(), left > .zero else { return false }
-        shimmerSince = now
-        shimmerEnd = Task { @MainActor [weak self] in
-            guard (try? await Task.sleep(for: left)) != nil, let self else { return }
-            self.shimmerEnd = nil
-            self.waitingChanged()
-        }
-        return true
-    }
-
-    /// The wait is over (or another card's begins): its shimmer time starts again from zero.
-    private func endWait() {
-        shimmerEnd?.cancel()
-        shimmerEnd = nil
-        shimmerSince = nil
-        shimmered = .zero
     }
 
     private func colorSkeleton() {

@@ -517,6 +517,17 @@ import Testing
         #expect(poster(view, "a")?.shimmer?.animation(forKey: FolderCard.shimmerKey) != nil)
     }
 
+    /// The browser hidden inside a visible window (another tab of Home's): its cards keep still too.
+    @Test func shimmerStopsWhileTheBrowserIsHidden() async {
+        let source = FakeHomeSource()
+        let view = await waitingView([BrowserFixtures.folder("a")], source)
+        #expect(poster(view, "a")?.shimmer != nil)
+        view.isHidden = true
+        #expect(poster(view, "a")?.isWaiting == true && poster(view, "a")?.shimmer == nil)
+        view.isHidden = false
+        #expect(poster(view, "a")?.shimmer != nil)
+    }
+
     /// Only the cards in view shimmer, at most `shimmerCap` at once; those laid out in the margin keep still.
     @Test func onlyCardsInViewShimmer() async {
         let source = FakeHomeSource()
@@ -1157,6 +1168,26 @@ import Testing
             #expect(target === view.toolbar, "\(point) -> \(String(describing: target))")
         }
         #expect(view.toolbar.mouseDownCanMoveWindow)
+    }
+
+    /// The wheel and a pinch over the toolbar's glass go through to the grid under it (scroll, resize); a control
+    /// keeps its own.
+    @Test func wheelAndPinchPassThroughTheToolbar() async {
+        let source = FakeHomeSource()
+        let view = await shown(source, (0..<60).map { BrowserFixtures.folder("f\($0)") })
+        view.scroll.contentView.scroll(to: CGPoint(x: 0, y: 200))
+        view.scroll.reflectScrolledClipView(view.scroll.contentView)
+        view.layoutSubtreeIfNeeded()
+        let gap = view.toolbar.convert(CGPoint(x: view.toolbar.kindFrame.maxX + 4, y: HomeToolbar.height / 2), to: view)
+        let sort = view.toolbar.convert(CGPoint(x: view.toolbar.sortFrame.midX, y: view.toolbar.sortFrame.midY), to: view)
+        for type in [NSEvent.EventType.scrollWheel, .magnify] {
+            view.toolbar.eventType = { type }
+            let target = view.hitTest(gap)
+            #expect(target.map { $0 === view.scroll || $0.isDescendant(of: view.scroll) } == true, "\(type)")
+            #expect(view.hitTest(sort).map { $0.isDescendant(of: view.toolbar) } == true)
+        }
+        view.toolbar.eventType = { .leftMouseDown }
+        #expect(view.hitTest(gap) === view.toolbar)
     }
 
     @Test func popoverButtonsReachTheSource() async {
