@@ -73,14 +73,37 @@ import Testing
         }
     }
 
-    /// The pill alone, larger room around it: running and paused, side by side.
+    /// The compact step (a toolbar of 1150 pt, no card switch): the ring alone, running and paused.
+    @Test(.enabled(if: folder != nil)) func pillCompact() throws {
+        let width: CGFloat = 1150
+        for dark in [false, true] {
+            try CardSnapshots.write("P-pill-compact", size: CGSize(width: width, height: 2 * HomeToolbar.height + 30), dark: dark) { host in
+                for (i, state) in [Self.running, Self.paused].enumerated() {
+                    let bar = Self.toolbar(state, width: width)
+                    bar.frame.origin = CGPoint(x: 0, y: 10 + CGFloat(i) * (HomeToolbar.height + 10))
+                    bar.layoutSubtreeIfNeeded()
+                    #expect(bar.progressStep == .compact)
+                    let y = bar.frame.minY
+                    Self.standIn(bar.sortFrame.offsetBy(dx: 0, dy: y), in: host, light: Self.boardTrack.light,
+                                 dark: Self.boardTrack.dark, isDark: dark)
+                    Self.standIn(bar.progressFrame.offsetBy(dx: 0, dy: y), in: host, light: Self.boardGlass.light,
+                                 dark: Self.boardGlass.dark, isDark: dark)
+                    Self.hideGlass(in: bar)
+                    host.addSubview(bar)
+                }
+            }
+        }
+    }
+
+    /// The pill alone: running and paused, full and compact, side by side.
     @Test(.enabled(if: folder != nil)) func pillCloseUp() throws {
         for dark in [false, true] {
-            try CardSnapshots.write("P-pill-close", size: CGSize(width: 420, height: 60), dark: dark) { host in
+            try CardSnapshots.write("P-pill-close", size: CGSize(width: 520, height: 60), dark: dark) { host in
                 var x: CGFloat = 20
-                for state in [Self.running, Self.paused] {
+                for (state, compact) in [(Self.running, false), (Self.paused, false), (Self.running, true), (Self.paused, true)] {
                     let pill = ThumbsProgressPill()
                     pill.show(state)
+                    pill.isCompact = compact
                     let s = pill.intrinsicContentSize
                     pill.frame = CGRect(x: x, y: 16, width: s.width, height: s.height)
                     Self.standIn(pill.frame, in: host, light: Self.boardGlass.light, dark: Self.boardGlass.dark, isDark: dark)

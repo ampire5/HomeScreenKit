@@ -220,7 +220,7 @@ import Testing
         pill.show(paused)
         #expect(pill.text == "Paused · 120 / 480")
         #expect(pill.ringEnd == 0.5)
-        #expect(pill.ringColor == ThumbsProgressPill.pausedRing)
+        #expect(pill.ringColor == Chrome.Palette.progress.pausedRing)
         #expect(pill.glyph == .play)
         // Height 28, 6 before the 20 pt ring, 8 to the text, 12 after it (the board's button).
         let size = pill.intrinsicContentSize
@@ -243,24 +243,6 @@ import Testing
         bar.show(progress: nil)
         bar.layoutSubtreeIfNeeded()
         #expect(!bar.isProgressVisible)
-    }
-
-    @Test func narrowToolbarHidesThePillFirst() {
-        let bar = toolbar()
-        bar.frame.size.width = 1400
-        bar.show(progress: Self.running)
-        bar.layoutSubtreeIfNeeded()
-        #expect(bar.isProgressVisible && bar.isSortVisible && bar.isFilterVisible)
-        // The path keeps its room beside the kind filter: the pill goes, the sort and the filter stay.
-        bar.frame.size.width = 1100
-        bar.layoutSubtreeIfNeeded()
-        #expect(!bar.isProgressVisible)
-        #expect(bar.isSortVisible && bar.isFilterVisible)
-        #expect(bar.kindFrame.minX - 10 - (bar.navFrame.maxX + 14) >= HomeToolbar.pathRoomForProgress)
-        // Room again: it comes back with the state it holds.
-        bar.frame.size.width = 1400
-        bar.layoutSubtreeIfNeeded()
-        #expect(bar.isProgressVisible)
     }
 
     @Test func popoverShowsRowsNoteAndButtons() {
@@ -293,5 +275,75 @@ import Testing
         state.pauseNote = nil
         pill.show(state)
         #expect(panel.note == nil)
+    }
+
+    /// Narrowing the window: the full pill, then the ring alone (the text in its tooltip), then none, while the path
+    /// keeps its room; the same order with the posters / cards / list switch shown.
+    @Test(arguments: [false, true]) func narrowToolbarHidesThePillFirst(cardSwitch: Bool) {
+        let bar = toolbar()
+        bar.show(path: [("Places", .places), ("x", .folder(x))], canBack: true, canForward: false, canUp: true)
+        bar.show(cardStyle: .posters, visible: cardSwitch)
+        bar.show(progress: Self.running)
+        var steps: [HomeToolbar.ProgressStep] = []
+        for width in stride(from: 1800.0, through: 500, by: -10) {
+            bar.frame.size.width = width
+            bar.layoutSubtreeIfNeeded()
+            let step = bar.progressStep
+            if steps.last != step { steps.append(step) }
+            #expect(bar.isSortVisible && bar.isFilterVisible)
+            let path = bar.kindFrame.minX - 10 - (bar.navFrame.maxX + 14)
+            switch step {
+            case .full:
+                #expect(path >= HomeToolbar.pathRoomForFullProgress, "width \(width)")
+                #expect(bar.progress.toolTip == nil)
+                #expect(bar.progressFrame.width > 28)
+            case .compact:
+                #expect(path >= HomeToolbar.pathRoomForCompactProgress, "width \(width)")
+                #expect(bar.progress.toolTip == "Thumbnails 120 / 480")
+                #expect(bar.progressFrame.size == CGSize(width: 28, height: 28))
+                #expect(bar.progressFrame.maxX + 10 == bar.sortFrame.minX)
+            case .hidden:
+                #expect(!bar.isProgressVisible)
+            }
+        }
+        #expect(steps == [.full, .compact, .hidden])
+    }
+
+    /// The popover follows its content (the note coming and going, rows added) and closes when a narrow window hides
+    /// the pill.
+    @Test func popoverFollowsItsContentAndClosesWithThePill() async {
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 1400, height: 300), styleMask: [.titled], backing: .buffered,
+                              defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        let bar = toolbar()
+        bar.frame.size.width = 1400
+        window.contentView?.addSubview(bar)
+        window.orderFront(nil)
+        var state = Self.running
+        bar.show(progress: state)
+        bar.layoutSubtreeIfNeeded()
+        bar.progress.togglePopover()
+        await settle { bar.progress.isPopoverShown }
+        #expect(bar.progress.isPopoverShown)
+        let first = bar.progress.popoverContentSize
+        state.pauseNote = "Paused"
+        state.pausedByUser = true
+        bar.show(progress: state)
+        let withNote = bar.progress.popoverContentSize
+        #expect(withNote.height > first.height)
+        #expect(withNote == bar.progress.panelFittingSize)
+        state.rows.append(.init(title: "More", done: 1, total: 2))
+        bar.show(progress: state)
+        #expect(bar.progress.popoverContentSize.height > withNote.height)
+        state.pauseNote = nil
+        state.rows.removeLast()
+        bar.show(progress: state)
+        #expect(bar.progress.popoverContentSize == first)
+        bar.frame.size.width = 600
+        bar.layoutSubtreeIfNeeded()
+        #expect(!bar.isProgressVisible)
+        await settle { !bar.progress.isPopoverShown }
+        #expect(!bar.progress.isPopoverShown)
     }
 }

@@ -88,6 +88,26 @@ import Testing
         return traits?[.weight] as? CGFloat ?? .nan
     }
 
+    /// The progress pill's and its popover's colours from the progress board, light and dark.
+    @Test func progressValues() {
+        typealias P = Chrome.Palette.progress
+        let light = NSView(), dark = NSView()
+        light.appearance = NSAppearance(named: .aqua)
+        dark.appearance = NSAppearance(named: .darkAqua)
+        func rgba(_ c: NSColor, _ v: NSView) -> [CGFloat] {
+            let cg = Chrome.resolve(c, in: v).converted(to: CGColorSpace(name: CGColorSpace.sRGB)!, intent: .defaultIntent,
+                                                         options: nil)!
+            return cg.components!.map { ($0 * 1000).rounded() / 1000 }
+        }
+        let grey: [CGFloat] = [0.557, 0.557, 0.580, 1]
+        #expect(rgba(P.pausedRing, light) == grey)
+        #expect(rgba(P.pausedRing, dark) == grey)
+        #expect(rgba(P.highlight, light) == [1, 1, 1, 0.35])
+        #expect(rgba(P.highlight, dark) == [1, 1, 1, 0.35])
+        #expect(rgba(P.buttonBorder, light) == [0, 0, 0, 0.2])
+        #expect(rgba(P.buttonBorder, dark) == [1, 1, 1, 0.2])
+    }
+
     private func expectSRGB(_ color: NSColor, _ r: CGFloat, _ g: CGFloat, _ b: CGFloat, _ a: CGFloat,
                             sourceLocation: SourceLocation = #_sourceLocation) {
         guard let c = color.usingColorSpace(.sRGB) else {

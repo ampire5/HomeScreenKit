@@ -74,10 +74,18 @@ final class HomeToolbar: NSView, NSSearchFieldDelegate, NSMenuDelegate {
     private static let keyTitles: [(BrowserSort.Key, String)] = [(.name, "Name"), (.date, "Date"), (.size, "Size")]
     private static let edge: CGFloat = 20
     private static let spacing: CGFloat = 10
-    /// The narrow window's priority order: the progress pill goes first, as soon as it would leave the path less than
-    /// this much beside the kind filter (the path's last crumb, about 14 characters of 15 pt semibold). The sort, the
-    /// kind filter and the rest stay; the progress stays in the View menu's window.
-    static let pathRoomForProgress: CGFloat = 140
+    /// The narrow window's priority order: the progress pill steps down first — full, then the ring alone (its text in
+    /// the tooltip), then none — while the path keeps its room beside the kind filter. The sort, the kind filter and the
+    /// rest stay; the progress stays in the popover and the View menu's window.
+    /// Full while the path keeps 140 pt (its last crumb, about 14 characters of 15 pt semibold).
+    /// Compact while it keeps 60 pt (one short crumb).
+    /// Measured (`narrowToolbarHidesThePillFirst`, nav shown, "Thumbnails 120 / 480", kind filter All · Folders · Photos;
+    /// toolbar widths, 10 pt steps): without the card switch full ≥ 1240, compact 1020–1230, hidden ≤ 1010; with it
+    /// full ≥ 1350, compact 1120–1340, hidden ≤ 1110.
+    static let pathRoomForFullProgress: CGFloat = 140
+    static let pathRoomForCompactProgress: CGFloat = 60
+    enum ProgressStep: Equatable { case full, compact, hidden }
+    var progressStep: ProgressStep { progress.isHidden ? .hidden : progress.isCompact ? .compact : .full }
     /// The state the pill shows while there is room for it.
     private(set) var progressState: ThumbsProgressState?
 
@@ -165,12 +173,17 @@ final class HomeToolbar: NSView, NSSearchFieldDelegate, NSMenuDelegate {
         let left = (nav.isHidden ? homeButton.frame.maxX : nav.frame.maxX) + 14
         let k = size(kind)
         if progressState != nil {
-            // Shown only while the path keeps its room beside the kind filter: the first to go in a narrow window.
-            let p = size(progress)
+            // Full, compact or none, by the room the path keeps beside the kind filter: the first to go when narrow.
             let filterRoom = kind.isHidden ? 0 : k.width + Self.spacing
-            let fits = right - p.width - Self.spacing - filterRoom - left >= Self.pathRoomForProgress
-            progress.isHidden = !fits
-            if fits {
+            func pathRoom(_ width: CGFloat) -> CGFloat { right - width - Self.spacing - filterRoom - left }
+            let step: ProgressStep = pathRoom(progress.fullSize.width) >= Self.pathRoomForFullProgress ? .full
+                : pathRoom(progress.compactSize.width) >= Self.pathRoomForCompactProgress ? .compact : .hidden
+            progress.isHidden = step == .hidden
+            if step == .hidden {
+                progress.closePopover()
+            } else {
+                progress.isCompact = step == .compact
+                let p = size(progress)
                 progress.frame = CGRect(x: right - p.width, y: controlY, width: p.width, height: p.height)
                 right = progress.frame.minX - Self.spacing
             }
