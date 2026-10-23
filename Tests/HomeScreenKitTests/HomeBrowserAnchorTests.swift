@@ -86,4 +86,65 @@ import Testing
         await settle(seconds: 5) { view.entries.count == 2000 }
         #expect(view.anchor == anchor)
     }
+
+    /// While the restore waits for its names, a save takes the session's state, not the fallback first card at the top.
+    @Test func pendingRestoreIsWhatASaveTakes() async throws {
+        let anchor = try #require(await taken())
+        let source = FakeHomeSource()
+        let selected = BrowserFixtures.files(2000)[1500].id
+        let view = make(source, selecting: selected, anchor: anchor)
+        source.yieldPartial(x, Array(BrowserFixtures.files(2000).prefix(5)))
+        await settle(seconds: 5) { !view.entries.isEmpty }
+        #expect(view.anchor == anchor)
+        #expect(view.selection == selected)
+    }
+
+    /// The user's own scroll while names come drops the session's anchor and selection: the grid does not jump.
+    @Test func userScrollDropsThePendingRestore() async throws {
+        let anchor = try #require(await taken())
+        let source = FakeHomeSource()
+        let view = make(source, selecting: BrowserFixtures.files(2000)[1500].id, anchor: anchor)
+        source.yieldPartial(x, Array(BrowserFixtures.files(2000).prefix(5)))
+        await settle(seconds: 5) { !view.entries.isEmpty }
+        view.scroll.onUserScroll?()
+        #expect(view.anchor == nil)
+        source.yield(x, BrowserFixtures.files(2000))
+        await settle(seconds: 5) { view.entries.count == 2000 }
+        #expect(view.scrollOffset == 0)
+        #expect(view.selection != BrowserFixtures.files(2000)[1500].id)
+    }
+
+    /// So does the user's own selection (an arrow key).
+    @Test func userSelectionDropsThePendingRestore() async throws {
+        let anchor = try #require(await taken())
+        let source = FakeHomeSource()
+        let view = make(source, anchor: anchor)
+        source.yieldPartial(x, Array(BrowserFixtures.files(2000).prefix(5)))
+        await settle(seconds: 5) { !view.entries.isEmpty }
+        let right = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+                                                  windowNumber: 0, context: nil, characters: "\u{F703}",
+                                                  charactersIgnoringModifiers: "\u{F703}", isARepeat: false,
+                                                  keyCode: 124))
+        view.keyDown(with: right)
+        #expect(view.anchor == nil)
+        source.yield(x, BrowserFixtures.files(2000))
+        await settle(seconds: 5) { view.entries.count == 2000 }
+        #expect(view.scrollOffset == 0)
+    }
+
+    /// The anchor's entry comes before the selected one: the selection, when it comes, is selected without scrolling.
+    @Test func lateSelectionKeepsTheRestoredScroll() async throws {
+        let anchor = try #require(await taken())
+        let source = FakeHomeSource()
+        let selected = BrowserFixtures.files(2000)[1500].id
+        let view = make(source, selecting: selected, anchor: anchor)
+        source.yieldPartial(x, Array(BrowserFixtures.files(2000).prefix(200)))
+        await settle(seconds: 5) { view.entries.count == 200 }
+        #expect(view.anchor == anchor)
+        let y = view.scrollOffset
+        source.yield(x, BrowserFixtures.files(2000))
+        await settle(seconds: 5) { view.entries.count == 2000 }
+        #expect(view.selection == selected)
+        #expect(view.scrollOffset == y)
+    }
 }

@@ -6,12 +6,16 @@ import HomeScreenModel
 /// left alone) and a pinch; a precise wheel moves a step every 40 points, a pinch every 0.15 of magnification.
 final class GridScrollView: NSScrollView {
     var onResize: ((HomeResize) -> Void)?
+    /// The user scrolled (a wheel or a trackpad, not a resize step).
+    var onUserScroll: (() -> Void)?
     /// Wheel and pinch travel not yet a whole step.
     private var pendingNotches = 0.0
     private var pendingMagnification: CGFloat = 0
 
     override func scrollWheel(with event: NSEvent) {
-        if !resizeWheel(event) { super.scrollWheel(with: event) }
+        guard !resizeWheel(event) else { return }
+        onUserScroll?()
+        super.scrollWheel(with: event)
     }
 
     override func magnify(with event: NSEvent) {

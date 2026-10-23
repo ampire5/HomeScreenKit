@@ -50,12 +50,14 @@ public final class HomeBrowserView: NSView {
     /// The last places or folder shown: where the app's "Folders" goes back to.
     public private(set) var lastBrowsed = BrowserLocation.places
 
-    /// The selected entry's id (a session keeps it).
-    public var selection: String? { selectedID }
+    /// The selected entry's id (a session keeps it); while a restore waits for its entry, that one.
+    public var selection: String? { pendingSelection ?? selectedID }
 
     /// How far the grid is scrolled, for a session: the first card fully in view (else the first in view) and its
-    /// offset below the view's top; nil at the top or with nothing on screen.
+    /// offset below the view's top; nil at the top or with nothing on screen. While a session's anchor waits for its
+    /// names, that one.
     public var anchor: BrowserAnchor? {
+        if let pendingAnchor { return pendingAnchor }
         let top = scroll.contentView.bounds.origin.y
         guard top > 0, page == nil else { return nil }
         let visible = scroll.contentView.documentVisibleRect
@@ -170,6 +172,9 @@ public final class HomeBrowserView: NSView {
     private var pendingScroll: CGFloat?
     /// A session's scroll (`show(_:selecting:anchor:)`): taken once the names are all there or have its entry.
     private var pendingAnchor: BrowserAnchor?
+    /// The scroll is a session's (its anchor waits or was taken): a selection that comes later selects without
+    /// scrolling. Cleared by a move and by the user's own scroll or selection.
+    private var restoredScroll = false
     private(set) var selectedID: String?
 
     // MARK: Parts
@@ -232,6 +237,7 @@ public final class HomeBrowserView: NSView {
         scroll.autohidesScrollers = true
         scroll.documentView = document
         scroll.onResize = { [weak self] step in self?.onResize?(step) }
+        scroll.onUserScroll = { [weak self] in self?.dropRestore() }
         scroll.contentView.postsBoundsChangedNotifications = true
         NotificationCenter.default.addObserver(self, selector: #selector(scrolled), name: NSView.boundsDidChangeNotification,
                                                object: scroll.contentView)
@@ -328,6 +334,7 @@ public final class HomeBrowserView: NSView {
         pendingSelection = selecting ?? history.selection(for: location)
         pendingScroll = selecting == nil && anchor == nil ? history.scroll(for: location) : nil
         pendingAnchor = anchor
+        restoredScroll = anchor != nil
         load()
     }
 
@@ -449,6 +456,7 @@ public final class HomeBrowserView: NSView {
 
     private func rememberPlace() {
         pendingAnchor = nil
+        restoredScroll = false
         history.remember(selection: selectedID, scroll: scroll.contentView.bounds.origin.y)
     }
 
@@ -670,7 +678,7 @@ public final class HomeBrowserView: NSView {
         if let field = renameField, indexByID[field.entryID] == nil { endRename() }
         if let wanted = pendingSelection, indexByID[wanted] != nil {
             pendingSelection = nil
-            select(id: wanted, scrolls: pendingScroll == nil && pendingAnchor == nil)
+            select(id: wanted, scrolls: pendingScroll == nil && !restoredScroll)
         } else if let id = selectedID, indexByID[id] != nil {
             select(id: id, scrolls: false)
         } else if !entries.isEmpty {
@@ -1189,7 +1197,17 @@ public final class HomeBrowserView: NSView {
 
     private func select(index: Int) {
         guard entries.indices.contains(index) else { return }
+        dropRestore()
         select(id: entries[index].id)
+    }
+
+    /// The user scrolled or selected: a session's scroll and selection still waiting for their names are dropped, so
+    /// the grid does not jump away from what the user is doing.
+    private func dropRestore() {
+        guard restoredScroll || pendingAnchor != nil else { return }
+        pendingAnchor = nil
+        pendingSelection = nil
+        restoredScroll = false
     }
 
     private var selectedIndex: Int? { selectedID.flatMap { indexByID[$0] } }
