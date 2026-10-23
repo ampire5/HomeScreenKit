@@ -1,7 +1,7 @@
 import CoreGraphics
 
 /// How a photo sits in its slot: filling a square, or whole inside it.
-public enum GridStyle: String, CaseIterable, Sendable {
+public enum GridStyle: String, CaseIterable, Codable, Sendable {
     case square, aspect
 }
 
