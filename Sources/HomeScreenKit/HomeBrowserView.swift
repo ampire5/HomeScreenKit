@@ -50,6 +50,20 @@ public final class HomeBrowserView: NSView {
     /// The last places or folder shown: where the app's "Folders" goes back to.
     public private(set) var lastBrowsed = BrowserLocation.places
 
+    /// The selected entry's id (a session keeps it).
+    public var selection: String? { selectedID }
+
+    /// How far the grid is scrolled, for a session: the first card fully in view (else the first in view) and its
+    /// offset below the view's top; nil at the top or with nothing on screen.
+    public var anchor: BrowserAnchor? {
+        let top = scroll.contentView.bounds.origin.y
+        guard top > 0, page == nil else { return nil }
+        let visible = scroll.contentView.documentVisibleRect
+        let shown = live.keys.sorted().filter { grid.frame(of: $0).intersects(visible) }
+        guard let i = shown.first(where: { grid.frame(of: $0).minY >= top }) ?? shown.first else { return nil }
+        return BrowserAnchor(id: entries[i].id, offset: Double(grid.frame(of: i).minY - top), index: i)
+    }
+
     /// The cards laid out now (in view and a screen either side), in order; a card's facts set while it is not among
     /// them show when it is laid out, and one laid out anew asks for its picture.
     public var liveIDs: [String] { live.keys.sorted().map { entries[$0].id } }
@@ -154,6 +168,8 @@ public final class HomeBrowserView: NSView {
     /// What to select and how far to scroll once the place's entries come (Back, Up, or the app's `show`).
     private var pendingSelection: String?
     private var pendingScroll: CGFloat?
+    /// A session's scroll (`show(_:selecting:anchor:)`): taken once the names are all there or have its entry.
+    private var pendingAnchor: BrowserAnchor?
     private(set) var selectedID: String?
 
     // MARK: Parts
@@ -296,8 +312,9 @@ public final class HomeBrowserView: NSView {
 
     /// Opens `location` and selects `selecting` there (nil: what was selected there last time). The folder already on
     /// screen with its complete listing (the viewer going back to it) keeps its cards and pictures: `selecting` is
-    /// selected at once and the folder is listed again behind them (`refresh`).
-    public func show(_ location: BrowserLocation, selecting: String?) {
+    /// selected at once and the folder is listed again behind them (`refresh`). `anchor`: a session's scroll, in place
+    /// of the one remembered for the place.
+    public func show(_ location: BrowserLocation, selecting: String?, anchor: BrowserAnchor? = nil) {
         if hasShown, location == self.location, hasComplete, page == nil, !isShowingMessage {
             return refresh(selecting: selecting)
         }
@@ -309,7 +326,8 @@ public final class HomeBrowserView: NSView {
             hasShown = true
         }
         pendingSelection = selecting ?? history.selection(for: location)
-        pendingScroll = selecting == nil ? history.scroll(for: location) : nil
+        pendingScroll = selecting == nil && anchor == nil ? history.scroll(for: location) : nil
+        pendingAnchor = anchor
         load()
     }
 
@@ -430,6 +448,7 @@ public final class HomeBrowserView: NSView {
     }
 
     private func rememberPlace() {
+        pendingAnchor = nil
         history.remember(selection: selectedID, scroll: scroll.contentView.bounds.origin.y)
     }
 
@@ -651,7 +670,7 @@ public final class HomeBrowserView: NSView {
         if let field = renameField, indexByID[field.entryID] == nil { endRename() }
         if let wanted = pendingSelection, indexByID[wanted] != nil {
             pendingSelection = nil
-            select(id: wanted, scrolls: pendingScroll == nil)
+            select(id: wanted, scrolls: pendingScroll == nil && pendingAnchor == nil)
         } else if let id = selectedID, indexByID[id] != nil {
             select(id: id, scrolls: false)
         } else if !entries.isEmpty {
@@ -663,6 +682,12 @@ public final class HomeBrowserView: NSView {
             scrollGrid(to: y)
         } else if let anchor, let i = indexByID[anchor.id] {
             scrollGrid(to: grid.frame(of: i).minY - anchor.offset)
+        } else if let saved = pendingAnchor, arranged.sort == sort, indexByID[saved.id] != nil || !new.more {
+            // The entry, or once the names are all there, the one at its index; none, the top.
+            pendingAnchor = nil
+            if let i = saved.target(count: entries.count, index: { indexByID[$0] }) {
+                scrollGrid(to: grid.frame(of: i).minY - CGFloat(saved.offset))
+            }
         }
         updateSubtitle()
     }
