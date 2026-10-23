@@ -34,7 +34,9 @@ import Testing
         #expect(view.selectedID == target)
         #expect(!view.isShowingSkeleton)
         for id in live { #expect(view.card(for: id)?.image != nil, "\(id)") }
-        #expect(source.listed.count == listed + 1)   // listed again in the background
+        // The listing already open goes on (the app's watcher relists into it): no second listing at once.
+        #expect(source.listed.count == listed)
+        #expect(source.terminated.isEmpty)
         #expect(view.hasCompleteListing)
 
         source.yieldPartial(x, BrowserFixtures.files(3))
@@ -96,5 +98,20 @@ import Testing
         #expect(view.selectedID == target)
         let after = try #require(view.card(for: target)).frame.minY - view.scrollOffset
         #expect(abs(after - before) < 1)
+    }
+
+    /// The relist behind a folder shown again fails (a share dropped): the kept grid stays, the failure is a toast.
+    @Test func failedRelistKeepsTheGrid() async {
+        let source = FakeHomeSource()
+        let view = make(source)
+        source.yield(x, BrowserFixtures.files(10))
+        await settle { view.entries.count == 10 }
+        view.show(.folder(x), selecting: nil)
+        source.fail(x, CocoaError(.fileReadUnknown))
+        await settle { view.toastText != nil }
+        #expect(view.toastText != nil)
+        #expect(!view.isShowingMessage)
+        #expect(!view.isGridHidden)
+        #expect(view.entries.count == 10)
     }
 }

@@ -313,13 +313,12 @@ public final class HomeBrowserView: NSView {
         load()
     }
 
-    /// The place on screen listed again without wiping it: the cards, their pictures, facts, the filter, the scroll and
-    /// the progress stay; `selecting` (nil: the selection as it is) is selected now, or once the new listing has it. A
-    /// names-only part of the new listing changes nothing (`apply`); the complete one replaces the entries by id.
+    /// The place on screen shown again without wiping it: the cards, their pictures, facts, the filter, the scroll and
+    /// the progress stay; `selecting` (nil: the selection as it is) is selected now, or once a listing has it. The
+    /// listing already open goes on (the app relists into it: its watcher's re-read when the viewer goes), so nothing
+    /// is listed twice at once; only a stream that has ended is opened again. A names-only part changes nothing
+    /// (`apply`); a complete one replaces the entries by id.
     private func refresh(selecting: String?) {
-        generation += 1
-        let generation = generation
-        listTask?.cancel()
         siblingTask?.cancel()
         if let selecting {
             if indexByID[selecting] != nil {
@@ -330,7 +329,7 @@ public final class HomeBrowserView: NSView {
             }
             pendingScroll = nil
         }
-        subscribe(generation)
+        if !isListing { subscribe(generation) }
         onLocation?(location)
         onMoved?(location)
         // Its listing is complete as it is: the sidebar may list the path now.
@@ -340,18 +339,24 @@ public final class HomeBrowserView: NSView {
     /// The source's listings of the place on screen, as they come, until the next move (`generation`).
     private func subscribe(_ generation: Int) {
         guard let stream = source?.list(location) else { return }
+        isListing = true
         listTask = Task { @MainActor [weak self] in
             do {
                 for try await listing in stream {
                     guard let self, self.generation == generation else { return }
                     self.received(listing)
                 }
+                if let self, self.generation == generation { self.isListing = false }
             } catch {
                 guard let self, self.generation == generation else { return }
+                self.isListing = false
                 self.listFailed(error)
             }
         }
     }
+
+    /// The stream of the place on screen is still open (`subscribe`).
+    private var isListing = false
 
     /// A listing from the source's stream: the one already on screen again (the kept listing drawn at the move, then
     /// delivered by the stream) changes nothing.
@@ -365,6 +370,7 @@ public final class HomeBrowserView: NSView {
     public func stop() {
         generation += 1
         listTask?.cancel()
+        isListing = false
         orderCount += 1
         orderPending = nil
         loadingTask?.cancel()
@@ -431,6 +437,7 @@ public final class HomeBrowserView: NSView {
         generation += 1
         let generation = generation
         listTask?.cancel()
+        isListing = false
         siblingTask?.cancel()
         orderCount += 1
         orderPending = nil
@@ -738,11 +745,16 @@ public final class HomeBrowserView: NSView {
     var skeletonPictureFrames: [CGRect] { skeleton.pictureFrames }
     var slowText: String? { slowCaption.map { "\($0.0)\n\($0.1)" } }
 
-    /// The folder could not be listed: why, in place of the grid; Up and Back still work.
+    /// The folder could not be listed: why, in place of the grid; Up and Back still work. After its complete listing
+    /// (a relist behind the grid failed: the share dropped) the grid stays and the failure is a toast.
     private func listFailed(_ error: Error) {
         loadingTask?.cancel()
-        toolbar.show(subtitle: "")
         guard case .folder(let url) = location else { return }
+        if hasComplete {
+            showToast("Could not list \(url.lastPathComponent): \(error.localizedDescription)")
+            return updateLoading()
+        }
+        toolbar.show(subtitle: "")
         message.show(title: url.lastPathComponent, reason: error.localizedDescription, detail: url.path,
                      hints: ["⌘↑ Up", "⌘[ Back"])
         message.isHidden = false
