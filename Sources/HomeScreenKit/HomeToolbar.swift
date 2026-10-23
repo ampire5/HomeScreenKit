@@ -5,7 +5,8 @@ import HomeScreenModel
 /// The browser's toolbar, drawn over the grid as in Photos: a backdrop fading from the background into the grid,
 /// the sidebar button, the start page button, ‹ › ↑ and the path (or a source's title) with the subtitle under it on the left, the kind filter
 /// (or a page's own filter) in the middle, and the thumbnails' progress pill, the sort, − | +, the style and a name field on
-/// the right. Only its controls take clicks; the rest goes to the grid under it.
+/// the right. Its controls take their clicks and the rest of it keeps them (it drags the window); only the wheel and a
+/// pinch go to the grid under it.
 final class HomeToolbar: NSView, NSSearchFieldDelegate, NSMenuDelegate {
     static let height: CGFloat = 56
 
@@ -131,11 +132,22 @@ final class HomeToolbar: NSView, NSSearchFieldDelegate, NSMenuDelegate {
 
     override var isFlipped: Bool { true }
 
-    /// Only the controls take clicks.
+    /// Every click inside the toolbar stays in it: a control takes its own, and an empty stretch (the glass, the space
+    /// around the path) is the toolbar's, which drags the window (`mouseDownCanMoveWindow`) and does nothing else; a
+    /// press where a control was a moment ago (the pill went out, or moved as its text changed) never opens the card
+    /// under the glass. Only the wheel and a pinch go through to the grid, as `HomeScreenView.hitTest` lets them.
     override func hitTest(_ point: NSPoint) -> NSView? {
-        let hit = super.hitTest(point)
-        return hit === self || hit === crumbs ? nil : hit
+        guard let hit = super.hitTest(point) else { return nil }
+        guard hit === self || hit === crumbs else { return hit }
+        if let type = NSApp.currentEvent?.type, type == .scrollWheel || type == .magnify { return nil }
+        return self
     }
+
+    override var mouseDownCanMoveWindow: Bool { true }
+
+    /// An empty stretch takes the click and keeps it: not the browser's (`HomeBrowserView.mouseDown` takes the keys).
+    override func mouseDown(with event: NSEvent) {}
+    override func rightMouseDown(with event: NSEvent) {}
 
     private func updateBackdrop() {
         backdrop.colors = [Chrome.resolve(background.withAlphaComponent(0.9), in: self),

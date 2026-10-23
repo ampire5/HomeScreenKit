@@ -686,41 +686,45 @@ public final class HomeBrowserView: NSView {
 
     /// The pill goes out this long after the work is done (the spec's 1 s).
     var progressHideAfter: Duration = .seconds(1)
+    /// How long a state with nothing being prepared must hold before it counts: it then drops a show still waiting for
+    /// its delay, or starts the pill's going out. Basis: the source sends at most four states a second
+    /// (`FolderBrowserSource.progressInterval`, 250 ms) and a scroll's new ask can leave one of them with the work
+    /// ahead briefly all done (the ask replaces it); 0.5 s is two updates, so one such blip never counts, while the
+    /// pill still goes out 1.5 s after the work really ended.
+    var progressGrace: Duration = .milliseconds(500)
     /// The latest state while the pill waits for its delay.
     private var pendingProgress: ThumbsProgressState?
     /// The wait before the pill shows, or, once it shows, before it goes out; one cancellable task, no timer.
     private var progressTask: Task<Void, Never>?
+    /// Running while a non-working state is within its grace (`progressGrace`).
+    private var progressGraceTask: Task<Void, Never>?
+    /// The delay ran out while the work was within its grace: the pill lights as soon as work comes back in it.
+    private var progressDelayOver = false
 
     /// Whether the pill is lit (a narrow toolbar may still leave it out).
     var isShowingProgress: Bool { toolbar.progressState != nil }
 
     /// How far the thumbnails of the folder on screen are; nil or not `working`: all done. The pill shows only after
     /// `delay` of continuous work (a folder served from the catalog finishes sooner and never lights it), follows every
-    /// state while lit, and goes out `progressHideAfter` (1 s) after the work is done. The popover (the pill's, or
-    /// View › Thumbnails…'s with the pill out) shows the latest state given, done or not. A move to another folder puts
-    /// the pill out at once and leaves the popover at zeros until that folder's state comes.
+    /// state while lit, and goes out `progressHideAfter` (1 s) after the work is done. A non-working state counts only
+    /// once it has held for `progressGrace`: work back within it keeps the pill, and a pending show's clock. The popover
+    /// (the pill's, or View › Thumbnails…'s with the pill out) shows the latest state given, done or not. A move to
+    /// another folder puts the pill out at once and leaves the popover at zeros until that folder's state comes.
     public func setProgress(_ state: ThumbsProgressState?, delay: Duration) {
         toolbar.show(progressDetail: state)
-        let state = state?.working == true ? state : nil
-        let lit = isShowingProgress
-        guard let state else {
-            pendingProgress = nil
-            progressTask?.cancel()
-            progressTask = nil
-            guard lit else { return }
-            let after = progressHideAfter
-            progressTask = Task { @MainActor [weak self] in
-                try? await Task.sleep(for: after)
-                guard let self, !Task.isCancelled else { return }
-                self.progressTask = nil
-                self.toolbar.show(progress: nil)
-            }
-            return
-        }
-        if lit {
+        guard let state, state.working else { return progressMayHaveStopped() }
+        progressGraceTask?.cancel()
+        progressGraceTask = nil
+        if isShowingProgress {
             // Lit (perhaps counting down to going out): new work keeps it.
             progressTask?.cancel()
             progressTask = nil
+            toolbar.show(progress: state)
+            return
+        }
+        if progressDelayOver {
+            progressDelayOver = false
+            pendingProgress = nil
             toolbar.show(progress: state)
             return
         }
@@ -735,8 +739,42 @@ public final class HomeBrowserView: NSView {
             try? await Task.sleep(for: delay)
             guard let self, !Task.isCancelled, let state = self.pendingProgress else { return }
             self.progressTask = nil
+            // Within the grace the work may come back: it then lights the pill at once.
+            if self.progressGraceTask != nil { return self.progressDelayOver = true }
             self.pendingProgress = nil
             self.toolbar.show(progress: state)
+        }
+    }
+
+    /// A state with nothing being prepared: counted once it has held for `progressGrace` (from the first such state).
+    private func progressMayHaveStopped() {
+        guard progressGraceTask == nil else { return }
+        let lit = isShowingProgress
+        // Nothing waiting to show, or the pill already going out.
+        guard lit ? progressTask == nil : pendingProgress != nil || progressDelayOver else { return }
+        let grace = progressGrace
+        progressGraceTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: grace)
+            guard let self, !Task.isCancelled else { return }
+            self.progressGraceTask = nil
+            self.progressStopped()
+        }
+    }
+
+    /// The work stayed done through the grace: a show still waiting is dropped, a lit pill goes out after
+    /// `progressHideAfter`.
+    private func progressStopped() {
+        pendingProgress = nil
+        progressDelayOver = false
+        progressTask?.cancel()
+        progressTask = nil
+        guard isShowingProgress else { return }
+        let after = progressHideAfter
+        progressTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: after)
+            guard let self, !Task.isCancelled else { return }
+            self.progressTask = nil
+            self.toolbar.show(progress: nil)
         }
     }
 
@@ -754,6 +792,9 @@ public final class HomeBrowserView: NSView {
         progressTask?.cancel()
         progressTask = nil
         pendingProgress = nil
+        progressGraceTask?.cancel()
+        progressGraceTask = nil
+        progressDelayOver = false
         if isShowingProgress { toolbar.show(progress: nil) }
         toolbar.show(progressDetail: nil)
     }

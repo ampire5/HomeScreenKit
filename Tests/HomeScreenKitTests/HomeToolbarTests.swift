@@ -230,6 +230,26 @@ import Testing
         #expect(pill.isHidden)
     }
 
+    /// While one total holds, the pill keeps its width as the count grows (it does not move under the pointer): the
+    /// text area is as wide as the widest count for that total and stage word, in tabular digits.
+    @Test func pillWidthHoldsWhileTheTotalDoes() {
+        let pill = ThumbsProgressPill()
+        func width(_ text: String) -> CGFloat {
+            var state = Self.running
+            state.text = text
+            pill.show(state)
+            return pill.intrinsicContentSize.width
+        }
+        let widest = width("Thumbnails 1480 / 1480")
+        for text in ["Thumbnails 1 / 1480", "Thumbnails 7 / 1480", "Thumbnails 52 / 1480", "Thumbnails 999 / 1480"] {
+            #expect(width(text) == widest, "\(text)")
+        }
+        #expect(pill.textWidth < pill.reservedTextWidth)
+        // Another total or stage word may change it.
+        #expect(width("Thumbnails 3 / 48") < widest)
+        #expect(width("In view 0 / 6") == width("In view 6 / 6"))
+    }
+
     @Test func pillSitsBesideTheSort() {
         let bar = toolbar()
         bar.frame.size.width = 1400

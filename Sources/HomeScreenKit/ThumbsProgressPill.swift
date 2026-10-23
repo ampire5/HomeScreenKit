@@ -47,7 +47,27 @@ final class ThumbsProgressPill: NSView, NSPopoverDelegate {
     var text: String { label.stringValue }
     /// The ring's fill, 0…1 (the model value; the layer animates to it).
     var ringEnd: CGFloat { fill.strokeEnd }
-    var textWidth: CGFloat { ceil((text as NSString).size(withAttributes: [.font: Self.font]).width) }
+    var textWidth: CGFloat { Self.width(text) }
+    /// The text area's width: that of the widest count for the current total and stage word ("Thumbnails 0000 / 1480"
+    /// for "Thumbnails 52 / 1480": the digits are tabular, all one width), so the pill keeps its width, and its place
+    /// under the pointer, while the count grows; a text with no "n / N" at its end is as wide as itself.
+    private(set) var reservedTextWidth: CGFloat = 0
+
+    /// The widest text for `text`'s total: its done count as many digits as the total has.
+    static func widestText(_ text: String) -> String {
+        guard let slash = text.range(of: " / ", options: .backwards) else { return text }
+        let total = text[slash.upperBound...]
+        func isDigit(_ c: Character) -> Bool { ("0"..."9").contains(c) }
+        guard !total.isEmpty, total.allSatisfy(isDigit) else { return text }
+        let head = text[..<slash.lowerBound]
+        let digits = head.reversed().prefix(while: isDigit).count
+        guard digits > 0 else { return text }
+        return head.dropLast(digits) + String(repeating: "0", count: total.count) + " / " + total
+    }
+
+    private static func width(_ text: String) -> CGFloat {
+        ceil((text as NSString).size(withAttributes: [.font: font]).width)
+    }
 
     private let glass = NSGlassEffectView()
     private let content = FlippedLayerView()
@@ -102,6 +122,8 @@ final class ThumbsProgressPill: NSView, NSPopoverDelegate {
     }
 
     override func mouseDown(with event: NSEvent) { togglePopover() }
+    /// The click that brings the window forward opens the popover too, as the toolbar's other controls do.
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     override func accessibilityPerformPress() -> Bool {
         togglePopover()
@@ -112,7 +134,7 @@ final class ThumbsProgressPill: NSView, NSPopoverDelegate {
 
     /// With the text: the board's button.
     var fullSize: NSSize {
-        NSSize(width: Self.leading + Self.ringBox + Self.gap + textWidth + Self.trailing, height: Self.height)
+        NSSize(width: Self.leading + Self.ringBox + Self.gap + reservedTextWidth + Self.trailing, height: Self.height)
     }
 
     /// The ring alone, centred in a capsule as wide as it is high.
@@ -132,8 +154,12 @@ final class ThumbsProgressPill: NSView, NSPopoverDelegate {
         isHidden = false
         if label.stringValue != p.text {
             label.stringValue = p.text
-            invalidateIntrinsicContentSize()
-            needsLayout = true
+            let reserved = max(textWidth, Self.width(Self.widestText(p.text)))
+            if reserved != reservedTextWidth {
+                reservedTextWidth = reserved
+                invalidateIntrinsicContentSize()
+                needsLayout = true
+            }
         }
         setAccessibilityLabel(p.text)
         toolTip = isCompact ? p.text : nil

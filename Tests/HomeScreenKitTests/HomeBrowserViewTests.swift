@@ -1056,6 +1056,70 @@ import Testing
         #expect(view.isShowingProgress)
     }
 
+    /// A scroll replaces the work ahead and may leave a moment with nothing to do: a non-working state shorter than
+    /// the grace does not restart the delay, so blips every update still let the pill light.
+    @Test func scrollBlipDoesNotResetTheDelay() async {
+        let view = make(FakeHomeSource())
+        #expect(view.progressGrace == .milliseconds(500))
+        var idle = Self.progress
+        idle.working = false
+        for _ in 0..<8 {
+            view.setProgress(Self.progress, delay: .milliseconds(400))
+            try? await Task.sleep(for: .milliseconds(150))
+            view.setProgress(idle, delay: .milliseconds(400))
+            try? await Task.sleep(for: .milliseconds(50))
+            if view.isShowingProgress { break }
+        }
+        #expect(view.isShowingProgress)
+    }
+
+    /// A lit pill does not start going out on a non-working state shorter than the grace.
+    @Test func scrollBlipDoesNotHideALitPill() async {
+        let view = make(FakeHomeSource())
+        view.progressHideAfter = .milliseconds(100)
+        view.setProgress(Self.progress, delay: .zero)
+        await settle { view.isShowingProgress }
+        view.setProgress(nil, delay: .zero)
+        try? await Task.sleep(for: .milliseconds(300))
+        #expect(view.isShowingProgress)
+        view.setProgress(Self.progress, delay: .zero)
+        try? await Task.sleep(for: .milliseconds(700))
+        #expect(view.isShowingProgress)
+        // Done for longer than the grace: it goes out.
+        view.setProgress(nil, delay: .zero)
+        await settle(seconds: 5) { !view.isShowingProgress }
+        #expect(!view.isShowingProgress)
+    }
+
+    /// The toolbar keeps every click inside its bounds: over a card scrolled under it, a press where the pill was a
+    /// moment ago (it went out) or on an empty stretch of the toolbar never reaches the card; the wheel still scrolls
+    /// the grid. The pill takes the click that activates the window.
+    @Test func clickOnTheToolbarNeverReachesTheGrid() async throws {
+        let source = FakeHomeSource()
+        let view = await shown(source, (0..<60).map { BrowserFixtures.folder("f\($0)") })
+        view.scroll.contentView.scroll(to: CGPoint(x: 0, y: 200))
+        view.scroll.reflectScrolledClipView(view.scroll.contentView)
+        view.layoutSubtreeIfNeeded()
+        view.setProgress(Self.progress, delay: .zero)
+        await settle { view.isShowingProgress }
+        view.layoutSubtreeIfNeeded()
+        let pill = view.toolbar.progressFrame
+        #expect(view.toolbar.progress.acceptsFirstMouse(for: nil))
+        func hit(_ point: CGPoint) -> NSView? { view.hitTest(view.toolbar.convert(point, to: view)) }
+        #expect(hit(CGPoint(x: pill.midX, y: pill.midY)) === view.toolbar.progress)
+        // Below the toolbar, the same column reaches a card: one is under the toolbar too.
+        let below = view.toolbar.convert(CGPoint(x: pill.midX, y: HomeToolbar.height + 40), to: view)
+        #expect(view.hitTest(below).map { $0 is GridCard || $0.superview is GridCard } == true)
+        view.setProgress(nil, delay: .zero)
+        await settle(seconds: 5) { !view.isShowingProgress }
+        for point in [CGPoint(x: pill.midX, y: pill.midY), CGPoint(x: pill.midX, y: 3),
+                      CGPoint(x: view.toolbar.kindFrame.maxX + 4, y: HomeToolbar.height / 2)] {
+            let target = hit(point)
+            #expect(target === view.toolbar, "\(point) -> \(String(describing: target))")
+        }
+        #expect(view.toolbar.mouseDownCanMoveWindow)
+    }
+
     @Test func popoverButtonsReachTheSource() async {
         let source = FakeHomeSource()
         let view = make(source)
