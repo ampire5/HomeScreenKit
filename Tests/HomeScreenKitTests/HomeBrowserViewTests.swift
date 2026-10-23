@@ -601,6 +601,45 @@ import Testing
         #expect(view.card(for: view.entries[0].id) is ListRow)
     }
 
+    /// A density switch remakes every file card without its picture: the pictures are asked for again, at the new
+    /// width, though the ids are the same as before.
+    @Test func switchingDensityAsksForPicturesAgain() async {
+        let source = FakeHomeSource()
+        let view = make(source)
+        source.yield(x, [BrowserFixtures.folder("a")] + ["p.jpg", "q.jpg", "r.jpg"].map { BrowserFixtures.file($0) })
+        await settle(seconds: 5) { !view.entries.isEmpty }
+        view.layoutSubtreeIfNeeded()
+        let image = CGContext(data: nil, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 0,
+                              space: CGColorSpaceCreateDeviceRGB(),
+                              bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!.makeImage()!
+        for entry in view.entries { view.setImage(image, for: entry.id) }
+        let asks = source.wanted.count
+        view.chooseCardStyle(.list)
+        await settle()
+        #expect(source.wanted.count == asks + 1)
+        let files = view.entries.filter(\.isFile).map(\.id)
+        #expect(Set(files).isSubset(of: Set(source.wanted.last ?? [])))
+        #expect(source.wantedWidths.last == GridMetrics().listCover)
+        for entry in view.entries { view.setImage(image, for: entry.id) }
+        view.chooseCardStyle(.posters)
+        await settle()
+        #expect(source.wanted.count == asks + 2)
+        #expect(source.wantedWidths.last == view.slotWidth)
+        for id in files { #expect(view.card(for: id)?.image == nil) }
+    }
+
+    /// The same cards at the same width are not asked for twice (the ids-only dedup keeps its purpose).
+    @Test func unchangedRetileDoesNotAskAgain() async {
+        let source = FakeHomeSource()
+        let view = await shown(source, ["p.jpg", "q.jpg"].map { BrowserFixtures.file($0) })
+        let asks = source.wanted.count
+        #expect(asks > 0)
+        view.tile()
+        view.tile()
+        view.sendMarginNow()
+        #expect(source.wanted.count == asks)
+    }
+
     @Test func listRowsReusedWhileScrolling() async {
         let source = FakeHomeSource()
         let view = await shown(source, BrowserFixtures.files(10_000))

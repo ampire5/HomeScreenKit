@@ -191,6 +191,8 @@ public final class HomeBrowserView: NSView {
     private var headers: [GridHeader] = []
     private let footer = GridFooter()
     private var lastWanted: [String] = []
+    /// The width `lastWanted` was asked at: another width is a new ask, though the ids are the same.
+    private var lastWantedWidth: CGFloat = 0
     /// The visible ids last sent, and the send of the margin that waits for scrolling to stop.
     private var lastVisibleSent: [String] = []
     private var marginTask: Task<Void, Never>?
@@ -1051,6 +1053,8 @@ public final class HomeBrowserView: NSView {
         let range = grid.indices(in: visible, margin: max(visible.height, 1))
         // A card goes with its entry to the entry's slot now (a new order, a filter, names before it), its picture and
         // closures kept; one whose entry left the range, or whose slot is of the other kind now, goes back to its pool.
+        let wantedIDs = Set(lastWanted)
+        var newlyConfigured = false
         var kept: [Int: GridCard] = [:]
         for card in live.values {
             if let i = indexByID[card.item.id], range.contains(i), kept[i] == nil,
@@ -1078,6 +1082,8 @@ public final class HomeBrowserView: NSView {
                 configure(card, entry)
                 card.isHidden = false
                 live[i] = card
+                // The card the ask was sent for is gone (a density switch remakes it, picture and all): ask again.
+                if wantedIDs.contains(entry.id) { newlyConfigured = true }
             }
             let card = live[i]!
             let section = grid.section(of: i)
@@ -1091,6 +1097,10 @@ public final class HomeBrowserView: NSView {
             if let row = card as? ListRow { row.showsSeparator = i < entries.count - 1 }
             // Straight to the slot: a view's frame animates only in an animation group that allows it (the sidebar's).
             card.frame = grid.frame(of: i)
+        }
+        if newlyConfigured {
+            lastWanted = []
+            lastVisibleSent = []
         }
         placeHeaders()
         placeListHeader(showsListHeader, width: width)   // over the rows just made: it stays at the top
@@ -1243,6 +1253,10 @@ public final class HomeBrowserView: NSView {
         func lacksImage(_ id: String) -> Bool { indexByID[id].flatMap { live[$0] }?.image == nil }
         let visibleWanted = visible.filter(lacksImage)
         let marginWanted = rest.filter(lacksImage)
+        if slotWidth != lastWantedWidth {
+            lastWanted = []
+            lastVisibleSent = []
+        }
         marginTask?.cancel()
         marginTask = nil
         pendingMargin = nil
@@ -1250,6 +1264,7 @@ public final class HomeBrowserView: NSView {
             lastVisibleSent = visibleWanted
             if !visibleWanted.isEmpty, visibleWanted + marginWanted != lastWanted {
                 lastWanted = visibleWanted
+                lastWantedWidth = slotWidth
                 source?.wantImages(visibleWanted, visible: visibleWanted.count, width: slotWidth)
             }
         }
@@ -1272,6 +1287,7 @@ public final class HomeBrowserView: NSView {
         pendingMargin = nil
         guard all != lastWanted else { return }
         lastWanted = all
+        lastWantedWidth = slotWidth
         source?.wantImages(all, visible: visible, width: slotWidth)
     }
 
