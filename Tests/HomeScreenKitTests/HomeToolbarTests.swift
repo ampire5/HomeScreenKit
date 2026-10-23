@@ -346,4 +346,45 @@ import Testing
         await settle { !bar.progress.isPopoverShown }
         #expect(!bar.progress.isPopoverShown)
     }
+
+    /// The View menu's Thumbnails…: the popover from the pill when it shows, else from the sort (a narrow window), where
+    /// it stays open through the toolbar's layout passes; nothing without a state.
+    @Test func progressPopoverOpensFromTheSortWhenThePillIsHidden() async {
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 1400, height: 300), styleMask: [.titled], backing: .buffered,
+                              defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        let bar = toolbar()
+        bar.show(path: [("Places", .places), ("x", .folder(x))], canBack: true, canForward: false, canUp: true)
+        bar.show(sort: .standard, keys: [.name, .date, .size])
+        window.contentView?.addSubview(bar)
+        window.orderFront(nil)
+        bar.frame.size.width = 1400
+        bar.layoutSubtreeIfNeeded()
+        #expect(!bar.showProgressPopover())
+        #expect(!bar.progress.isPopoverShown)
+        bar.show(progress: Self.running)
+        bar.layoutSubtreeIfNeeded()
+        #expect(bar.showProgressPopover())
+        await settle { bar.progress.isPopoverShown }
+        #expect(bar.progress.isPopoverShown)
+        #expect(bar.progress.isPopoverOnPill)
+        bar.progress.closePopover()
+        await settle { !bar.progress.isPopoverShown }
+        bar.frame.size.width = 600
+        bar.layoutSubtreeIfNeeded()
+        #expect(!bar.isProgressVisible)
+        #expect(bar.showProgressPopover())
+        await settle { bar.progress.isPopoverShown }
+        #expect(bar.progress.isPopoverShown)
+        #expect(!bar.progress.isPopoverOnPill)
+        bar.needsLayout = true
+        bar.layoutSubtreeIfNeeded()
+        try? await Task.sleep(for: .milliseconds(100))
+        #expect(bar.progress.isPopoverShown)
+        // Done: the popover goes with the state.
+        bar.show(progress: nil)
+        await settle { !bar.progress.isPopoverShown }
+        #expect(!bar.progress.isPopoverShown)
+    }
 }

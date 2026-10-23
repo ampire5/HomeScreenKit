@@ -732,6 +732,12 @@ public final class HomeBrowserView: NSView {
         }
     }
 
+    /// The pill is lit (shown, or left out by a narrow toolbar): View › Thumbnails… can open its popover.
+    public var canShowProgressPopover: Bool { isShowingProgress }
+
+    /// View › Thumbnails…: the pill's popover, from the pill or, while a narrow toolbar hides it, from the sort.
+    public func showProgressPopover() { toolbar.showProgressPopover() }
+
     private func resetProgress() {
         progressTask?.cancel()
         progressTask = nil

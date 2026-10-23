@@ -975,6 +975,17 @@ import Testing
         #expect(!view.isShowingProgress)
     }
 
+    /// View › Thumbnails… is there only while the pill is lit (shown or left out by a narrow toolbar).
+    @Test func progressPopoverOnlyWithAState() async {
+        let view = make(FakeHomeSource())
+        #expect(!view.canShowProgressPopover)
+        view.setProgress(Self.progress, delay: .zero)
+        await settle { view.isShowingProgress }
+        #expect(view.canShowProgressPopover)
+        view.show(.folder(x.appendingPathComponent("y")), selecting: nil)
+        #expect(!view.canShowProgressPopover)
+    }
+
     @Test func pillHidesOneSecondAfterDone() async {
         let source = FakeHomeSource()
         let view = make(source)

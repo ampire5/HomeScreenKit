@@ -216,12 +216,23 @@ final class ThumbsProgressPill: NSView, NSPopoverDelegate {
     var popoverContentSize: CGSize { popover?.contentSize ?? .zero }
     var panelFittingSize: CGSize { panel?.fittingSize ?? .zero }
 
+    /// Whether the open popover points at the pill (not at the view the View menu's Thumbnails… chose for a hidden
+    /// pill): it then goes when a narrow toolbar hides the pill.
+    var isPopoverOnPill: Bool { isPopoverShown && popoverAnchor === self }
+    private weak var popoverAnchor: NSView?
+
     func togglePopover() {
         if let popover, popover.isShown {
             popover.close()
             return
         }
-        guard state != nil, window != nil else { return }
+        openPopover(from: self)
+    }
+
+    /// The popover pointing at `anchor` (the pill, or the sort while a narrow toolbar hides the pill); one already
+    /// open stays as it is.
+    func openPopover(from anchor: NSView) {
+        guard !isPopoverShown, state != nil, anchor.window != nil else { return }
         let panel = makePanel()
         panel.frame.size = panel.fittingSize
         let controller = NSViewController()
@@ -231,7 +242,8 @@ final class ThumbsProgressPill: NSView, NSPopoverDelegate {
         popover.contentViewController = controller
         popover.delegate = self
         self.popover = popover
-        popover.show(relativeTo: bounds, of: self, preferredEdge: .maxY)
+        popoverAnchor = anchor
+        popover.show(relativeTo: anchor.bounds, of: anchor, preferredEdge: .maxY)
     }
 
     func popoverDidClose(_ notification: Notification) {

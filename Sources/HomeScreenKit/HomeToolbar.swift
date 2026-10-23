@@ -180,7 +180,7 @@ final class HomeToolbar: NSView, NSSearchFieldDelegate, NSMenuDelegate {
                 : pathRoom(progress.compactSize.width) >= Self.pathRoomForCompactProgress ? .compact : .hidden
             progress.isHidden = step == .hidden
             if step == .hidden {
-                progress.closePopover()
+                if progress.isPopoverOnPill { progress.closePopover() }
             } else {
                 progress.isCompact = step == .compact
                 let p = size(progress)
@@ -332,6 +332,15 @@ final class HomeToolbar: NSView, NSSearchFieldDelegate, NSMenuDelegate {
         progressState = state
         progress.show(state)
         needsLayout = true
+    }
+
+    /// View › Thumbnails…: the progress popover, from the pill, or from the sort (else the toolbar) while a narrow
+    /// window hides the pill. False without a state.
+    @discardableResult func showProgressPopover() -> Bool {
+        guard progressState != nil else { return false }
+        let anchor: NSView = !progress.isHidden ? progress : !sortCapsule.isHidden ? sortCapsule : self
+        progress.openPopover(from: anchor)
+        return true
     }
 
     func focusFilter() { window?.makeFirstResponder(field) }
