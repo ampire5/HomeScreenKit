@@ -289,8 +289,13 @@ public final class HomeBrowserView: NSView {
 
     // MARK: Moving
 
-    /// Opens `location` and selects `selecting` there (nil: what was selected there last time).
+    /// Opens `location` and selects `selecting` there (nil: what was selected there last time). The folder already on
+    /// screen with its complete listing (the viewer going back to it) keeps its cards and pictures: `selecting` is
+    /// selected at once and the folder is listed again behind them (`refresh`).
     public func show(_ location: BrowserLocation, selecting: String?) {
+        if hasShown, location == self.location, hasComplete, page == nil, !isShowingMessage {
+            return refresh(selecting: selecting)
+        }
         if hasShown {
             rememberPlace()
             history.go(to: location)
@@ -301,6 +306,54 @@ public final class HomeBrowserView: NSView {
         pendingSelection = selecting ?? history.selection(for: location)
         pendingScroll = selecting == nil ? history.scroll(for: location) : nil
         load()
+    }
+
+    /// The place on screen listed again without wiping it: the cards, their pictures, facts, the filter, the scroll and
+    /// the progress stay; `selecting` (nil: the selection as it is) is selected now, or once the new listing has it. A
+    /// names-only part of the new listing changes nothing (`apply`); the complete one replaces the entries by id.
+    private func refresh(selecting: String?) {
+        generation += 1
+        let generation = generation
+        listTask?.cancel()
+        siblingTask?.cancel()
+        if let selecting {
+            if indexByID[selecting] != nil {
+                pendingSelection = nil
+                select(id: selecting)
+            } else {
+                pendingSelection = selecting
+            }
+            pendingScroll = nil
+        }
+        subscribe(generation)
+        onLocation?(location)
+        onMoved?(location)
+        // Its listing is complete as it is: the sidebar may list the path now.
+        onListingComplete?(location)
+    }
+
+    /// The source's listings of the place on screen, as they come, until the next move (`generation`).
+    private func subscribe(_ generation: Int) {
+        guard let stream = source?.list(location) else { return }
+        listTask = Task { @MainActor [weak self] in
+            do {
+                for try await listing in stream {
+                    guard let self, self.generation == generation else { return }
+                    self.received(listing)
+                }
+            } catch {
+                guard let self, self.generation == generation else { return }
+                self.listFailed(error)
+            }
+        }
+    }
+
+    /// A listing from the source's stream: the one already on screen again (the kept listing drawn at the move, then
+    /// delivered by the stream) changes nothing.
+    private func received(_ new: BrowserListing) {
+        if new.complete, hasComplete, let listing, listing.complete, listing.more == new.more,
+           listing.entries == new.entries { return }
+        apply(new)
     }
 
     /// The window closes: no more listing, timers or toasts.
@@ -417,19 +470,7 @@ public final class HomeBrowserView: NSView {
         } else {
             startSlowWatch(generation)
             updateLoading()
-            if let stream = source?.list(location) {
-                listTask = Task { @MainActor [weak self] in
-                    do {
-                        for try await listing in stream {
-                            guard let self, self.generation == generation else { return }
-                            self.apply(listing)
-                        }
-                    } catch {
-                        guard let self, self.generation == generation else { return }
-                        self.listFailed(error)
-                    }
-                }
-            }
+            subscribe(generation)
         }
         updateBar()
         if !keepingFilter { takeKeysBack() }
@@ -439,6 +480,11 @@ public final class HomeBrowserView: NSView {
         }
         onLocation?(location)
         onMoved?(location)
+        // A place visited earlier: its kept listing now, in this turn, after the move was told (its completeness is
+        // told to the sidebar after it), not after the stream's hops.
+        if page == nil, self.generation == generation, let kept = source?.lastListing(for: location), kept.complete {
+            apply(kept)
+        }
     }
 
     /// A move gives the keys back to the grid when they were left with something of the browser's that no longer

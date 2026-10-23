@@ -27,6 +27,10 @@ import AppKit
 
     func places() async -> [BrowserEntry] { placesList }
 
+    /// What `lastListing(for:)` gives by location: the listing kept from an earlier visit.
+    var kept: [BrowserLocation: BrowserListing] = [:]
+    func lastListing(for location: BrowserLocation) -> BrowserListing? { kept[location] }
+
     func list(_ location: BrowserLocation) -> AsyncThrowingStream<BrowserListing, Error> {
         switch location {
         case .places:

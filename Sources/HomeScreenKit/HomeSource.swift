@@ -40,6 +40,10 @@ public struct HomeSourceInfo {
     /// A location's listings, as they come: the places, a folder, or a list source; the browser stops iterating when it
     /// leaves the location.
     func list(_ location: BrowserLocation) -> AsyncThrowingStream<BrowserListing, Error>
+    /// The listing of `location` the source kept from an earlier visit (complete), at once: the browser draws it in the
+    /// same turn as the move, before `list`'s stream has delivered anything (that stream's first copy of it changes
+    /// nothing). Nil when none is kept (the default).
+    func lastListing(for location: BrowserLocation) -> BrowserListing?
     /// The folders and archives in `folder` (names are enough), for the path's sibling menus and the sidebar's tree: from
     /// the source's cache when it has the listing, so the menu fills at once.
     func folders(in folder: URL) async -> [BrowserEntry]
@@ -91,6 +95,7 @@ public struct HomeSourceInfo {
 }
 
 public extension HomeSource {
+    func lastListing(for location: BrowserLocation) -> BrowserListing? { nil }
     func sidebarMenu(for row: HomeSidebarRow) -> [HomeMenuItem] { [] }
     func performSidebar(_ item: String, on row: HomeSidebarRow) {}
     func cardStyle(for location: BrowserLocation) -> CardStyle { .posters }
