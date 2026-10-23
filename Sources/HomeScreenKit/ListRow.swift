@@ -110,6 +110,17 @@ final class ListRow: FolderCard {
         return CGRect(x: name.x, y: (middle - 8).rounded(), width: name.width, height: 16)
     }
 
+    /// Waiting: the placeholder in the small cover's place; a line in the Inside and the Dates columns (the board's
+    /// 70 % and 45 % of the column), on the row's middle.
+    override var waitingCover: (rect: CGRect, radius: CGFloat, topOnly: Bool) { (pictureFrame, Self.coverRadius, false) }
+    override var waitingLines: [CGRect] {
+        let c = ListColumns(width: bounds.width, metrics: metrics), h = Self.waitingLineHeight
+        let y = (middle - h / 2).rounded()
+        return zip([ListColumns.Column.inside, .dates], Self.waitingWidths).compactMap { column, fraction in
+            c[column].map { CGRect(x: $0.x, y: y, width: ($0.width * fraction).rounded(), height: h) }
+        }
+    }
+
     override func itemChanged() {
         super.itemChanged()
         // No poster seam, no cover chip (the type is beside the name), no ✓ or RTL in the mockup's row.
@@ -119,6 +130,10 @@ final class ListRow: FolderCard {
             insideLabel.stringValue = CardSummaryText.listInside(s, pages: holdsPages)
             yearsLabel.stringValue = CardSummaryText.years(s) ?? item.date.map(Self.dateText) ?? ""
             sizeLabel.stringValue = CardSummaryText.size(s) ?? "—"
+        } else if isWaiting {
+            insideLabel.stringValue = ""
+            yearsLabel.stringValue = ""
+            sizeLabel.stringValue = ""
         } else {
             insideLabel.stringValue = item.format ?? fallbackLabel.stringValue
             yearsLabel.stringValue = item.date.map(Self.dateText) ?? ""

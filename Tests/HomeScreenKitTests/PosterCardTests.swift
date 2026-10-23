@@ -205,4 +205,55 @@ import Testing
         let row = ListRow(item: HomeCardItem(id: "a", title: "Vacation 2024", tooltip: "a", symbol: "folder", summary: s))
         #expect(row.toolTip == c.toolTip)
     }
+
+    private func waiting(width: CGFloat) -> PosterCard {
+        let item = HomeCardItem(id: "a", title: "Vacation 2024", subtitle: "248 photos", tooltip: "a", symbol: "folder",
+                                waiting: true)
+        let card = PosterCard(item: item)
+        card.appearance = NSAppearance(named: .aqua)
+        card.frame = CGRect(x: 0, y: 0, width: width, height: width + GridLayout.bandHeight(width: width))
+        card.layoutSubtreeIfNeeded()
+        return card
+    }
+
+    /// A waiting poster: the cover placeholder over the whole cover (top corners round), the name at once, and the
+    /// board's two lines (10 pt, radius 4, 70 % and 45 %) in the band's facts lines; no seam, no facts text.
+    @Test func waitingPosterAsTheBoardDrawsIt() {
+        FolderCard.reduceMotion = { false }
+        let c = waiting(width: 300)
+        #expect(c.isWaiting && !c.nameLabel.isHidden && c.nameLabel.stringValue == "Vacation 2024")
+        #expect(c.skeletonCoverClip.frame == CGRect(x: 0, y: 0, width: 300, height: 300) && !c.skeletonCoverClip.isHidden)
+        #expect(c.skeletonCover.frame.height == 312)   // a radius taller: only the top corners show round
+        #expect(c.skeletonCover.cornerRadius == 12)
+        let lines = c.skeletonLines.filter { !$0.isHidden }
+        #expect(lines.map(\.frame.width) == [(280 * 0.7).rounded(), (280 * 0.45).rounded()])
+        #expect(lines.allSatisfy { $0.frame.height == 10 && $0.cornerRadius == 4 && $0.frame.minX == 10 })
+        #expect(c.progressTrack.isHidden && c.progressBar.isHidden)
+        #expect(c.insideLabel.isHidden && c.viewedLabel.isHidden && c.yearsLabel.isHidden)
+        #expect(waiting(width: 232).skeletonLines.filter { !$0.isHidden }.count == 1)   // a two-line band: one line
+        #expect(waiting(width: 176).skeletonLines.allSatisfy { $0.isHidden })         // the name only
+    }
+
+    /// A cover that arrives first replaces the placeholder; the lines keep shimmering until the facts come.
+    @Test func coverArrivingFirstKeepsTheLinesWaiting() {
+        FolderCard.reduceMotion = { false }
+        let c = waiting(width: 300)
+        c.image = CGContext(data: nil, width: 4, height: 4, bitsPerComponent: 8, bytesPerRow: 0,
+                            space: CGColorSpaceCreateDeviceRGB(),
+                            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!.makeImage()!
+        c.layoutSubtreeIfNeeded()
+        #expect(c.skeletonCoverClip.isHidden)
+        #expect(c.shimmer?.animation(forKey: FolderCard.shimmerKey) != nil)
+        #expect(c.skeletonLines.contains { !$0.isHidden })
+    }
+
+    /// With Reduce Motion: the placeholder stays, a little lighter, and nothing moves.
+    @Test func reduceMotionShowsNoMovement() {
+        FolderCard.reduceMotion = { true }
+        defer { FolderCard.reduceMotion = { false } }
+        let c = waiting(width: 300)
+        #expect(c.isWaiting && c.skeleton.superlayer != nil)
+        #expect(c.shimmer == nil || c.shimmer?.animationKeys()?.isEmpty != false)
+        #expect(c.skeleton.opacity < 1)
+    }
 }

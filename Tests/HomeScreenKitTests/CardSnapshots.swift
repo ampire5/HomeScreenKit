@@ -182,4 +182,61 @@ import Testing
             }
         }
     }
+
+    /// The progress board's «Карточки в ожидании»: ready cards beside waiting ones (the cover placeholder and two
+    /// lines under the shimmer, drawn still at the sweep's middle), as B, E and C.
+    static let waitingTitles = ["Mountains", "Sea", "City"]
+
+    static func waitingItem(_ title: String) -> HomeCardItem {
+        HomeCardItem(id: title, title: title, subtitle: "12 photos", tooltip: title, symbol: "folder", waiting: true)
+    }
+
+    @Test(.enabled(if: folder != nil)) func waitingCards() throws {
+        FolderCard.now = { CardTestClock.now }
+        FolderCard.reduceMotion = { false }
+        let ready = [Self.samples[0], Self.samples[2], Self.samples[1]]
+        for dark in [false, true] {
+            try Self.write("B-waiting", size: CGSize(width: 40 + 2 * 300 + 12, height: 40 + 3 * 92 + 2 * 12), dark: dark) { host in
+                var cards: [(CompactCard, Sample?)] = ready.prefix(2).map { (CompactCard(item: Self.item($0)), $0) }
+                cards.insert((CompactCard(item: Self.item(ready[2])), ready[2]), at: 2)
+                let waiting = Self.waitingTitles.map { (CompactCard(item: Self.waitingItem($0)), nil as Sample?) }
+                // The board's order: two ready in the first row, then a ready one beside a waiting one, then two waiting.
+                let order = [cards[0], cards[1], cards[2], waiting[0], waiting[1], waiting[2]]
+                for (i, (card, s)) in order.enumerated() {
+                    card.frame = CGRect(x: 20 + CGFloat(i % 2) * 312, y: 20 + CGFloat(i / 2) * 104, width: 300, height: 92)
+                    if let s { card.image = Self.cover(s, side: 76, layout: .hero, compact: true) }
+                    host.addSubview(card)
+                }
+            }
+            for side in [CGFloat(232), 300] {
+                let height = side + GridLayout.bandHeight(width: side)
+                try Self.write("E-waiting-\(Int(side))", size: CGSize(width: 40 + 4 * side + 3 * 16, height: 40 + height),
+                               dark: dark) { host in
+                    let items = [Self.item(ready[0])] + Self.waitingTitles.map(Self.waitingItem)
+                    for (i, item) in items.enumerated() {
+                        let card = PosterCard(item: item)
+                        card.frame = CGRect(x: 20 + CGFloat(i) * (side + 16), y: 20, width: side, height: height)
+                        if i == 0 { card.image = Self.cover(ready[0], side: side, layout: .hero) }
+                        host.addSubview(card)
+                    }
+                }
+            }
+            let width: CGFloat = 620, m = GridMetrics()
+            let rows = [Self.item(ready[0]), Self.item(ready[1])] + Self.waitingTitles.map(Self.waitingItem)
+            let height = ListHeader.height + CGFloat(rows.count) * m.listRow
+            try Self.write("C-waiting", size: CGSize(width: 40 + width, height: 40 + height), dark: dark) { host in
+                host.addSubview(ListPlate(frame: CGRect(x: 20, y: 20, width: width, height: height)))
+                for (i, item) in rows.enumerated() {
+                    let row = ListRow(item: item)
+                    row.frame = CGRect(x: 20, y: 20 + ListHeader.height + CGFloat(i) * m.listRow, width: width, height: m.listRow)
+                    if i < 2 { row.image = Self.cover(ready[i], side: m.listCover, layout: .quad) }
+                    row.showsSeparator = i < rows.count - 1
+                    host.addSubview(row)
+                }
+                let header = ListHeader(frame: CGRect(x: 20, y: 20, width: width, height: ListHeader.height))
+                header.sort = BrowserSort(text: "name")!
+                host.addSubview(header)
+            }
+        }
+    }
 }

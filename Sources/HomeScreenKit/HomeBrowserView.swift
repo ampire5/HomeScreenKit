@@ -1239,7 +1239,8 @@ public final class HomeBrowserView: NSView {
                             menu: source?.menu(for: entry, in: location) ?? [], glassSymbol: entry.kind == .place,
                             summary: summary, count: entry.count,
                             format: entry.isFile && !entry.url.pathExtension.isEmpty ? entry.url.pathExtension.uppercased() : nil,
-                            date: entry.date, bytes: entry.size)
+                            date: entry.date, bytes: entry.size,
+                            waiting: (entry.kind == .folder || entry.kind == .archive) && summary == nil && !entry.isDimmed)
     }
 
     /// The live cards without a picture, those in view first. The visible ones go to the source at once; the margin

@@ -40,11 +40,15 @@ public struct HomeCardItem: Equatable, Sendable {
     public var format: String?
     public var date: Date?
     public var bytes: Int64?
+    /// Its cover or its facts are still queued: the card shimmers (a placeholder cover, two lines) until they come,
+    /// or until it is known they will not.
+    public var waiting: Bool = false
 
     public init(id: String, title: String, subtitle: String? = nil, tooltip: String, symbol: String,
                 progress: Double? = nil, badge: String? = nil, isDimmed: Bool = false, menu: [HomeMenuItem] = [],
                 glassSymbol: Bool = false, summary: CardSummary? = nil, count: Int? = nil, format: String? = nil,
-                date: Date? = nil, bytes: Int64? = nil) {
+                date: Date? = nil, bytes: Int64? = nil, waiting: Bool = false) {
+        self.waiting = waiting
         self.format = format
         self.date = date
         self.bytes = bytes

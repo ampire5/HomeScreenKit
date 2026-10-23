@@ -66,6 +66,16 @@ final class CompactCard: FolderCard {
     }
     override var nameLine: CGRect { CGRect(x: column.x, y: rowTops[0], width: column.width, height: Self.rows[0]) }
 
+    /// Waiting (the board's B): the placeholder in the cover's place; the two lines spread as the board's column is,
+    /// under the name to the column's bottom (`justify-content: space-between`).
+    override var waitingCover: (rect: CGRect, radius: CGFloat, topOnly: Bool) { (pictureFrame, Self.coverRadius, false) }
+    override var waitingLines: [CGRect] {
+        let (x, width) = column, h = Self.waitingLineHeight
+        let top = rowTops[0] + Self.rows[0], last = metrics.cardHeight - metrics.cardPadding - 1 - h
+        let first = ((top + last - h) / 2).rounded()
+        return zip([first, last], Self.waitingWidths).map { CGRect(x: x, y: $0, width: (width * $1).rounded(), height: h) }
+    }
+
     override func itemChanged() {
         super.itemChanged()
         guard let s = summary else {

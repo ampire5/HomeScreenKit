@@ -100,6 +100,30 @@ import Testing
         #expect(card(done).viewedLabel.stringValue == "viewed · 3 d ago")
         #expect(card(CardSummary(photos: 12)).viewedLabel.stringValue == "not opened")
     }
+
+    /// The board's waiting card (B): the 76 pt placeholder (radius 8, #E4E4E0), the name at once, two lines 10 pt high
+    /// (radius 4, #ECECE8, 70 % and 45 % of the column) spread under it to the bottom; no progress, no facts text.
+    @Test func waitingCardAsTheBoardDrawsIt() {
+        FolderCard.reduceMotion = { false }
+        let item = HomeCardItem(id: "a", title: "Mountains", subtitle: "12 photos", tooltip: "a", symbol: "folder",
+                                waiting: true)
+        let c = CompactCard(item: item)
+        c.appearance = NSAppearance(named: .aqua)
+        c.frame = CGRect(x: 0, y: 0, width: 300, height: 92)
+        c.layoutSubtreeIfNeeded()
+        #expect(c.skeletonCoverClip.frame == CGRect(x: 8, y: 8, width: 76, height: 76) && c.skeletonCover.frame.height == 76 && c.skeletonCover.cornerRadius == 8)
+        #expect(c.skeletonCover.backgroundColor == NSColor(srgbRed: 0xE4 / 255.0, green: 0xE4 / 255.0, blue: 0xE0 / 255.0,
+                                                            alpha: 1).cgColor)
+        let column: CGFloat = 300 - 95 - 8
+        let lines = c.skeletonLines.filter { !$0.isHidden }
+        #expect(lines.map(\.frame) == [CGRect(x: 95, y: 44, width: (column * 0.7).rounded(), height: 10),
+                                       CGRect(x: 95, y: 73, width: (column * 0.45).rounded(), height: 10)])
+        #expect(lines.allSatisfy { $0.cornerRadius == 4 })
+        #expect(lines.first?.backgroundColor == NSColor(srgbRed: 0xEC / 255.0, green: 0xEC / 255.0, blue: 0xE8 / 255.0,
+                                                        alpha: 1).cgColor)
+        #expect(!c.nameLabel.isHidden && c.fallbackLabel.isHidden && c.progressTrack.isHidden)
+        #expect(c.shimmer?.animation(forKey: FolderCard.shimmerKey) != nil)
+    }
 }
 
 /// A fixed "now" for the cards' recency words (noon UTC mid-month: three days back is three calendar days in any
@@ -107,4 +131,5 @@ import Testing
 enum CardTestClock {
     static let now = Date(timeIntervalSince1970: 1_791_979_200)   // 2026-10-14 12:00 UTC
     static let threeDaysAgo = now.addingTimeInterval(-3 * 86_400)
+
 }

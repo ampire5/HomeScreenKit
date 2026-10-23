@@ -36,6 +36,22 @@ final class PosterCard: FolderCard {
         return CGRect(x: Self.side, y: w + metrics.seam + band.top, width: max(0, w - 2 * Self.side), height: band.nameLine)
     }
 
+    /// Waiting: the placeholder over the whole cover, its top corners round; a line in each facts line of the band
+    /// (the board's 70 % and 45 % of the band's width), centred in it.
+    override var waitingCover: (rect: CGRect, radius: CGFloat, topOnly: Bool) { (pictureFrame, Self.radius, true) }
+    override var waitingLines: [CGRect] {
+        let band = band, h = Self.waitingLineHeight
+        let width = max(0, bounds.width - 2 * Self.side)
+        var y = nameLine.maxY + band.gap
+        var lines: [CGRect] = []
+        for fraction in Self.waitingWidths.prefix(max(0, band.lines - 1)) {
+            lines.append(CGRect(x: Self.side, y: (y + (band.factsLine - h) / 2).rounded(), width: (width * fraction).rounded(),
+                                height: h))
+            y += band.factsLine + band.gap
+        }
+        return lines
+    }
+
     /// The third line's words without and with when the folder was viewed (`· 3 d ago`; nil when not known), and
     /// the width of the latter as last measured (its text and font).
     private var progressWords = ""
@@ -83,6 +99,8 @@ final class PosterCard: FolderCard {
         coverAlert.frame = CGRect(x: ((w - alert) / 2).rounded(), y: (w * 92 / 232).rounded(), width: alert, height: alert)
         // The seam: the track the whole width, the fill as far as viewed.
         progressTrack.frame = CGRect(x: 0, y: w, width: w, height: metrics.seam)
+        progressTrack.isHidden = isWaiting
+        progressBar.isHidden = isWaiting || shownProgress == nil
         let fraction = min(1, max(0, shownProgress ?? 0))
         progressBar.frame = CGRect(x: 0, y: w, width: (w * fraction).rounded(), height: metrics.seam)
         // Line 1: the name, ⧉ and RTL after it; `+12` and ✓ at the end.

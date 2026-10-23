@@ -25,6 +25,14 @@ extension Chrome.Palette {
         public static let coverChip = NSColor(srgbRed: 18 / 255, green: 18 / 255, blue: 20 / 255, alpha: 0.58)
         public static let coverChipText = NSColor.white
 
+        /// A waiting card (the progress board, «Карточки в ожидании»): its cover placeholder and its two lines, and
+        /// the highlight sweeping over them. Light: the board's #E4E4E0, #ECECE8 and white .55. Dark (not drawn on the
+        /// board): the same step from the plate — `label` over `background` at .12 and .084, as #E4E4E0 and #ECECE8 are
+        /// over white — and a light glint of `label` at .09, lifting the placeholder as much as the light one does.
+        public static let waitingCover = dynamic(light: 0xE4E4E0, dark: 0x444447)
+        public static let waitingLine = dynamic(light: 0xECECE8, dark: 0x3D3D40)
+        public static let shimmer = dynamic(light: (0xFFFFFF, 0.55), dark: (0xF2F2F4, 0.09))
+
         static func rgb(_ hex: UInt32, _ alpha: CGFloat = 1) -> NSColor {
             NSColor(srgbRed: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255,
                     blue: CGFloat(hex & 0xFF) / 255, alpha: alpha)

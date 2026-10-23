@@ -484,6 +484,44 @@ import Testing
         view.setSummary(CardSummary(photos: 1), for: view.entries[0].id)   // reachable again
         #expect((view.card(for: view.entries[0].id) as? PosterCard)?.picture.alphaValue == 1)
     }
+
+    /// A folder whose facts are still queued shimmers (one gradient sweeping over its cover placeholder and its
+    /// lines); its facts arriving stop it. A file never waits.
+    @Test func waitingCardShimmersUntilItsFactsCome() async {
+        FolderCard.reduceMotion = { false }
+        let source = FakeHomeSource()
+        let view = await shown(source, [BrowserFixtures.folder("a"), BrowserFixtures.file("p.jpg")])
+        let folder = view.entries.first { $0.kind == .folder }!.id
+        let file = view.entries.first { $0.kind == .file }!.id
+        let card = view.card(for: folder) as? PosterCard
+        card?.layoutSubtreeIfNeeded()
+        #expect(card?.item.waiting == true && card?.isWaiting == true)
+        #expect(card?.skeleton.superlayer != nil)
+        #expect(card?.shimmer?.animation(forKey: FolderCard.shimmerKey) != nil)
+        #expect(card?.isShowingSymbol == false)                             // the placeholder, not the folder symbol
+        #expect(view.card(for: file)?.item.waiting == false)
+        view.setSummary(summary, for: folder)
+        card?.layoutSubtreeIfNeeded()
+        #expect(card?.item.waiting == false && card?.isWaiting == false)
+        #expect(card?.shimmer == nil && card?.skeleton.superlayer == nil)
+    }
+
+    /// A card whose facts say nothing more will come (the volume is away) stops shimmering and shows its warning.
+    @Test func shimmerStopsWhenNothingWillCome() async {
+        FolderCard.reduceMotion = { false }
+        let source = FakeHomeSource()
+        var away = BrowserFixtures.folder("away")
+        away.isDimmed = true
+        let view = await shown(source, [BrowserFixtures.folder("a"), away])
+        let id = view.entries.first { $0.name == "a" }!.id
+        #expect(view.card(for: view.entries.first { $0.name == "away" }!.id)?.item.waiting == false)   // can't be reached
+        let card = view.card(for: id) as? PosterCard
+        #expect(card?.isWaiting == true)
+        view.setSummary(CardSummary(photos: 1120, viewed: 0.35, seen: 392, problem: .offline), for: id)
+        card?.layoutSubtreeIfNeeded()
+        #expect(card?.isWaiting == false && card?.shimmer == nil && card?.skeleton.superlayer == nil)
+        #expect(card?.warningLabel.isHidden == false && card?.warningLabel.stringValue == "Not connected · facts from the catalog")
+    }
 }
 
 @MainActor @Suite struct HomeBrowserListTests {
