@@ -495,7 +495,46 @@ import Testing
     private func waitingView(_ entries: [BrowserEntry], _ source: FakeHomeSource) async -> HomeBrowserView {
         FolderCard.reduceMotion = { false }
         source.sendsCardFacts = true
-        return await shown(source, entries)
+        let view = make(source)
+        view.windowVisibleForTests = true   // no window in a test: as if it were on screen
+        source.yield(x, entries)
+        await settle(seconds: 5) { !view.entries.isEmpty }
+        view.layoutSubtreeIfNeeded()
+        return view
+    }
+
+    /// The shimmer runs only while the window is on screen: hidden, minimized or covered, the waiting cards keep
+    /// still; visible again, they move again.
+    @Test func shimmerOnlyWhileTheWindowIsVisible() async {
+        let source = FakeHomeSource()
+        let view = await waitingView([BrowserFixtures.folder("a")], source)
+        #expect(poster(view, "a")?.shimmer != nil)
+        view.windowVisibleForTests = false
+        view.windowVisibilityChanged()
+        #expect(poster(view, "a")?.isWaiting == true && poster(view, "a")?.shimmer == nil)
+        view.windowVisibleForTests = true
+        view.windowVisibilityChanged()
+        #expect(poster(view, "a")?.shimmer?.animation(forKey: FolderCard.shimmerKey) != nil)
+    }
+
+    /// Only the cards in view shimmer, at most `shimmerCap` at once; those laid out in the margin keep still.
+    @Test func onlyCardsInViewShimmer() async {
+        let source = FakeHomeSource()
+        let view = await waitingView((0..<200).map { BrowserFixtures.folder("f\($0)") }, source)
+        let shown = Set(view.visibleIDs)
+        let cards = view.liveIDs.compactMap { view.card(for: $0) as? FolderCard }
+        let moving = cards.filter { $0.shimmer != nil }
+        #expect(!moving.isEmpty)
+        #expect(moving.count <= HomeBrowserView.shimmerCap)
+        #expect(moving.allSatisfy { shown.contains($0.item.id) })
+        #expect(cards.contains { !shown.contains($0.item.id) && $0.isWaiting && $0.shimmer == nil })
+        // A smaller card size puts more in view than the cap: still no more than it.
+        view.cardSize = 60
+        view.layoutSubtreeIfNeeded()
+        view.tile()
+        let small = view.liveIDs.compactMap { view.card(for: $0) as? FolderCard }
+        #expect(view.visibleIDs.count > HomeBrowserView.shimmerCap)
+        #expect(small.filter { $0.shimmer != nil }.count == HomeBrowserView.shimmerCap)
     }
 
     private func poster(_ view: HomeBrowserView, _ name: String) -> PosterCard? {

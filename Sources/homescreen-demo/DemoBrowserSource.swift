@@ -21,6 +21,10 @@ import HomeScreenKit
     /// The style the demo starts with (`HOMESCREEN_CARDS`: posters, cards or list).
     static var startStyle = ProcessInfo.processInfo.environment["HOMESCREEN_CARDS"].flatMap(CardStyle.init) ?? .posters
     private let root = URL(fileURLWithPath: "/Demo")
+    /// `HOMESCREEN_WAITING`: the source sends card facts but never delivers a folder's, so its cards wait (shimmer)
+    /// for good: for measuring what waiting cards cost (open `/Demo/Waiting`, 48 folders).
+    static let neverDelivers = ProcessInfo.processInfo.environment["HOMESCREEN_WAITING"] != nil
+    var sendsCardFacts: Bool { Self.neverDelivers }
 
     init() {
         let huge = root.appendingPathComponent("Huge")
@@ -31,6 +35,8 @@ import HomeScreenKit
                                  canRename: true, canTrash: true)
         tree[mixed.path] = (0..<12).map { folder("Album \($0)", in: mixed) } + [scans] + (0..<2_000).map { file("DSC_\($0).jpg", in: mixed, $0) }
         tree[huge.path] = (0..<30).map { folder("Set \($0)", in: huge) } + (0..<10_000).map { file("IMG_\($0).jpg", in: huge, $0) }
+        let waiting = root.appendingPathComponent("Waiting")
+        tree[waiting.path] = (0..<48).map { folder("Waiting \($0)", in: waiting) }
         let small = root.appendingPathComponent("Small")
         tree[small.path] = (0..<12).map { file("photo \($0).jxl", in: small, $0) }
         for i in 0..<30 {
@@ -153,6 +159,7 @@ import HomeScreenKit
     }
 
     func wantImages(_ ids: [String], width: CGFloat) {
+        if Self.neverDelivers { return }
         // The facts come after the listing, like the pictures.
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(300))

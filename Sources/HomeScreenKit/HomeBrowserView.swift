@@ -799,6 +799,47 @@ public final class HomeBrowserView: NSView {
         toolbar.show(progressDetail: nil)
     }
 
+    // MARK: Shimmer
+
+    /// Waiting cards that shimmer at once at most, the first in view in the grid's order; the others in view keep
+    /// still (the Reduce Motion look) until a slot frees or they scroll first. Basis: every shimmering card is a layer
+    /// the window server redraws 60 times a second; a window of 220 pt posters shows about 20-30 cards, so 24 lets a
+    /// usual screen of waiting folders all move, while small cards (60 pt: 130+ in view) never animate more than that.
+    static let shimmerCap = 24
+    /// Tests have no window: whether to count it as on screen.
+    var windowVisibleForTests: Bool?
+
+    /// The window is on screen (not minimized, not hidden with the app, not covered whole): only then do cards move.
+    private var isWindowVisible: Bool {
+        windowVisibleForTests ?? (window?.occlusionState.contains(.visible) == true)
+    }
+
+    public override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        let center = NotificationCenter.default
+        center.removeObserver(self, name: NSWindow.didChangeOcclusionStateNotification, object: nil)
+        if let window {
+            center.addObserver(self, selector: #selector(windowVisibilityChanged),
+                               name: NSWindow.didChangeOcclusionStateNotification, object: window)
+        }
+        updateShimmers()
+    }
+
+    @objc func windowVisibilityChanged() { updateShimmers() }
+
+    /// Which waiting cards may shimmer: those in view, the first `shimmerCap` of them in the grid's order, while the
+    /// window is on screen; the margin's and the pool's keep still.
+    private func updateShimmers() {
+        var slots = isWindowVisible && !isHiddenOrHasHiddenAncestor ? Self.shimmerCap : 0
+        let visible = scroll.contentView.documentVisibleRect
+        for i in live.keys.sorted() {
+            guard let card = live[i] as? FolderCard else { continue }
+            let may = slots > 0 && card.isWaiting && grid.frame(of: i).intersects(visible)
+            if may { slots -= 1 }
+            card.mayShimmer = may
+        }
+    }
+
     // MARK: Toast
 
     /// A short line at the bottom for 3 s: an action that failed.
@@ -1242,6 +1283,7 @@ public final class HomeBrowserView: NSView {
         footer.frame = grid.footerFrame
         placeRenameField()
         askImages()
+        updateShimmers()
     }
 
     private func isCollection(_ i: Int) -> Bool { !entries[i].isFile }
@@ -1274,6 +1316,7 @@ public final class HomeBrowserView: NSView {
 
     private func putAside(_ card: GridCard) {
         card.isHidden = true
+        (card as? FolderCard)?.mayShimmer = false
         card.image = nil
         if let photo = card as? PhotoCard { photoPool.append(photo) }
         if let collection = card as? CollectionCard { collectionPool.append(collection) }
@@ -1398,6 +1441,7 @@ public final class HomeBrowserView: NSView {
             let item = item(for: entries[i])
             if card.item != item { card.show(item) }
         }
+        updateShimmers()
     }
 
     /// The source works on these cards again (a refreshed cover): those it gave up on wait again, shimmering, until
@@ -1408,6 +1452,7 @@ public final class HomeBrowserView: NSView {
             let item = item(for: entries[i])
             if card.item != item { card.show(item) }
         }
+        updateShimmers()
     }
 
     /// The live cards without a picture, those in view first. The visible ones go to the source at once; the margin
@@ -1463,13 +1508,18 @@ public final class HomeBrowserView: NSView {
         entries[i].summary = summary
         guard let card = live[i], card.item.id == id else { return }
         let item = item(for: entries[i])
-        if card.item != item { card.show(item) }
+        if card.item != item {
+            card.show(item)
+            updateShimmers()   // a card done waiting frees its slot
+        }
     }
 
     /// A card's picture; one not on screen now is ignored.
     public func setImage(_ image: CGImage?, for id: String) {
         guard let card = card(for: id) else { return }
+        let waited = (card as? FolderCard)?.isWaiting == true
         card.image = image
+        if waited, (card as? FolderCard)?.isWaiting == false { updateShimmers() }
     }
 
     func card(for id: String) -> GridCard? {

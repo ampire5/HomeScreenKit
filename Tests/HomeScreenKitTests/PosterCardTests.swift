@@ -268,6 +268,43 @@ import Testing
         #expect(c.shimmer?.animation(forKey: FolderCard.shimmerKey) != nil)
     }
 
+    /// No animation runs for ever: after its time (`shimmerLimit`) a card still waiting keeps still, in the Reduce
+    /// Motion look (a little lighter), until its facts and cover come. A new wait (another item) may shimmer again.
+    @Test func shimmerEndsAfterItsTime() async {
+        let savedMotion = FolderCard.reduceMotion
+        defer { FolderCard.reduceMotion = savedMotion }
+        FolderCard.reduceMotion = { false }
+        #expect(FolderCard.defaultShimmerLimit == .seconds(8))
+        let c = waiting(width: 300)
+        c.shimmerLimit = .milliseconds(150)
+        c.mayShimmer = false
+        c.mayShimmer = true
+        #expect(c.shimmer != nil)
+        await settle(seconds: 5) { c.shimmer == nil }
+        c.layoutSubtreeIfNeeded()
+        #expect(c.isWaiting && c.skeleton?.layer.superlayer != nil)
+        #expect(c.shimmer == nil)
+        func gray(_ color: CGColor?) -> CGFloat { NSColor(cgColor: color!)!.usingColorSpace(.sRGB)!.redComponent }
+        #expect(gray(c.skeleton?.cover.backgroundColor) > 0xE4 / 255.0)
+        var other = c.item
+        other.id = "another"
+        c.show(other)
+        #expect(c.shimmer != nil)
+    }
+
+    /// The browser can hold a card still (out of view, the window hidden): no shimmer while it may not, back after.
+    @Test func cardShimmersOnlyWhileItMay() {
+        let savedMotion = FolderCard.reduceMotion
+        defer { FolderCard.reduceMotion = savedMotion }
+        FolderCard.reduceMotion = { false }
+        let c = waiting(width: 300)
+        c.mayShimmer = false
+        #expect(c.isWaiting && c.skeleton?.layer.superlayer != nil && c.shimmer == nil)
+        c.mayShimmer = true
+        c.layoutSubtreeIfNeeded()
+        #expect(c.shimmer?.animation(forKey: FolderCard.shimmerKey) != nil)
+    }
+
     /// Cards that never wait make no skeleton layers.
     @Test func skeletonOnlyForCardsThatWait() {
         #expect(card(summary, width: 232).skeleton == nil)
