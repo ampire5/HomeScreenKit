@@ -140,6 +140,19 @@ class FolderCard: GridCard {
         warningLabel.stringValue = ""
         warningLabel.isHidden = true
         progressBar.isHidden = shownProgress == nil
+        toolTip = Self.tooltip(item, summary: s, pages: holdsPages)
+    }
+
+    /// The tooltip has what the card may cut: every fact with the subfolders' photos, the dates' span and the
+    /// progress, then the item's own tooltip (the path).
+    static func tooltip(_ item: HomeCardItem, summary s: CardSummary?, pages: Bool) -> String {
+        var lines: [String] = []
+        if let s {
+            lines.append(CardSummaryText.facts(s, pages: pages, withInside: true))
+            lines.append([CardSummaryText.span(s), CardSummaryText.viewed(s)].compactMap { $0 }.joined(separator: " · "))
+        }
+        lines.append(item.tooltip)
+        return lines.filter { !$0.isEmpty }.joined(separator: "\n")
     }
 
     /// The mockups' cover opacity: .4 while the volume is away, .25 for an archive that cannot be read.

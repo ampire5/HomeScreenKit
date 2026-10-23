@@ -7,7 +7,8 @@ import HomeScreenModel
 /// track filled as far as the folder was viewed; then the band (`GridMetrics.posterBand`, which the grid reserves
 /// exactly), by width:
 /// - under 200 pt: the name, and at the line's end `+12` and ✓;
-/// - from 200 pt: also `248 photos · 3 folders · 1.9 GB`, the dates' bars and the years at the line's end;
+/// - from 200 pt: also `248 photos · 3 folders · 1.9 GB` whole, the years at the line's end, and the dates' bars
+///   between the two where they fit (the tooltip has every fact whatever the card cuts);
 /// - from 280 pt: the facts line with the subfolders' photos (`3 folders (412)`), and a third line of larger bars
 ///   with the dates' span and the progress: `Jun – Aug 2024 · 153 / 248`.
 /// A folder whose volume is away, or an archive that cannot be read, has its cover faint with a warning glyph over
@@ -104,7 +105,8 @@ final class PosterCard: FolderCard {
         }
         if band.lines == 2 {
             viewedLabel.isHidden = true
-            // The facts take what is left (cut with "…" first); the bars and the years at the line's end.
+            // The years at the line's end; the facts whole before them, and the bars between the two only where
+            // they fit (owner, 2026-10-23: the facts are what the card is for, the bars are the garnish).
             histogram.barWidth = 2.5
             histogram.barGap = 1.5
             var right = line2.maxX
@@ -115,7 +117,8 @@ final class PosterCard: FolderCard {
                 yearsLabel.frame = CGRect(x: right, y: y2, width: yw, height: band.factsLine)
                 right -= 8
             }
-            histogram.isHidden = problem != nil || !histogram.hasBars
+            let factsWidth = insideLabel.isHidden ? 0 : insideLabel.textWidth + 8
+            histogram.isHidden = problem != nil || !histogram.hasBars || x + factsWidth + histogram.barsWidth > right
             if !histogram.isHidden {
                 let hw = histogram.barsWidth
                 right -= hw

@@ -44,18 +44,40 @@ import Testing
         // the band: 10 pt from the sides, the name 7 pt under the seam
         #expect(c.nameLabel.frame.minX == 10 && c.nameLabel.frame.minY == 235 + 7)
         #expect(c.nameLabel.font.pointSize == 13)
-        for view in [c.nameLabel, c.insideLabel, c.histogram, c.yearsLabel, c.newPill] as [NSView] {
+        for view in [c.nameLabel, c.insideLabel, c.yearsLabel, c.newPill] as [NSView] {
             #expect(!view.isHidden)
             #expect(view.frame.minY >= 235 && view.frame.maxY <= c.bounds.height)
             #expect(view.frame.minX >= 10 && view.frame.maxX <= 222)
         }
-        // "+12" at the name line's end, the bars and the years at the facts line's end
+        // "+12" at the name line's end, the years at the facts line's end
         #expect(c.newPill.frame.maxX == 222 && abs(c.newPill.frame.midY - c.nameLabel.frame.midY) <= 1)
         #expect(c.yearsLabel.frame.maxX == 222 && c.yearsLabel.stringValue == "2024")
-        #expect(c.histogram.frame.maxX + 8 == c.yearsLabel.frame.minX)
+        // The facts stay whole (owner, 2026-10-23): the bars go when they would cut the text.
         #expect(c.insideLabel.stringValue == "248 photos · 3 folders · 1.9 GB")
-        #expect(c.insideLabel.frame.maxX + 8 == c.histogram.frame.minX)   // the text gives way, the bars do not
+        #expect(c.insideLabel.textWidth <= c.insideLabel.frame.width)
+        #expect(c.insideLabel.frame.maxX + 8 <= c.yearsLabel.frame.minX)
+        #expect(c.histogram.isHidden)
+    }
+
+    /// Short facts leave room: the bars sit between the text and the years, as board E draws them.
+    @Test func barsStayWhenTheyFit() {
+        var s = CardSummary(photos: 96, bytes: 1_200_000_000, first: Date(timeIntervalSince1970: 1_678_000_000),
+                            last: Date(timeIntervalSince1970: 1_679_000_000), histogram: [0, 0, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+        s.twoPages = true
+        let c = card(s, width: 232, badge: "ZIP")
+        #expect(c.insideLabel.stringValue == "96 pages · 1.2 GB")
+        #expect(!c.histogram.isHidden)
+        #expect(c.insideLabel.frame.maxX + 8 == c.histogram.frame.minX)
+        #expect(c.histogram.frame.maxX + 8 == c.yearsLabel.frame.minX && c.yearsLabel.frame.maxX == 222)
         #expect(c.histogram.barWidth == 2.5 && c.histogram.barGap == 1.5 && c.histogram.frame.height == 12)
+    }
+
+    /// Whatever the card cuts, the tooltip has it all: the facts with the subfolders' photos, the span and the
+    /// progress, then the path the item gave.
+    @Test func tooltipCarriesTheWholeFacts() {
+        let c = card(summary, width: 232)
+        #expect(c.toolTip == "248 photos · 3 folders (412) · 1.9 GB\nJun – Aug 2024 · 153 / 248\na")
+        #expect(card(nil, width: 232).toolTip == "a")
     }
 
     @Test func narrowPosterHasTheNameAndThePill() {
