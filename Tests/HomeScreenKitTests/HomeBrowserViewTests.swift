@@ -580,6 +580,19 @@ import Testing
         #expect(card?.insideLabel.stringValue == "3 photos")
     }
 
+    /// The source asks again for a card it gave up on ("Refresh cover", `resumeWaiting`): it shimmers again.
+    @Test func resumedCardWaitsAgain() async {
+        var folder = BrowserFixtures.folder("a")
+        folder.count = 3
+        let source = FakeHomeSource()
+        let view = await waitingView([folder], source)
+        view.stopWaiting(for: [view.entries[0].id])
+        #expect(poster(view, "a")?.isWaiting == false)
+        view.resumeWaiting(for: [view.entries[0].id, "not listed"])
+        let card = poster(view, "a")
+        #expect(card?.item.waiting == true && card?.isWaiting == true)
+    }
+
     /// A source that does not say it sends facts (the default) gets the cards as before: the subtitle, no shimmer.
     @Test func waitingIsOffForSourcesWithoutFacts() async {
         var folder = BrowserFixtures.folder("a")

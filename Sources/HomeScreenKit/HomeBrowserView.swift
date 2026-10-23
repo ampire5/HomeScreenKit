@@ -1346,6 +1346,16 @@ public final class HomeBrowserView: NSView {
         }
     }
 
+    /// The source works on these cards again (a refreshed cover): those it gave up on wait again, shimmering, until
+    /// their facts and cover come or it gives up once more.
+    public func resumeWaiting(for ids: [String]) {
+        for id in ids where givenUp.remove(id) != nil {
+            guard let i = indexByID[id], let card = live[i], card.item.id == id else { continue }
+            let item = item(for: entries[i])
+            if card.item != item { card.show(item) }
+        }
+    }
+
     /// The live cards without a picture, those in view first. The visible ones go to the source at once; the margin
     /// around them only after 150 ms without a bounds change, so a fast scroll does not queue what it passes.
     private func askImages() {
