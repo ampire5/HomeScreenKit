@@ -76,6 +76,10 @@ public struct HomeSourceInfo {
     func pageFilterChosen(_ index: Int, in source: String)
     /// The browser went from `old` (nil: the first location) to `new`: what was read for `old` alone can stop.
     func moved(from old: BrowserLocation?, to new: BrowserLocation)
+    /// Whether the source sends folder and archive cards their facts and covers after the listing
+    /// (`HomeBrowserView.setSummary`, `setImage`): their cards then wait for them, shimmering, until they come or the
+    /// source gives up (`HomeBrowserView.stopWaiting`). False by default: the cards show their subtitle as before.
+    var sendsCardFacts: Bool { get }
 }
 
 public extension HomeSource {
@@ -85,4 +89,5 @@ public extension HomeSource {
     func setCardStyle(_ style: CardStyle, for location: BrowserLocation) {}
     func wantImages(_ ids: [String], visible: Int, width: CGFloat) { wantImages(ids, width: width) }
     func moved(from old: BrowserLocation?, to new: BrowserLocation) {}
+    var sendsCardFacts: Bool { false }
 }

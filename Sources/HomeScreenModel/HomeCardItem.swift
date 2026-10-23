@@ -40,8 +40,10 @@ public struct HomeCardItem: Equatable, Sendable {
     public var format: String?
     public var date: Date?
     public var bytes: Int64?
-    /// Its cover or its facts are still queued: the card shimmers (a placeholder cover, two lines) until they come,
-    /// or until it is known they will not.
+    /// The source may still send this card's facts or cover (`HomeSource.sendsCardFacts`): set while it has no
+    /// facts, or while its facts expect a cover (no problem, photos here or inside), and the source has not given up
+    /// on it (`HomeBrowserView.stopWaiting`). The card shimmers while the facts or the cover are missing: a
+    /// placeholder cover until the picture, two lines until the facts.
     public var waiting: Bool = false
 
     public init(id: String, title: String, subtitle: String? = nil, tooltip: String, symbol: String,

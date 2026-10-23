@@ -111,11 +111,12 @@ import Testing
         c.appearance = NSAppearance(named: .aqua)
         c.frame = CGRect(x: 0, y: 0, width: 300, height: 92)
         c.layoutSubtreeIfNeeded()
-        #expect(c.skeletonCoverClip.frame == CGRect(x: 8, y: 8, width: 76, height: 76) && c.skeletonCover.frame.height == 76 && c.skeletonCover.cornerRadius == 8)
-        #expect(c.skeletonCover.backgroundColor == NSColor(srgbRed: 0xE4 / 255.0, green: 0xE4 / 255.0, blue: 0xE0 / 255.0,
+        let k = c.skeleton!
+        #expect(k.coverClip.frame == CGRect(x: 8, y: 8, width: 76, height: 76) && k.cover.frame.height == 76 && k.cover.cornerRadius == 8)
+        #expect(k.cover.backgroundColor == NSColor(srgbRed: 0xE4 / 255.0, green: 0xE4 / 255.0, blue: 0xE0 / 255.0,
                                                             alpha: 1).cgColor)
         let column: CGFloat = 300 - 95 - 8
-        let lines = c.skeletonLines.filter { !$0.isHidden }
+        let lines = k.lines.filter { !$0.isHidden }
         #expect(lines.map(\.frame) == [CGRect(x: 95, y: 44, width: (column * 0.7).rounded(), height: 10),
                                        CGRect(x: 95, y: 73, width: (column * 0.45).rounded(), height: 10)])
         #expect(lines.allSatisfy { $0.cornerRadius == 4 })

@@ -153,6 +153,8 @@ import AppKit
     }
 
     var cardStyles: [BrowserLocation: CardStyle] = [:]
+    /// Whether the cards wait for facts and covers (`HomeSource.sendsCardFacts`).
+    var sendsCardFacts = false
     private(set) var setCardStyles: [(CardStyle, BrowserLocation)] = []
     func cardStyle(for location: BrowserLocation) -> CardStyle { cardStyles[location] ?? .posters }
     func setCardStyle(_ style: CardStyle, for location: BrowserLocation) {

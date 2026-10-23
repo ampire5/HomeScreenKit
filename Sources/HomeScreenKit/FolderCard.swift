@@ -50,26 +50,11 @@ class FolderCard: GridCard {
     /// Between the name line's parts (the mockups' `gap: 6px`).
     static let gap: CGFloat = 6
 
-    /// A waiting card (`HomeCardItem.waiting`, the progress board's «Карточки в ожидании»): its cover placeholder
-    /// and its lines, under one highlight sweeping across the card. In the card's layer only while it waits.
-    let skeleton = CALayer()
-    /// The cover placeholder, in a clip as tall as the cover: a poster's is a radius taller, so that only its top
-    /// corners show round (as `coverClip` does; `maskedCorners` is not drawn by a layer's `render(in:)`).
-    let skeletonCoverClip = CALayer()
-    let skeletonCover = CALayer()
-    /// The lines in place of the facts: two on a card or a poster, one per facts column of a row; those a card does
-    /// not use are hidden.
-    let skeletonLines = [CALayer(), CALayer()]
-    /// The skeleton's shapes again, opaque: the highlight shows only over them.
-    private let skeletonMask = CALayer()
-    private let maskCoverClip = CALayer()
-    private let maskCover = CALayer()
-    private let maskLines = [CALayer(), CALayer()]
-    /// The highlight (the board's `.sk::after`): one gradient per waiting card, its `transform` animated by Core
-    /// Animation (no timers); none with Reduce Motion.
-    private(set) var shimmer: CAGradientLayer?
-    /// The width the shimmer's animation was made for: a new width makes it again.
-    private var shimmerWidth: CGFloat = 0
+    /// A waiting card's placeholders and shimmer (`CardSkeleton`): made when the card first waits, in its layer only
+    /// while it waits.
+    private(set) var skeleton: CardSkeleton?
+    /// The highlight (the board's `.sk::after`): one gradient per waiting card; none with Reduce Motion.
+    var shimmer: CAGradientLayer? { skeleton?.shimmer }
     static let shimmerKey = "shimmer"
     /// The board's `animation: sh 1.6s ease-in-out infinite`.
     static let shimmerDuration: CFTimeInterval = 1.6
@@ -77,8 +62,6 @@ class FolderCard: GridCard {
     static let waitingLineHeight: CGFloat = 10
     static let waitingLineRadius: CGFloat = 4
     static let waitingWidths: [CGFloat] = [0.7, 0.45]
-    /// With Reduce Motion the placeholder stays, a little lighter (nearer the plate), and does not move.
-    static let reducedSkeletonOpacity: Float = 0.7
     /// Whether to keep still (System Settings › Accessibility › Display › Reduce motion); tests set their own.
     static var reduceMotion: () -> Bool = { Chrome.Motion.reduced }
 
@@ -98,8 +81,11 @@ class FolderCard: GridCard {
     /// The progress shown: the summary's, else the item's (a recent folder's).
     var shownProgress: Double? { summary?.viewed ?? item.progress }
     var problem: CardSummary.Problem? { summary?.problem }
-    /// The cover or the facts are still queued: the card shimmers.
-    var isWaiting: Bool { item.waiting }
+    /// The card shimmers: the source may still send something (`HomeCardItem.waiting`) and something is missing —
+    /// the facts, or the cover.
+    var isWaiting: Bool { item.waiting && (summary == nil || image == nil) }
+    /// Waiting for the facts: the lines stand in for them (and the subtitle, the progress are not shown).
+    var isWaitingForFacts: Bool { isWaiting && summary == nil }
 
     override init(item: HomeCardItem) {
         super.init(item: item)
@@ -135,16 +121,6 @@ class FolderCard: GridCard {
         rtlLabel.text = "RTL"
         layer?.addSublayer(edge)
         layer?.addSublayer(ring)
-        skeletonCoverClip.addSublayer(skeletonCover)
-        skeleton.addSublayer(skeletonCoverClip)
-        for line in skeletonLines { skeleton.addSublayer(line) }
-        maskCoverClip.addSublayer(maskCover)
-        skeletonMask.addSublayer(maskCoverClip)
-        for line in maskLines { skeletonMask.addSublayer(line) }
-        for clip in [skeletonCoverClip, maskCoverClip] { clip.masksToBounds = true }
-        skeleton.mask = skeletonMask
-        for part in [skeletonCover, maskCover] { part.cornerCurve = .continuous }
-        for part in [maskCover] + maskLines { part.backgroundColor = CGColor(gray: 0, alpha: 1) }
         show(item)
         appearanceChanged()
     }
@@ -171,7 +147,7 @@ class FolderCard: GridCard {
         coverChip.isHidden = item.badge == nil
         let s = summary
         histogram.bins = s?.histogram ?? []
-        fallbackLabel.stringValue = s == nil && !isWaiting ? item.subtitle ?? "" : ""
+        fallbackLabel.stringValue = s == nil && !isWaitingForFacts ? item.subtitle ?? "" : ""
         rtlLabel.isHidden = !(s?.rightToLeft ?? false)
         twoPagesIcon.isHidden = !(s?.twoPages ?? false)
         newPill.text = (s?.new ?? 0) > 0 ? "+\(s!.new)" : ""
@@ -232,98 +208,36 @@ class FolderCard: GridCard {
     /// Where a waiting card's cover placeholder goes, its radius and whether only its top corners are round (a
     /// poster's); the subclasses say.
     var waitingCover: (rect: CGRect, radius: CGFloat, topOnly: Bool) { (pictureFrame, 0, false) }
-    /// Where its lines go, in the card's coordinates (at most `skeletonLines.count`).
+    /// Where its lines go, in the card's coordinates (at most `CardSkeleton.lines.count`).
     var waitingLines: [CGRect] { [] }
 
-    /// Puts the skeleton in or takes it out, with its shimmer, as the card waits or not; the cover placeholder only
-    /// while there is no cover.
+    /// Puts the skeleton in or takes it out, with its shimmer, as the card waits or not: the cover placeholder while
+    /// there is no cover, the lines while there are no facts.
     private func waitingChanged() {
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        defer { CATransaction.commit() }
         guard isWaiting else {
-            skeleton.removeFromSuperlayer()
-            shimmer?.removeFromSuperlayer()
-            shimmer = nil
+            skeleton?.remove()
             return
         }
-        if skeleton.superlayer == nil, let cover = coverClip.layer { layer?.insertSublayer(skeleton, above: cover) }
-        skeletonCoverClip.isHidden = image != nil
-        maskCoverClip.isHidden = skeletonCoverClip.isHidden
-        let still = Self.reduceMotion()
-        skeleton.opacity = still ? Self.reducedSkeletonOpacity : 1
-        if still {
-            shimmer?.removeFromSuperlayer()
-            shimmer = nil
-        } else if shimmer == nil {
-            let g = CAGradientLayer()
-            g.locations = [0.3, 0.5, 0.7]
-            skeleton.addSublayer(g)
-            shimmer = g
-            shimmerWidth = 0
-            colorSkeleton()
-        }
+        let k = skeleton ?? CardSkeleton()
+        skeleton = k
+        if let cover = coverClip.layer, let layer { k.insert(in: layer, above: cover) }
+        k.show(cover: image == nil, lines: isWaitingForFacts, moving: !Self.reduceMotion())
+        colorSkeleton()
         needsLayout = true
     }
 
     private func colorSkeleton() {
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        skeletonCover.backgroundColor = Chrome.resolve(Chrome.Palette.card.waitingCover, in: self)
-        for line in skeletonLines { line.backgroundColor = Chrome.resolve(Chrome.Palette.card.waitingLine, in: self) }
-        let glint = Chrome.resolve(Chrome.Palette.card.shimmer, in: self)
-        let clear = glint.copy(alpha: 0) ?? CGColor(gray: 1, alpha: 0)
-        shimmer?.colors = [clear, glint, clear]
-        CATransaction.commit()
+        guard let k = skeleton else { return }
+        let still = k.shimmer == nil
+        let card = Chrome.Palette.card.self
+        k.color(cover: Chrome.resolve(still ? card.waitingCoverStill : card.waitingCover, in: self),
+                line: Chrome.resolve(still ? card.waitingLineStill : card.waitingLine, in: self),
+                glint: Chrome.resolve(card.shimmer, in: self))
     }
 
-    /// The skeleton's shapes where the subclass says, and the shimmer over the card: the board's
-    /// `linear-gradient(100deg, …)` moved from −100 % to 100 % of the card's width.
     private func layoutSkeleton() {
-        guard isWaiting else { return }
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        defer { CATransaction.commit() }
-        skeleton.frame = bounds
-        skeletonMask.frame = bounds
-        let cover = waitingCover
-        for clip in [skeletonCoverClip, maskCoverClip] { clip.frame = cover.rect }
-        for part in [skeletonCover, maskCover] {
-            part.frame = CGRect(x: 0, y: 0, width: cover.rect.width, height: cover.rect.height + (cover.topOnly ? cover.radius : 0))
-            part.cornerRadius = cover.radius
-        }
-        let rects = waitingLines
-        for (i, (line, mask)) in zip(skeletonLines, maskLines).enumerated() {
-            line.isHidden = i >= rects.count
-            mask.isHidden = line.isHidden
-            guard !line.isHidden else { continue }
-            for part in [line, mask] {
-                part.frame = rects[i]
-                part.cornerRadius = Self.waitingLineRadius
-            }
-        }
-        guard let g = shimmer, bounds.width > 0, bounds.height > 0 else { return }
-        g.frame = bounds
-        // The CSS gradient line at 100° (clockwise from up, y down): its direction and its length over the box.
-        let angle = 100 * CGFloat.pi / 180, w = bounds.width, h = bounds.height
-        let dx = sin(angle), dy = -cos(angle)
-        let length = abs(w * dx) + abs(h * dy)
-        let ux = dx * length / 2 / w, uy = dy * length / 2 / h
-        g.startPoint = CGPoint(x: 0.5 - ux, y: 0.5 - uy)
-        g.endPoint = CGPoint(x: 0.5 + ux, y: 0.5 + uy)
-        // The model value is the sweep's middle (what a still picture of the card shows); the animation runs from
-        // one side to the other.
-        g.transform = CATransform3DIdentity
-        guard shimmerWidth != w else { return }
-        shimmerWidth = w
-        let sweep = CABasicAnimation(keyPath: "transform.translation.x")
-        sweep.fromValue = -w
-        sweep.toValue = w
-        sweep.duration = Self.shimmerDuration
-        sweep.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-        sweep.repeatCount = .infinity
-        sweep.isRemovedOnCompletion = false
-        g.add(sweep, forKey: Self.shimmerKey)
+        guard isWaiting, let k = skeleton else { return }
+        k.layout(bounds: bounds, cover: waitingCover, lines: waitingLines)
     }
 
     override func layout() {
@@ -426,4 +340,134 @@ class FolderCard: GridCard {
 /// The cover's rounded clip: top-down, so the picture sits at its top.
 final class CoverClip: NSView {
     override var isFlipped: Bool { true }
+}
+
+/// A waiting card's skeleton (the progress board's «Карточки в ожидании»): the cover placeholder and the lines, and
+/// over them one highlight sweeping across the card — the board's `.sk::after`, a `linear-gradient(100deg, …)` moved
+/// from −100 % to 100 % of the card's width, its `transform` animated by Core Animation (no timers). The highlight is
+/// masked to the shapes. Main thread only.
+@MainActor final class CardSkeleton {
+    let layer = CALayer()
+    /// The cover placeholder, in a clip as tall as the cover: a poster's is a radius taller, so that only its top
+    /// corners show round (as `FolderCard.coverClip` does; `maskedCorners` is not drawn by a layer's `render(in:)`).
+    let coverClip = CALayer()
+    let cover = CALayer()
+    /// The lines in place of the facts (two on a card or a poster, one per facts column of a row); those a card does
+    /// not use are hidden.
+    let lines = [CALayer(), CALayer()]
+    /// The shapes again, opaque: the highlight shows only over them.
+    private let mask = CALayer()
+    private let maskCoverClip = CALayer()
+    private let maskCover = CALayer()
+    private let maskLines = [CALayer(), CALayer()]
+    private(set) var shimmer: CAGradientLayer?
+    /// The width the shimmer's animation was made for: a new width makes it again.
+    private var shimmerWidth: CGFloat = 0
+    private var showsLines = true
+
+    init() {
+        coverClip.addSublayer(cover)
+        layer.addSublayer(coverClip)
+        for line in lines { layer.addSublayer(line) }
+        maskCoverClip.addSublayer(maskCover)
+        mask.addSublayer(maskCoverClip)
+        for line in maskLines { mask.addSublayer(line) }
+        for clip in [coverClip, maskCoverClip] { clip.masksToBounds = true }
+        layer.mask = mask
+        for part in [cover, maskCover] { part.cornerCurve = .continuous }
+        for part in [maskCover] + maskLines { part.backgroundColor = CGColor(gray: 0, alpha: 1) }
+    }
+
+    func insert(in card: CALayer, above cover: CALayer) {
+        guard layer.superlayer == nil else { return }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        card.insertSublayer(layer, above: cover)
+        CATransaction.commit()
+    }
+
+    func remove() {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        layer.removeFromSuperlayer()
+        shimmer?.removeFromSuperlayer()
+        shimmer = nil
+        CATransaction.commit()
+    }
+
+    /// Which parts show, and whether the highlight moves (none with Reduce Motion).
+    func show(cover showsCover: Bool, lines showsLines: Bool, moving: Bool) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        coverClip.isHidden = !showsCover
+        maskCoverClip.isHidden = !showsCover
+        self.showsLines = showsLines
+        if !moving {
+            shimmer?.removeFromSuperlayer()
+            shimmer = nil
+        } else if shimmer == nil {
+            let g = CAGradientLayer()
+            g.locations = [0.3, 0.5, 0.7]
+            layer.addSublayer(g)
+            shimmer = g
+            shimmerWidth = 0
+        }
+        CATransaction.commit()
+    }
+
+    func color(cover coverColor: CGColor, line: CGColor, glint: CGColor) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        cover.backgroundColor = coverColor
+        for l in lines { l.backgroundColor = line }
+        let clear = glint.copy(alpha: 0) ?? CGColor(gray: 1, alpha: 0)
+        shimmer?.colors = [clear, glint, clear]
+        CATransaction.commit()
+    }
+
+    /// The shapes where the card says, and the highlight over the card.
+    func layout(bounds: CGRect, cover place: (rect: CGRect, radius: CGFloat, topOnly: Bool), lines rects: [CGRect]) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        layer.frame = bounds
+        mask.frame = bounds
+        for clip in [coverClip, maskCoverClip] { clip.frame = place.rect }
+        for part in [cover, maskCover] {
+            part.frame = CGRect(x: 0, y: 0, width: place.rect.width,
+                                height: place.rect.height + (place.topOnly ? place.radius : 0))
+            part.cornerRadius = place.radius
+        }
+        for (i, (line, maskLine)) in zip(lines, maskLines).enumerated() {
+            line.isHidden = !showsLines || i >= rects.count
+            maskLine.isHidden = line.isHidden
+            guard !line.isHidden else { continue }
+            for part in [line, maskLine] {
+                part.frame = rects[i]
+                part.cornerRadius = FolderCard.waitingLineRadius
+            }
+        }
+        guard let g = shimmer, bounds.width > 0, bounds.height > 0 else { return }
+        g.frame = bounds
+        // The CSS gradient line at 100° (clockwise from up, y down): its direction and its length over the box.
+        let angle = 100 * CGFloat.pi / 180, w = bounds.width, h = bounds.height
+        let dx = sin(angle), dy = -cos(angle)
+        let length = abs(w * dx) + abs(h * dy)
+        let ux = dx * length / 2 / w, uy = dy * length / 2 / h
+        g.startPoint = CGPoint(x: 0.5 - ux, y: 0.5 - uy)
+        g.endPoint = CGPoint(x: 0.5 + ux, y: 0.5 + uy)
+        // The model value is the sweep's middle (what a still picture of the card shows); the animation runs from
+        // one side to the other. Made again for a new width, or when Core Animation dropped it.
+        g.transform = CATransform3DIdentity
+        guard g.animation(forKey: FolderCard.shimmerKey) == nil || shimmerWidth != w else { return }
+        shimmerWidth = w
+        let sweep = CABasicAnimation(keyPath: "transform.translation.x")
+        sweep.fromValue = -w
+        sweep.toValue = w
+        sweep.duration = FolderCard.shimmerDuration
+        sweep.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        sweep.repeatCount = .infinity
+        sweep.isRemovedOnCompletion = false
+        g.add(sweep, forKey: FolderCard.shimmerKey)
+    }
 }

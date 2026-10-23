@@ -222,16 +222,17 @@ import Testing
         FolderCard.reduceMotion = { false }
         let c = waiting(width: 300)
         #expect(c.isWaiting && !c.nameLabel.isHidden && c.nameLabel.stringValue == "Vacation 2024")
-        #expect(c.skeletonCoverClip.frame == CGRect(x: 0, y: 0, width: 300, height: 300) && !c.skeletonCoverClip.isHidden)
-        #expect(c.skeletonCover.frame.height == 312)   // a radius taller: only the top corners show round
-        #expect(c.skeletonCover.cornerRadius == 12)
-        let lines = c.skeletonLines.filter { !$0.isHidden }
+        let k = c.skeleton!
+        #expect(k.coverClip.frame == CGRect(x: 0, y: 0, width: 300, height: 300) && !k.coverClip.isHidden)
+        #expect(k.cover.frame.height == 312)   // a radius taller: only the top corners show round
+        #expect(k.cover.cornerRadius == 12)
+        let lines = k.lines.filter { !$0.isHidden }
         #expect(lines.map(\.frame.width) == [(280 * 0.7).rounded(), (280 * 0.45).rounded()])
         #expect(lines.allSatisfy { $0.frame.height == 10 && $0.cornerRadius == 4 && $0.frame.minX == 10 })
         #expect(c.progressTrack.isHidden && c.progressBar.isHidden)
         #expect(c.insideLabel.isHidden && c.viewedLabel.isHidden && c.yearsLabel.isHidden)
-        #expect(waiting(width: 232).skeletonLines.filter { !$0.isHidden }.count == 1)   // a two-line band: one line
-        #expect(waiting(width: 176).skeletonLines.allSatisfy { $0.isHidden })         // the name only
+        #expect(waiting(width: 232).skeleton!.lines.filter { !$0.isHidden }.count == 1)   // a two-line band: one line
+        #expect(waiting(width: 176).skeleton!.lines.allSatisfy { $0.isHidden })         // the name only
     }
 
     /// A cover that arrives first replaces the placeholder; the lines keep shimmering until the facts come.
@@ -242,9 +243,25 @@ import Testing
                             space: CGColorSpaceCreateDeviceRGB(),
                             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!.makeImage()!
         c.layoutSubtreeIfNeeded()
-        #expect(c.skeletonCoverClip.isHidden)
+        #expect(c.skeleton!.coverClip.isHidden)
         #expect(c.shimmer?.animation(forKey: FolderCard.shimmerKey) != nil)
-        #expect(c.skeletonLines.contains { !$0.isHidden })
+        #expect(c.skeleton!.lines.contains { !$0.isHidden })
+    }
+
+    /// An animation Core Animation dropped (the layer left the window and came back) is made again on layout.
+    @Test func lostShimmerComesBack() {
+        FolderCard.reduceMotion = { false }
+        let c = waiting(width: 300)
+        c.shimmer?.removeAllAnimations()
+        c.needsLayout = true
+        c.layoutSubtreeIfNeeded()
+        #expect(c.shimmer?.animation(forKey: FolderCard.shimmerKey) != nil)
+    }
+
+    /// Cards that never wait make no skeleton layers.
+    @Test func skeletonOnlyForCardsThatWait() {
+        #expect(card(summary, width: 232).skeleton == nil)
+        #expect(card(nil, width: 232).skeleton == nil)
     }
 
     /// With Reduce Motion: the placeholder stays, a little lighter, and nothing moves.
@@ -252,8 +269,14 @@ import Testing
         FolderCard.reduceMotion = { true }
         defer { FolderCard.reduceMotion = { false } }
         let c = waiting(width: 300)
-        #expect(c.isWaiting && c.skeleton.superlayer != nil)
-        #expect(c.shimmer == nil || c.shimmer?.animationKeys()?.isEmpty != false)
-        #expect(c.skeleton.opacity < 1)
+        #expect(c.isWaiting && c.skeleton?.layer.superlayer != nil)
+        #expect(c.shimmer == nil)
+        // a little lighter: in light nearer the white plate, in dark nearer the label
+        func gray(_ color: CGColor?) -> CGFloat { NSColor(cgColor: color!)!.usingColorSpace(.sRGB)!.redComponent }
+        #expect(gray(c.skeleton?.cover.backgroundColor) > 0xE4 / 255.0)
+        c.appearance = NSAppearance(named: .darkAqua)
+        c.layoutSubtreeIfNeeded()
+        #expect(gray(c.skeleton?.cover.backgroundColor) > 0x44 / 255.0 + 0.01)
+        #expect(gray(c.skeleton?.lines[0].backgroundColor) > 0x3D / 255.0 + 0.01)
     }
 }

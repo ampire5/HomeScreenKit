@@ -130,7 +130,7 @@ final class ListRow: FolderCard {
             insideLabel.stringValue = CardSummaryText.listInside(s, pages: holdsPages)
             yearsLabel.stringValue = CardSummaryText.years(s) ?? item.date.map(Self.dateText) ?? ""
             sizeLabel.stringValue = CardSummaryText.size(s) ?? "—"
-        } else if isWaiting {
+        } else if isWaitingForFacts {
             insideLabel.stringValue = ""
             yearsLabel.stringValue = ""
             sizeLabel.stringValue = ""

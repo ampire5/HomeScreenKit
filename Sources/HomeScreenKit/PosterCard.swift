@@ -99,8 +99,8 @@ final class PosterCard: FolderCard {
         coverAlert.frame = CGRect(x: ((w - alert) / 2).rounded(), y: (w * 92 / 232).rounded(), width: alert, height: alert)
         // The seam: the track the whole width, the fill as far as viewed.
         progressTrack.frame = CGRect(x: 0, y: w, width: w, height: metrics.seam)
-        progressTrack.isHidden = isWaiting
-        progressBar.isHidden = isWaiting || shownProgress == nil
+        progressTrack.isHidden = isWaitingForFacts
+        progressBar.isHidden = isWaitingForFacts || shownProgress == nil
         let fraction = min(1, max(0, shownProgress ?? 0))
         progressBar.frame = CGRect(x: 0, y: w, width: (w * fraction).rounded(), height: metrics.seam)
         // Line 1: the name, ⧉ and RTL after it; `+12` and ✓ at the end.

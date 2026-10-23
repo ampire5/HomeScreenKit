@@ -32,6 +32,10 @@ extension Chrome.Palette {
         public static let waitingCover = dynamic(light: 0xE4E4E0, dark: 0x444447)
         public static let waitingLine = dynamic(light: 0xECECE8, dark: 0x3D3D40)
         public static let shimmer = dynamic(light: (0xFFFFFF, 0.55), dark: (0xF2F2F4, 0.09))
+        /// The same with Reduce Motion (no highlight): a little lighter. Light: 70 % of the step from the plate
+        /// (nearer white); dark: `label` at .16 and .11 (nearer the label).
+        public static let waitingCoverStill = dynamic(light: 0xECECE9, dark: 0x4C4C4F)
+        public static let waitingLineStill = dynamic(light: 0xF2F2EF, dark: 0x424245)
 
         static func rgb(_ hex: UInt32, _ alpha: CGFloat = 1) -> NSColor {
             NSColor(srgbRed: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255,

@@ -188,6 +188,8 @@ public final class HomeBrowserView: NSView {
     /// The facts that came after the listing, by id: they outlive a new listing of the same place, which may not carry
     /// them yet. Cleared on a move.
     private var summaries: [String: CardSummary] = [:]
+    /// The cards the source gave up on (`stopWaiting`): nothing more will come for them in this location.
+    private var givenUp: Set<String> = []
     private var headers: [GridHeader] = []
     private let footer = GridFooter()
     private var lastWanted: [String] = []
@@ -388,6 +390,7 @@ public final class HomeBrowserView: NSView {
         sortChoice = BrowserSortChoice(current: source?.sort(for: location) ?? .standard)
         cardStyle = source?.cardStyle(for: location) ?? .posters
         summaries = [:]
+        givenUp = []
         showPage(info?.page)
         if page != nil {
             // A page lists nothing: it is complete as it is.
@@ -1240,7 +1243,29 @@ public final class HomeBrowserView: NSView {
                             summary: summary, count: entry.count,
                             format: entry.isFile && !entry.url.pathExtension.isEmpty ? entry.url.pathExtension.uppercased() : nil,
                             date: entry.date, bytes: entry.size,
-                            waiting: (entry.kind == .folder || entry.kind == .archive) && summary == nil && !entry.isDimmed)
+                            waiting: waits(entry, summary: summary))
+    }
+
+    /// Whether the source may still send the card's facts or cover (`HomeCardItem.waiting`): a folder or an archive in
+    /// reach, of a source that sends facts, not given up on, without facts or with facts that expect a cover (no
+    /// problem, photos here or inside).
+    private func waits(_ entry: BrowserEntry, summary: CardSummary?) -> Bool {
+        guard source?.sendsCardFacts == true, entry.kind == .folder || entry.kind == .archive, !entry.isDimmed,
+              !givenUp.contains(entry.id) else { return false }
+        guard let summary else { return true }
+        return summary.problem == nil && ((summary.photos ?? 0) > 0 || (summary.insidePhotos ?? 0) > 0)
+    }
+
+    /// The source will send nothing more for these cards (its cover queue gave up, or a folder has no cover to give):
+    /// they stop waiting and show what they have. Ids not in the listing are ignored; a new location forgets them.
+    public func stopWaiting(for ids: [String]) {
+        for id in ids {
+            guard let i = indexByID[id] else { continue }
+            givenUp.insert(id)
+            guard let card = live[i], card.item.id == id else { continue }
+            let item = item(for: entries[i])
+            if card.item != item { card.show(item) }
+        }
     }
 
     /// The live cards without a picture, those in view first. The visible ones go to the source at once; the margin

@@ -485,42 +485,110 @@ import Testing
         #expect((view.card(for: view.entries[0].id) as? PosterCard)?.picture.alphaValue == 1)
     }
 
-    /// A folder whose facts are still queued shimmers (one gradient sweeping over its cover placeholder and its
-    /// lines); its facts arriving stop it. A file never waits.
-    @Test func waitingCardShimmersUntilItsFactsCome() async {
-        FolderCard.reduceMotion = { false }
-        let source = FakeHomeSource()
-        let view = await shown(source, [BrowserFixtures.folder("a"), BrowserFixtures.file("p.jpg")])
-        let folder = view.entries.first { $0.kind == .folder }!.id
-        let file = view.entries.first { $0.kind == .file }!.id
-        let card = view.card(for: folder) as? PosterCard
-        card?.layoutSubtreeIfNeeded()
-        #expect(card?.item.waiting == true && card?.isWaiting == true)
-        #expect(card?.skeleton.superlayer != nil)
-        #expect(card?.shimmer?.animation(forKey: FolderCard.shimmerKey) != nil)
-        #expect(card?.isShowingSymbol == false)                             // the placeholder, not the folder symbol
-        #expect(view.card(for: file)?.item.waiting == false)
-        view.setSummary(summary, for: folder)
-        card?.layoutSubtreeIfNeeded()
-        #expect(card?.item.waiting == false && card?.isWaiting == false)
-        #expect(card?.shimmer == nil && card?.skeleton.superlayer == nil)
+    private var picture: CGImage {
+        CGContext(data: nil, width: 4, height: 4, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!.makeImage()!
     }
 
-    /// A card whose facts say nothing more will come (the volume is away) stops shimmering and shows its warning.
-    @Test func shimmerStopsWhenNothingWillCome() async {
+    /// A source that sends card facts: a folder card waits (and shimmers) until its facts and its cover have come.
+    /// (The browser holds its source weakly: the caller keeps it.)
+    private func waitingView(_ entries: [BrowserEntry], _ source: FakeHomeSource) async -> HomeBrowserView {
         FolderCard.reduceMotion = { false }
+        source.sendsCardFacts = true
+        return await shown(source, entries)
+    }
+
+    private func poster(_ view: HomeBrowserView, _ name: String) -> PosterCard? {
+        let card = view.card(for: view.entries.first { $0.name == name }!.id) as? PosterCard
+        card?.layoutSubtreeIfNeeded()
+        return card
+    }
+
+    /// A folder whose facts and cover are still queued shimmers (one gradient sweeping over its cover placeholder and
+    /// its lines); both arriving stop it. A file never waits.
+    @Test func waitingCardShimmersUntilItsFactsCome() async {
         let source = FakeHomeSource()
+        let view = await waitingView([BrowserFixtures.folder("a"), BrowserFixtures.file("p.jpg")], source)
+        let id = view.entries.first { $0.name == "a" }!.id
+        let card = poster(view, "a")
+        #expect(card?.item.waiting == true && card?.isWaiting == true)
+        #expect(card?.skeleton?.layer.superlayer != nil)
+        #expect(card?.shimmer?.animation(forKey: FolderCard.shimmerKey) != nil)
+        #expect(card?.isShowingSymbol == false)                             // the placeholder, not the folder symbol
+        #expect(view.card(for: view.entries.first { $0.kind == .file }!.id)?.item.waiting == false)
+        view.setSummary(summary, for: id)
+        view.setImage(picture, for: id)
+        card?.layoutSubtreeIfNeeded()
+        #expect(card?.isWaiting == false)
+        #expect(card?.shimmer == nil && card?.skeleton?.layer.superlayer == nil)
+    }
+
+    /// Facts first, with photos to make a cover of: the facts show, the cover placeholder keeps shimmering until the
+    /// picture comes.
+    @Test func factsFirstKeepTheCoverWaiting() async {
+        let source = FakeHomeSource()
+        let view = await waitingView([BrowserFixtures.folder("a")], source)
+        let id = view.entries[0].id
+        view.setSummary(summary, for: id)
+        let card = poster(view, "a")
+        #expect(card?.isWaiting == true && card?.skeleton?.coverClip.isHidden == false)
+        #expect(card?.skeleton?.lines.allSatisfy { $0.isHidden } == true)
+        #expect(card?.insideLabel.stringValue == "248 photos · 3 folders · 4.2 GB" && card?.insideLabel.isHidden == false)
+        #expect(card?.shimmer?.animation(forKey: FolderCard.shimmerKey) != nil)
+        view.setImage(picture, for: id)
+        card?.layoutSubtreeIfNeeded()
+        #expect(card?.isWaiting == false && card?.skeleton?.layer.superlayer == nil)
+    }
+
+    /// A card whose facts say nothing more will come (the volume is away) stops shimmering and shows its warning; a
+    /// folder out of reach never waits.
+    @Test func shimmerStopsWhenNothingWillCome() async {
         var away = BrowserFixtures.folder("away")
         away.isDimmed = true
-        let view = await shown(source, [BrowserFixtures.folder("a"), away])
+        let source = FakeHomeSource()
+        let view = await waitingView([BrowserFixtures.folder("a"), away], source)
         let id = view.entries.first { $0.name == "a" }!.id
-        #expect(view.card(for: view.entries.first { $0.name == "away" }!.id)?.item.waiting == false)   // can't be reached
-        let card = view.card(for: id) as? PosterCard
+        #expect(poster(view, "away")?.item.waiting == false)
+        let card = poster(view, "a")
         #expect(card?.isWaiting == true)
         view.setSummary(CardSummary(photos: 1120, viewed: 0.35, seen: 392, problem: .offline), for: id)
         card?.layoutSubtreeIfNeeded()
-        #expect(card?.isWaiting == false && card?.shimmer == nil && card?.skeleton.superlayer == nil)
+        #expect(card?.isWaiting == false && card?.shimmer == nil && card?.skeleton?.layer.superlayer == nil)
         #expect(card?.warningLabel.isHidden == false && card?.warningLabel.stringValue == "Not connected · facts from the catalog")
+    }
+
+    /// Facts that say there is nothing to make a cover of (no photos here or inside) end the wait at once.
+    @Test func emptyFolderStopsWaiting() async {
+        let source = FakeHomeSource()
+        let view = await waitingView([BrowserFixtures.folder("a")], source)
+        view.setSummary(CardSummary(photos: 0, folders: 2), for: view.entries[0].id)
+        let card = poster(view, "a")
+        #expect(card?.item.waiting == false && card?.isWaiting == false && card?.skeleton?.layer.superlayer == nil)
+    }
+
+    /// The source gives up on a card (`stopWaiting`): it stops shimmering and shows its subtitle as before.
+    @Test func givenUpCardStopsWaiting() async {
+        var folder = BrowserFixtures.folder("a")
+        folder.count = 3
+        let source = FakeHomeSource()
+        let view = await waitingView([folder], source)
+        #expect(poster(view, "a")?.isWaiting == true)
+        #expect(poster(view, "a")?.insideLabel.stringValue == "")
+        view.stopWaiting(for: [view.entries[0].id, "not listed"])
+        let card = poster(view, "a")
+        #expect(card?.item.waiting == false && card?.isWaiting == false && card?.skeleton?.layer.superlayer == nil)
+        #expect(card?.insideLabel.stringValue == "3 photos")
+    }
+
+    /// A source that does not say it sends facts (the default) gets the cards as before: the subtitle, no shimmer.
+    @Test func waitingIsOffForSourcesWithoutFacts() async {
+        var folder = BrowserFixtures.folder("a")
+        folder.count = 3
+        let source = FakeHomeSource()
+        let view = await shown(source, [folder])
+        let card = poster(view, "a")
+        #expect(card?.item.waiting == false && card?.isWaiting == false && card?.skeleton == nil)
+        #expect(card?.insideLabel.stringValue == "3 photos" && card?.isShowingSymbol == true)
     }
 }
 
