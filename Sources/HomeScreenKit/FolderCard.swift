@@ -50,6 +50,9 @@ class FolderCard: GridCard {
     /// Between the name line's parts (the mockups' `gap: 6px`).
     static let gap: CGFloat = 6
 
+    /// The clock the recency words (`3 d ago`) count from; tests set a fixed one.
+    static var now: () -> Date = { Date() }
+
     /// The measurements (the kit's defaults: the browser only changes the grid's top, which cards do not use).
     var metrics = GridMetrics() { didSet { needsLayout = true } }
 
@@ -144,12 +147,13 @@ class FolderCard: GridCard {
     }
 
     /// The tooltip has what the card may cut: every fact with the subfolders' photos, the dates' span and the
-    /// progress, then the item's own tooltip (the path).
+    /// progress, when the folder was viewed (`Viewed 3 d ago`), then the item's own tooltip (the path).
     static func tooltip(_ item: HomeCardItem, summary s: CardSummary?, pages: Bool) -> String {
         var lines: [String] = []
         if let s {
             lines.append(CardSummaryText.facts(s, pages: pages, withInside: true))
             lines.append([CardSummaryText.span(s), CardSummaryText.viewed(s)].compactMap { $0 }.joined(separator: " · "))
+            if let visited = s.visited { lines.append("Viewed " + CardSummaryText.ago(visited, now: now())) }
         }
         lines.append(item.tooltip)
         return lines.filter { !$0.isEmpty }.joined(separator: "\n")

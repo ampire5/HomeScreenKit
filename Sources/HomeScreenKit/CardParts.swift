@@ -52,6 +52,15 @@ final class CardText: NSView {
 
     var lineHeight: CGFloat { ceil(CardFont.lineHeight(font)) }
 
+    /// The natural width `string` would have in this label's font and kern, rounded up, without showing it.
+    func textWidth(of string: String) -> CGFloat {
+        guard !string.isEmpty else { return 0 }
+        var attributes: [NSAttributedString.Key: Any] = [.font: font]
+        if kern != 0 { attributes[.kern] = kern }
+        let line = CTLineCreateWithAttributedString(NSAttributedString(string: string, attributes: attributes))
+        return ceil(CTLineGetTypographicBounds(line, nil, nil, nil))
+    }
+
     private func changed() {
         measured = nil
         drawn = nil

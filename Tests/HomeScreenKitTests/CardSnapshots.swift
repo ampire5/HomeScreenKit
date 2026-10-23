@@ -10,7 +10,8 @@ import Testing
     nonisolated static let folder = ProcessInfo.processInfo.environment["HOMESCREEN_SNAPSHOTS"]
 
     /// The mockups' five items: a folder with photos and subfolders, an archive of pages read to the end, a folder of
-    /// folders, a folder on a volume that is away, a damaged archive.
+    /// folders, a folder on a volume that is away, a damaged archive. The first two were viewed three days before
+    /// `CardTestClock.now`.
     struct Sample {
         var title: String
         var badge: String?
@@ -25,11 +26,13 @@ import Testing
     static let samples: [Sample] = [
         Sample(title: "Vacation 2024", summary: CardSummary(photos: 248, folders: 3, insidePhotos: 412, bytes: 1_900_000_000,
                                                              first: date(2024, 6), last: date(2024, 8),
-                                                             histogram: [1, 3, 8, 10, 7, 4, 2, 1], viewed: 0.62, seen: 153, new: 12),
+                                                             histogram: [1, 3, 8, 10, 7, 4, 2, 1], viewed: 0.62, seen: 153,
+                                                             visited: CardTestClock.threeDaysAgo, new: 12),
                colors: [0x3E6E8E, 0xD9B26A, 0x6F8F5A, 0xA5573E]),
         Sample(title: "Scans.zip", badge: "ZIP", summary: CardSummary(photos: 96, bytes: 1_200_000_000, first: date(2023, 3),
                                                                        last: date(2023, 3), histogram: [0, 0, 10, 0, 0, 0, 0, 0],
-                                                                       viewed: 1, seen: 96, done: true, twoPages: true,
+                                                                       viewed: 1, seen: 96,
+                                                                       visited: CardTestClock.threeDaysAgo, done: true, twoPages: true,
                                                                        rightToLeft: true),
                colors: [0xB9AF97, 0xE3DCCB, 0xCFC6B1, 0x9E937B]),
         Sample(title: "Family", summary: CardSummary(photos: 0, folders: 14, insidePhotos: 3860, first: date(2009, 2),
@@ -113,6 +116,7 @@ import Testing
     }
 
     @Test(.enabled(if: folder != nil)) func posters() throws {
+        FolderCard.now = { CardTestClock.now }   // the samples were viewed three days before it
         for side in [CGFloat(176), 232, 300] {
             let height = side + GridLayout.bandHeight(width: side)
             for dark in [false, true] {
@@ -145,6 +149,7 @@ import Testing
     }
 
     @Test(.enabled(if: folder != nil)) func compactCards() throws {
+        FolderCard.now = { CardTestClock.now }
         for dark in [false, true] {
             try Self.write("B-cards", size: CGSize(width: 40 + 2 * 300 + 12, height: 40 + 3 * 92 + 2 * 12), dark: dark) { host in
                 for (i, s) in Self.samples.enumerated() {

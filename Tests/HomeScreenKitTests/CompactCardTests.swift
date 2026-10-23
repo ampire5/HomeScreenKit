@@ -85,4 +85,26 @@ import Testing
         #expect(c.nameFrame.minY == c.nameLabel.frame.minY && c.nameFrame.height == c.nameLabel.frame.height)
         #expect(c.nameFrame.minX == c.nameLabel.frame.minX && c.nameFrame.width >= c.nameLabel.frame.width)
     }
+
+    /// Row 4 says when the folder was viewed, after the progress; in the same 11 pt, the same gaps.
+    @Test func compactRowFourHasRecency() {
+        FolderCard.now = { CardTestClock.now }
+        var s = summary
+        s.visited = CardTestClock.threeDaysAgo
+        let c = card(s)
+        #expect(c.viewedLabel.stringValue == "153 / 248 · 3 d ago" && c.viewedLabel.font.pointSize == 11)
+        #expect(c.newPill.frame.maxX == 292 && c.viewedLabel.frame.maxX + 7 == c.newPill.frame.minX)
+        #expect(c.progressTrack.frame.maxX + 7 == c.viewedLabel.frame.minX)
+        var done = CardSummary(photos: 96, viewed: 1, seen: 96, done: true)
+        done.visited = CardTestClock.threeDaysAgo
+        #expect(card(done).viewedLabel.stringValue == "viewed · 3 d ago")
+        #expect(card(CardSummary(photos: 12)).viewedLabel.stringValue == "not opened")
+    }
+}
+
+/// A fixed "now" for the cards' recency words (noon UTC mid-month: three days back is three calendar days in any
+/// time zone).
+enum CardTestClock {
+    static let now = Date(timeIntervalSince1970: 1_791_979_200)   // 2026-10-14 12:00 UTC
+    static let threeDaysAgo = now.addingTimeInterval(-3 * 86_400)
 }

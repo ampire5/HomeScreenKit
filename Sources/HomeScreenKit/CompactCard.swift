@@ -8,7 +8,7 @@ import HomeScreenModel
 /// 1. the name with ⧉ and RTL;
 /// 2. the counts with their glyphs — photos, subfolders `· the photos in them` — and the size;
 /// 3. the dates' bars and their span (`Jun – Aug 2024`);
-/// 4. the progress track with "153 / 248" and `+12` — or, when the volume is away or the archive is damaged, the
+/// 4. the progress track with "153 / 248 · 3 d ago" and `+12` — or, when the volume is away or the archive is damaged, the
 ///    warning line.
 final class CompactCard: FolderCard {
     static let radius: CGFloat = 12
@@ -102,7 +102,7 @@ final class CompactCard: FolderCard {
         }
         sizeLabel.stringValue = CardSummaryText.size(s) ?? "—"
         yearsLabel.stringValue = CardSummaryText.span(s) ?? ""
-        viewedLabel.stringValue = CardSummaryText.progress(s) ?? ""
+        viewedLabel.stringValue = CardSummaryText.progressLine(s, now: Self.now()) ?? ""
         if let problem = s.problem { warningLabel.stringValue = Self.warning(problem, short: false) }
     }
 

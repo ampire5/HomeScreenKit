@@ -115,6 +115,33 @@ public enum CardSummaryText {
         return viewed(s)
     }
 
+    /// How long ago `date` was, by calendar days in `calendar`'s time zone: `today`, `yesterday`, `3 d ago` (2…13
+    /// days), `2 w ago` (2…8 weeks), then the month, `Mar 2025` (English month names, as with `en_US_POSIX`). A date
+    /// ahead of `now` (another machine's clock) is `today`.
+    public static func ago(_ date: Date, now: Date, calendar: Calendar = Calendar(identifier: .gregorian)) -> String {
+        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: date),
+                                           to: calendar.startOfDay(for: now)).day ?? 0
+        switch days {
+        case ...0: return "today"
+        case 1: return "yesterday"
+        case 2...13: return "\(days) d ago"
+        case 14...62: return "\(days / 7) w ago"
+        default:
+            let c = calendar.dateComponents([.year, .month], from: date)
+            guard let year = c.year, let month = c.month else { return "" }
+            return "\(months[month - 1]) \(year)"
+        }
+    }
+
+    /// A compact card's row 4: the progress and how long ago it was viewed, `153 / 248 · 3 d ago`, `viewed · 3 d ago`;
+    /// `not opened` (no visit); nil when there is nothing to count.
+    public static func progressLine(_ s: CardSummary, now: Date,
+                                    calendar: Calendar = Calendar(identifier: .gregorian)) -> String? {
+        guard let progress = progress(s) else { return nil }
+        guard s.viewed != nil || s.done, let visited = s.visited else { return progress }
+        return progress + " · " + ago(visited, now: now, calendar: calendar)
+    }
+
     /// `1 204`.
     private static func grouped(_ n: Int) -> String {
         let digits = String(abs(n))

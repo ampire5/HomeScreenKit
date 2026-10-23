@@ -173,4 +173,36 @@ import Testing
         h.bins = [1, 2, 3]
         #expect(h.barsWidth == CGFloat(10.5))
     }
+
+    /// A large poster's third line ends with when the folder was viewed; short of room, that goes first, before any
+    /// cutting. Board E's eight bars at 300 pt leave room for it (210 pt of 226); at 280 pt they do not (206).
+    @Test func largePosterAppendsRecencyAndDropsItFirst() {
+        FolderCard.now = { CardTestClock.now }
+        var s = summary
+        s.histogram = [1, 3, 8, 10, 7, 4, 2, 1]
+        s.visited = CardTestClock.threeDaysAgo
+        let c = card(s, width: 300)
+        #expect(c.viewedLabel.stringValue == "Jun – Aug 2024 · 153 / 248 · 3 d ago")
+        #expect(c.viewedLabel.font.pointSize == 12 && c.viewedLabel.frame.maxY + 8 == c.bounds.height)
+        #expect(c.viewedLabel.textWidth <= c.viewedLabel.frame.width)
+        let narrow = card(s, width: 280)
+        #expect(narrow.band.lines == 3)
+        #expect(narrow.viewedLabel.stringValue == "Jun – Aug 2024 · 153 / 248")
+        #expect(narrow.viewedLabel.textWidth <= narrow.viewedLabel.frame.width)
+        // growing again brings it back
+        narrow.frame.size = CGSize(width: 300, height: 300 + GridLayout.bandHeight(width: 300))
+        narrow.layoutSubtreeIfNeeded()
+        #expect(narrow.viewedLabel.stringValue == "Jun – Aug 2024 · 153 / 248 · 3 d ago")
+    }
+
+    /// The tooltip says it too, on its own line after the progress; a list row's tooltip is the same.
+    @Test func tooltipHasRecency() {
+        FolderCard.now = { CardTestClock.now }
+        var s = summary
+        s.visited = CardTestClock.threeDaysAgo
+        let c = card(s, width: 232)
+        #expect(c.toolTip == "248 photos · 3 folders (412) · 1.9 GB\nJun – Aug 2024 · 153 / 248\nViewed 3 d ago\na")
+        let row = ListRow(item: HomeCardItem(id: "a", title: "Vacation 2024", tooltip: "a", symbol: "folder", summary: s))
+        #expect(row.toolTip == c.toolTip)
+    }
 }

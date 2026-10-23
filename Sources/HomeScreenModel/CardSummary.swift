@@ -30,6 +30,8 @@ public struct CardSummary: Equatable, Sendable {
     /// How many photos were seen (up to the one viewed last, counted at the visit): the `137 / 248` text, whose
     /// second number is the photos now. Nil: from `viewed` of the photos now.
     public var seen: Int?
+    /// When the folder was last viewed (the `3 d ago` words); nil when unknown or never.
+    public var visited: Date?
     /// Viewed to the end.
     public var done: Bool
     /// Photos new since the last visit; 0 is none.
@@ -41,7 +43,7 @@ public struct CardSummary: Equatable, Sendable {
 
     public init(photos: Int? = nil, folders: Int? = nil, insidePhotos: Int? = nil, insideIncomplete: Bool = false,
                 bytes: Int64? = nil, first: Date? = nil, last: Date? = nil, histogram: [UInt8] = [], viewed: Double? = nil,
-                seen: Int? = nil, done: Bool = false, new: Int = 0, twoPages: Bool = false, rightToLeft: Bool = false,
+                seen: Int? = nil, visited: Date? = nil, done: Bool = false, new: Int = 0, twoPages: Bool = false, rightToLeft: Bool = false,
                 problem: Problem? = nil) {
         self.photos = photos
         self.folders = folders
@@ -53,6 +55,7 @@ public struct CardSummary: Equatable, Sendable {
         self.histogram = histogram
         self.viewed = viewed
         self.seen = seen
+        self.visited = visited
         self.done = done
         self.new = new
         self.twoPages = twoPages

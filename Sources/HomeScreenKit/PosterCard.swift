@@ -10,7 +10,8 @@ import HomeScreenModel
 /// - from 200 pt: also `248 photos · 3 folders · 1.9 GB` whole, the years at the line's end, and the dates' bars
 ///   between the two where they fit (the tooltip has every fact whatever the card cuts);
 /// - from 280 pt: the facts line with the subfolders' photos (`3 folders (412)`), and a third line of larger bars
-///   with the dates' span and the progress: `Jun – Aug 2024 · 153 / 248`.
+///   with the dates' span, the progress and when the folder was viewed: `Jun – Aug 2024 · 153 / 248 · 3 d ago` (short
+///   of room the last goes first, before any cutting).
 /// A folder whose volume is away, or an archive that cannot be read, has its cover faint with a warning glyph over
 /// it and a warning line in place of the facts.
 final class PosterCard: FolderCard {
@@ -35,6 +36,12 @@ final class PosterCard: FolderCard {
         return CGRect(x: Self.side, y: w + metrics.seam + band.top, width: max(0, w - 2 * Self.side), height: band.nameLine)
     }
 
+    /// The third line's words without and with when the folder was viewed (`· 3 d ago`; nil when not known), and
+    /// the width of the latter as last measured (its text and font).
+    private var progressWords = ""
+    private var progressWithRecency: String?
+    private var measuredWithRecency: (text: String, font: NSFont, width: CGFloat)?
+
     /// The facts line's words: with the subfolders' photos on a large poster.
     private var withInside: Bool { bounds.width >= metrics.bandProgressFrom }
 
@@ -47,12 +54,16 @@ final class PosterCard: FolderCard {
             insideLabel.stringValue = fallbackLabel.stringValue
             yearsLabel.stringValue = ""
             viewedLabel.stringValue = ""
+            progressWords = ""
+            progressWithRecency = nil
             return
         }
         insideLabel.stringValue = CardSummaryText.facts(s, pages: holdsPages, withInside: withInside)
         yearsLabel.stringValue = CardSummaryText.years(s) ?? ""
-        viewedLabel.stringValue = [CardSummaryText.span(s), CardSummaryText.viewed(s)].compactMap { $0 }
-            .joined(separator: " · ")
+        let words = [CardSummaryText.span(s), CardSummaryText.viewed(s)].compactMap { $0 }
+        progressWords = words.joined(separator: " · ")
+        progressWithRecency = s.visited.map { (words + [CardSummaryText.ago($0, now: Self.now())]).joined(separator: " · ") }
+        viewedLabel.stringValue = progressWithRecency ?? progressWords
     }
 
     override func setFrameSize(_ newSize: NSSize) {
@@ -141,7 +152,19 @@ final class PosterCard: FolderCard {
             histogram.frame = CGRect(x: x, y: y3 + band.factsLine - 14, width: hw, height: 14)
             cursor += hw + 8
         }
+        let room = max(0, x + width - cursor)
+        viewedLabel.stringValue = fits(progressWithRecency, room) ? progressWithRecency! : progressWords
         viewedLabel.isHidden = viewedLabel.stringValue.isEmpty
-        viewedLabel.frame = CGRect(x: cursor, y: y3, width: max(0, x + width - cursor), height: band.factsLine)
+        viewedLabel.frame = CGRect(x: cursor, y: y3, width: room, height: band.factsLine)
+    }
+
+    /// Whether the third line's words with the recency fit `room` in the label's font (measured once per text and
+    /// font).
+    private func fits(_ text: String?, _ room: CGFloat) -> Bool {
+        guard let text else { return false }
+        if measuredWithRecency?.text != text || measuredWithRecency?.font != viewedLabel.font {
+            measuredWithRecency = (text, viewedLabel.font, viewedLabel.textWidth(of: text))
+        }
+        return measuredWithRecency!.width <= room
     }
 }
