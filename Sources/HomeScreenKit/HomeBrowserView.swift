@@ -128,9 +128,13 @@ public final class HomeBrowserView: NSView {
     /// The last listing of this place and whether a complete one has come (a sort by date or size waits for it).
     private var listing: BrowserListing?
     private var hasComplete = false
-    /// The order the grid keeps while a sort by date or size chosen over it waits for the complete listing: the one
-    /// on screen when it was chosen, so the grid stays (more names join it) instead of blanking. Nil: none kept.
+    /// The order the grid keeps while a sort by date or size waits for the complete listing: the one on screen when it
+    /// was chosen, so the grid stays (more names join it) instead of blanking; a place whose saved sort is by date or
+    /// size shows its names in Finder's order meanwhile (`BrowserSort.standard`). Nil: none kept.
     private var heldSort: BrowserSort?
+    /// The complete listing changed the order on screen from the held one: its show keeps the selected card (or the
+    /// first in view) where it was in the view.
+    private var anchorsNextShow = false
     /// What the app says of the source on screen; nil in a folder or at the places.
     private var info: HomeSourceInfo?
     /// The date headings of a source's list (`DateGroups`), or nil for one untitled run.
@@ -433,7 +437,7 @@ public final class HomeBrowserView: NSView {
         loadingTask?.cancel()
         listing = nil
         hasComplete = false
-        heldSort = nil
+        anchorsNextShow = false
         footerText = ("", nil)
         containerCount = 0
         // A filter is for the place it was set in: a move starts with everything shown. The progress pill was the old
@@ -457,6 +461,8 @@ public final class HomeBrowserView: NSView {
         }
         if case .source(let id) = location { info = source?.info(for: id) } else { info = nil; lastBrowsed = location }
         sortChoice = BrowserSortChoice(current: source?.sort(for: location) ?? .standard)
+        // A saved sort by date or size: the names in Finder's order until the dates and sizes come, then once in it.
+        heldSort = sort.key == .name ? nil : .standard
         cardStyle = source?.cardStyle(for: location) ?? .posters
         summaries = [:]
         givenUp = []
@@ -555,6 +561,7 @@ public final class HomeBrowserView: NSView {
     private func apply(_ new: BrowserListing) {
         // Names only after a complete listing (the one remembered, shown on Back): it has nothing the other lacks.
         if !new.complete, hasComplete { return }
+        let before = shownSort
         listing = new
         if new.complete, !hasComplete {
             hasComplete = true
@@ -563,6 +570,7 @@ public final class HomeBrowserView: NSView {
             lastWanted = []
             lastVisibleSent = []
             onListingComplete?(location, new.entries)
+            if before != nil, before != shownSort { anchorsNextShow = true }
         }
         defer { updateLoading() }
         guard let shownSort else { return }
@@ -597,6 +605,8 @@ public final class HomeBrowserView: NSView {
         var footer: String
         var state: String?
         var dateSections: [(title: String, count: Int)]?
+        /// The order it is in.
+        var sort: BrowserSort
     }
 
     /// What arranging a source's list needs of its `info`: the footer's noun and whether it is under date headings.
@@ -618,12 +628,14 @@ public final class HomeBrowserView: NSView {
                                             complete: listing.complete, more: listing.more, noun: info.noun)
         let groups = info.groupsByDate ? DateGroups.sections(ordered.map(\.date), now: Date(), calendar: .current) : nil
         return Arranged(entries: ordered, containers: containers, footer: summary.line, state: summary.state,
-                        dateSections: groups)
+                        dateSections: groups, sort: sort)
     }
 
     /// `listing`'s entries in order on screen, the selection and scroll kept or restored.
     private func show(_ arranged: Arranged, of new: BrowserListing) {
         loadingTask?.cancel()
+        let anchor = anchorsNextShow ? viewAnchor() : nil
+        anchorsNextShow = false
         let old = selectedID.flatMap { indexByID[$0] }
         footerText = (arranged.footer, arranged.state)
         containerCount = arranged.containers
@@ -638,11 +650,24 @@ public final class HomeBrowserView: NSView {
         } else if !entries.isEmpty {
             select(id: entries[min(old ?? 0, entries.count - 1)].id, scrolls: false)
         }
-        if let y = pendingScroll, !entries.isEmpty {
+        // A scroll remembered for the place is for its own order, not the held one.
+        if let y = pendingScroll, !entries.isEmpty, arranged.sort == sort {
             pendingScroll = nil
             scrollGrid(to: y)
+        } else if let anchor, let i = indexByID[anchor.id] {
+            scrollGrid(to: grid.frame(of: i).minY - anchor.offset)
         }
         updateSubtitle()
+    }
+
+    /// The selected card when it is in view, else the first card in view, and how far below the view's top it is; none
+    /// while the grid is at its top (it stays there, on the new order's first cards).
+    private func viewAnchor() -> (id: String, offset: CGFloat)? {
+        guard scroll.contentView.bounds.origin.y > 0 else { return nil }
+        let visible = visibleIDs
+        guard let id = selectedID.flatMap({ visible.contains($0) ? $0 : nil }) ?? visible.first,
+              let i = indexByID[id] else { return nil }
+        return (id, grid.frame(of: i).minY - scroll.contentView.bounds.origin.y)
     }
 
     /// Under the path: while names come, how many; else the selected card; else the footer line.

@@ -53,20 +53,21 @@ import Testing
         #expect(view.headerTitles.isEmpty)
     }
 
-    @Test func sectionsWaitForCompleteDateSort() async {
+    /// A saved sort by date shows the names' sections in Finder's order while the dates are listed, then the same
+    /// sections in date order.
+    @Test func sectionsShowWhileADateSortWaits() async {
         let source = FakeHomeSource()
         source.sorts[x.path] = BrowserSort(text: "date-desc")
         let view = HomeBrowserView(source: source)
         view.frame = CGRect(x: 0, y: 0, width: 1200, height: 800)
         view.show(.folder(x), selecting: nil)
         source.yieldPartial(x, mixed.map { BrowserEntry(url: $0.url, name: $0.name, kind: $0.kind) })
-        await settle()
-        view.layoutSubtreeIfNeeded()
-        #expect(view.entries.isEmpty)
-        #expect(view.headerTitles.isEmpty)
-        #expect(view.footerLines.isEmpty)
-        source.yield(x, mixed)
         await settle { !view.entries.isEmpty }
+        view.layoutSubtreeIfNeeded()
+        #expect(view.entries.count == mixed.count)
+        #expect(view.headerTitles == ["Folders", "Photos · 20"])
+        source.yield(x, mixed)
+        await settle { !view.footerLines.isEmpty && view.footerLines.count == 1 }
         view.layoutSubtreeIfNeeded()
         #expect(view.headerTitles == ["Folders", "Photos · 20"])
         #expect(view.footerLines.first?.hasPrefix("20 photos · 3 folders") == true)

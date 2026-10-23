@@ -67,13 +67,14 @@ import Testing
         let view = await shown(source, names, complete: false)
         #expect(view.entries.map(\.name) == ["a.jpg", "b.jpg"])
 
+        // A saved sort by date: the names in Finder's order meanwhile, then by date.
         source.sorts[x.path] = BrowserSort(text: "date-desc")
         let waiting = make(source)
         source.yield(x, names, complete: false)
-        await settle()
-        #expect(waiting.entries.isEmpty)
-        source.yield(x, [BrowserFixtures.file("a.jpg", date: 1), BrowserFixtures.file("b.jpg", date: 2)])
         await settle { !waiting.entries.isEmpty }
+        #expect(waiting.entries.map(\.name) == ["a.jpg", "b.jpg"])
+        source.yield(x, [BrowserFixtures.file("a.jpg", date: 1), BrowserFixtures.file("b.jpg", date: 2)])
+        await settle { waiting.entries.first?.name == "b.jpg" }
         #expect(waiting.entries.map(\.name) == ["b.jpg", "a.jpg"])
     }
 

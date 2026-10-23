@@ -71,4 +71,30 @@ import Testing
         #expect(view.entries.count == 12)
         #expect(source.wanted.count == asked)   // the same listing again: no new ask
     }
+
+    /// A folder whose saved sort is by date shows its names at once, in Finder's order, while its dates are listed (a
+    /// share's seconds), not the skeleton; the complete listing re-sorts it once, the selection kept and the selected
+    /// card where it was on screen.
+    @Test func savedDateSortShowsNamesThenResortsOnce() async throws {
+        let source = FakeHomeSource()
+        source.sorts[x.path] = BrowserSort(text: "date-desc")
+        let view = make(source)
+        let names = (0..<60).map { BrowserFixtures.file(String(format: "img%02d.jpg", $0)) }
+        source.yield(x, names.shuffled(), complete: false)
+        await settle { !view.entries.isEmpty }
+        #expect(view.entries.map(\.name) == names.map(\.name))
+        #expect(!view.isShowingSkeleton)
+        #expect(view.toolbar.sortTitles == ["Name", "Date ↓", "Size"])   // the sort shown is the saved one
+        let target = names[30].id
+        view.select(id: target)
+        view.layoutSubtreeIfNeeded()
+        let before = try #require(view.card(for: target)).frame.minY - view.scrollOffset
+
+        source.yield(x, (0..<60).map { BrowserFixtures.file(String(format: "img%02d.jpg", $0), date: Double($0)) })
+        await settle { view.entries.first?.name == "img59.jpg" }
+        #expect(view.entries.map(\.name) == names.map(\.name).reversed())
+        #expect(view.selectedID == target)
+        let after = try #require(view.card(for: target)).frame.minY - view.scrollOffset
+        #expect(abs(after - before) < 1)
+    }
 }
