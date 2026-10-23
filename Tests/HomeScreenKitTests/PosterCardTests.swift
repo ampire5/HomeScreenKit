@@ -177,6 +177,8 @@ import Testing
     /// A large poster's third line ends with when the folder was viewed; short of room, that goes first, before any
     /// cutting. Board E's eight bars at 300 pt leave room for it (210 pt of 226); at 280 pt they do not (206).
     @Test func largePosterAppendsRecencyAndDropsItFirst() {
+        let savedNow = FolderCard.now
+        defer { FolderCard.now = savedNow }
         FolderCard.now = { CardTestClock.now }
         var s = summary
         s.histogram = [1, 3, 8, 10, 7, 4, 2, 1]
@@ -197,6 +199,8 @@ import Testing
 
     /// The tooltip says it too, on its own line after the progress; a list row's tooltip is the same.
     @Test func tooltipHasRecency() {
+        let savedNow = FolderCard.now
+        defer { FolderCard.now = savedNow }
         FolderCard.now = { CardTestClock.now }
         var s = summary
         s.visited = CardTestClock.threeDaysAgo
@@ -219,6 +223,8 @@ import Testing
     /// A waiting poster: the cover placeholder over the whole cover (top corners round), the name at once, and the
     /// board's two lines (10 pt, radius 4, 70 % and 45 %) in the band's facts lines; no seam, no facts text.
     @Test func waitingPosterAsTheBoardDrawsIt() {
+        let savedMotion = FolderCard.reduceMotion
+        defer { FolderCard.reduceMotion = savedMotion }
         FolderCard.reduceMotion = { false }
         let c = waiting(width: 300)
         #expect(c.isWaiting && !c.nameLabel.isHidden && c.nameLabel.stringValue == "Vacation 2024")
@@ -237,6 +243,8 @@ import Testing
 
     /// A cover that arrives first replaces the placeholder; the lines keep shimmering until the facts come.
     @Test func coverArrivingFirstKeepsTheLinesWaiting() {
+        let savedMotion = FolderCard.reduceMotion
+        defer { FolderCard.reduceMotion = savedMotion }
         FolderCard.reduceMotion = { false }
         let c = waiting(width: 300)
         c.image = CGContext(data: nil, width: 4, height: 4, bitsPerComponent: 8, bytesPerRow: 0,
@@ -250,6 +258,8 @@ import Testing
 
     /// An animation Core Animation dropped (the layer left the window and came back) is made again on layout.
     @Test func lostShimmerComesBack() {
+        let savedMotion = FolderCard.reduceMotion
+        defer { FolderCard.reduceMotion = savedMotion }
         FolderCard.reduceMotion = { false }
         let c = waiting(width: 300)
         c.shimmer?.removeAllAnimations()

@@ -116,6 +116,8 @@ import Testing
     }
 
     @Test(.enabled(if: folder != nil)) func posters() throws {
+        let savedNow = FolderCard.now
+        defer { FolderCard.now = savedNow }
         FolderCard.now = { CardTestClock.now }   // the samples were viewed three days before it
         for side in [CGFloat(176), 232, 300] {
             let height = side + GridLayout.bandHeight(width: side)
@@ -149,6 +151,8 @@ import Testing
     }
 
     @Test(.enabled(if: folder != nil)) func compactCards() throws {
+        let savedNow = FolderCard.now
+        defer { FolderCard.now = savedNow }
         FolderCard.now = { CardTestClock.now }
         for dark in [false, true] {
             try Self.write("B-cards", size: CGSize(width: 40 + 2 * 300 + 12, height: 40 + 3 * 92 + 2 * 12), dark: dark) { host in
@@ -192,7 +196,11 @@ import Testing
     }
 
     @Test(.enabled(if: folder != nil)) func waitingCards() throws {
+        let savedNow = FolderCard.now
+        defer { FolderCard.now = savedNow }
         FolderCard.now = { CardTestClock.now }
+        let savedMotion = FolderCard.reduceMotion
+        defer { FolderCard.reduceMotion = savedMotion }
         FolderCard.reduceMotion = { false }
         let ready = [Self.samples[0], Self.samples[2], Self.samples[1]]
         for dark in [false, true] {

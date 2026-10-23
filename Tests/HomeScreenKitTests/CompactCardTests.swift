@@ -88,6 +88,8 @@ import Testing
 
     /// Row 4 says when the folder was viewed, after the progress; in the same 11 pt, the same gaps.
     @Test func compactRowFourHasRecency() {
+        let savedNow = FolderCard.now
+        defer { FolderCard.now = savedNow }
         FolderCard.now = { CardTestClock.now }
         var s = summary
         s.visited = CardTestClock.threeDaysAgo
@@ -104,6 +106,8 @@ import Testing
     /// The board's waiting card (B): the 76 pt placeholder (radius 8, #E4E4E0), the name at once, two lines 10 pt high
     /// (radius 4, #ECECE8, 70 % and 45 % of the column) spread under it to the bottom; no progress, no facts text.
     @Test func waitingCardAsTheBoardDrawsIt() {
+        let savedMotion = FolderCard.reduceMotion
+        defer { FolderCard.reduceMotion = savedMotion }
         FolderCard.reduceMotion = { false }
         let item = HomeCardItem(id: "a", title: "Mountains", subtitle: "12 photos", tooltip: "a", symbol: "folder",
                                 waiting: true)
