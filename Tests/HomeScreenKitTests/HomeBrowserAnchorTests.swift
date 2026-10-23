@@ -132,6 +132,41 @@ import Testing
         #expect(view.scrollOffset == 0)
     }
 
+    /// A selection-only restore (no anchor): the user's own pick (an arrow key) wins over the selection that comes
+    /// later, and the grid does not scroll to it.
+    @Test func userSelectionDropsAPendingSelectionWithoutAnchor() async throws {
+        let source = FakeHomeSource()
+        let restored = BrowserFixtures.files(2000)[1500].id
+        let view = make(source, selecting: restored)
+        source.yieldPartial(x, Array(BrowserFixtures.files(2000).prefix(5)))
+        await settle(seconds: 5) { !view.entries.isEmpty }
+        let right = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+                                                  windowNumber: 0, context: nil, characters: "\u{F703}",
+                                                  charactersIgnoringModifiers: "\u{F703}", isARepeat: false,
+                                                  keyCode: 124))
+        view.keyDown(with: right)
+        let picked = try #require(view.selectedID)
+        #expect(view.selection == picked)
+        source.yield(x, BrowserFixtures.files(2000))
+        await settle(seconds: 5) { view.entries.count == 2000 }
+        #expect(view.selection == picked)
+        #expect(view.scrollOffset == 0)
+    }
+
+    /// So does the user's own scroll: the selection that comes later does not scroll the grid away.
+    @Test func userScrollDropsAPendingSelectionWithoutAnchor() async throws {
+        let source = FakeHomeSource()
+        let restored = BrowserFixtures.files(2000)[1500].id
+        let view = make(source, selecting: restored)
+        source.yieldPartial(x, Array(BrowserFixtures.files(2000).prefix(5)))
+        await settle(seconds: 5) { !view.entries.isEmpty }
+        view.scroll.onUserScroll?()
+        source.yield(x, BrowserFixtures.files(2000))
+        await settle(seconds: 5) { view.entries.count == 2000 }
+        #expect(view.selection != restored)
+        #expect(view.scrollOffset == 0)
+    }
+
     /// The anchor's entry comes before the selected one: the selection, when it comes, is selected without scrolling.
     @Test func lateSelectionKeepsTheRestoredScroll() async throws {
         let anchor = try #require(await taken())

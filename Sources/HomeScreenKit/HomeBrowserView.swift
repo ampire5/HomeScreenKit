@@ -1201,10 +1201,9 @@ public final class HomeBrowserView: NSView {
         select(id: entries[index].id)
     }
 
-    /// The user scrolled or selected: a session's scroll and selection still waiting for their names are dropped, so
-    /// the grid does not jump away from what the user is doing.
+    /// The user scrolled or selected: a scroll and selection still waiting for their names (a session's, or one
+    /// restored without an anchor) are dropped, so the grid does not jump away from what the user is doing.
     private func dropRestore() {
-        guard restoredScroll || pendingAnchor != nil else { return }
         pendingAnchor = nil
         pendingSelection = nil
         restoredScroll = false
