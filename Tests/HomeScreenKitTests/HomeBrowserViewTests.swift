@@ -570,6 +570,23 @@ import Testing
         #expect(shown.last!.maxX <= a.bounds.width - 12)
     }
 
+    /// The Folders / Photos headings stay in the list (owner, 2026-10-23): under the column heads, inside the
+    /// container, their text in line with the rows' covers.
+    @Test func listKeepsTheFoldersAndPhotosHeadings() async {
+        let source = FakeHomeSource()
+        let view = await shown(source, [BrowserFixtures.folder("a"), BrowserFixtures.folder("b")] + BrowserFixtures.files(3))
+        #expect(view.headerTitles == ["Folders", "Photos · 3"])
+        let heads = view.listHeader!, plate = view.listPlate!, headings = view.shownHeaders
+        #expect(headings.count == 2 && headings.first.map { $0.frame.minY >= heads.frame.maxY } == true)
+        for heading in headings {
+            #expect(heading.frame.minY >= plate.frame.minY && heading.frame.maxY <= plate.frame.maxY)
+            heading.layoutSubtreeIfNeeded()
+            #expect(abs(heading.label.frame.minX - (20 + 12)) < 0.5)
+        }
+        let b = view.card(for: view.entries[1].id)!, p = view.card(for: view.entries[2].id)!
+        #expect(headings.count == 2 && b.frame.maxY <= headings[1].frame.minY && headings[1].frame.maxY <= p.frame.minY)
+    }
+
     @Test func listShowsFilesInRows() async {
         let source = FakeHomeSource()
         let view = await shown(source, [BrowserFixtures.folder("a"), BrowserFixtures.file("img.jpg", date: 700_000_000)])

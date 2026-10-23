@@ -3,12 +3,15 @@ import HomeChrome
 
 /// A section's heading over its cards: `Folders`, `Photos · 2 719`.
 final class GridHeader: NSView {
-    private let label = NSTextField(labelWithString: "")
+    let label = NSTextField(labelWithString: "")
 
     var title: String {
         get { label.stringValue }
         set { label.stringValue = newValue }
     }
+
+    /// The text's distance from the sides: the grid's edge, or in the list the rows' covers' left.
+    var inset: CGFloat = 20 { didSet { if inset != oldValue { needsLayout = true } } }
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -25,6 +28,6 @@ final class GridHeader: NSView {
     override func layout() {
         super.layout()
         let h = label.intrinsicContentSize.height
-        label.frame = CGRect(x: 20, y: bounds.height - h - 6, width: max(0, bounds.width - 40), height: h)
+        label.frame = CGRect(x: inset, y: bounds.height - h - 6, width: max(0, bounds.width - 2 * inset), height: h)
     }
 }

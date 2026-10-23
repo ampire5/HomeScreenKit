@@ -1024,8 +1024,9 @@ public final class HomeBrowserView: NSView {
         }
         guard case .folder = location else { return [GridSection(kind: .collections, count: entries.count)] }
         let files = entries.count - containerCount
-        // The list is one container of rows with its column heads: no headings between folders and files.
-        let both = containerCount > 0 && files > 0 && shownCardStyle(width: gridWidth) != .list
+        // In the list the headings go inside its container, between the folders' rows and the files' (owner,
+        // 2026-10-23).
+        let both = containerCount > 0 && files > 0
         return [GridSection(kind: .collections, count: containerCount, title: both ? "Folders" : nil),
                 GridSection(kind: .photos, count: files, title: both ? "Photos · \(BrowserSummary.number(files))" : nil)]
     }
@@ -1145,10 +1146,14 @@ public final class HomeBrowserView: NSView {
             document.addSubview(header)
             headers.append(header)
         }
+        // In the list the headings sit inside the container: their text in line with the rows' covers.
+        let m = GridMetrics()
+        let inset = shownCardStyle(width: gridWidth) == .list ? m.collectionEdge + m.listPadding : m.collectionEdge
         for (i, header) in headers.enumerated() {
             header.isHidden = i >= titled.count
             guard i < titled.count else { continue }
             header.title = titled[i].0
+            header.inset = inset
             header.frame = titled[i].1
         }
     }
@@ -1300,7 +1305,8 @@ public final class HomeBrowserView: NSView {
     var liveCardCount: Int { live.count }
     /// The columns of the last section (the photos in a folder, the places at the top).
     var columns: Int { sections.isEmpty ? 0 : grid.columns(inSection: sections.count - 1) }
-    var headerTitles: [String] { headers.filter { !$0.isHidden }.map(\.title) }
+    var headerTitles: [String] { shownHeaders.map(\.title) }
+    var shownHeaders: [GridHeader] { headers.filter { !$0.isHidden } }
     var footerLines: [String] { footer.lines }
     var scrollOffset: CGFloat { scroll.contentView.bounds.origin.y }
     var gridContentHeight: CGFloat { document.frame.height }
