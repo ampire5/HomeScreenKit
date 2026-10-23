@@ -61,7 +61,7 @@ extension HomeBrowserView {
         return row
     }
 
-    /// The user chose how folders are drawn (the app's menu, the switch, ⌃⌘1–⌃⌘3): the source saves it, the grid
+    /// The user chose how folders are drawn (the app's menu, the switch, ⌥⌘1–⌥⌘3): the source saves it, the grid
     /// re-tiles. Choosing the style already shown still saves it for this folder, on purpose: that pins a style the
     /// folder only inherited. Where there are no folder cards (`canChooseCardStyle` is false) nothing happens.
     public func chooseCardStyle(_ style: CardStyle) {

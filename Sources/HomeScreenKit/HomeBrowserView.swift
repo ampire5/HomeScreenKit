@@ -941,7 +941,7 @@ public final class HomeBrowserView: NSView {
     }
 
     private var typeSelect = BrowserTypeSelect()
-    /// The digit keys 1 / 2 / 3: with ⌥ the sort capsule's first, second and third field, with ⌃⌘ the card style (⌘
+    /// The digit keys 1 / 2 / 3: with ⌥ the sort capsule's first, second and third field, with ⌥⌘ the card style (⌘
     /// alone is the app's: a window's tabs by number).
     private static let sortKeyIndex: [UInt16: Int] = [18: 0, 19: 1, 20: 2]
 
@@ -960,8 +960,8 @@ public final class HomeBrowserView: NSView {
             onResize?(resize)
             return true
         }
-        // ⌃⌘1 / ⌃⌘2 / ⌃⌘3: Posters, Cards, List (the View menu's items have the same keys); ⌘1–⌘3 go on to the app.
-        if flags == [.control, .command], let i = Self.sortKeyIndex[event.keyCode] {
+        // ⌥⌘1 / ⌥⌘2 / ⌥⌘3: Posters, Cards, List (the View menu's items have the same keys); ⌘1–⌘3 go on to the app.
+        if flags == [.option, .command], let i = Self.sortKeyIndex[event.keyCode] {
             guard canChooseCardStyle else { return false }   // no folder cards here: the key is someone else's
             chooseCardStyle(CardStyle.allCases[i])
             return true
