@@ -334,11 +334,15 @@ final class HomeToolbar: NSView, NSSearchFieldDelegate, NSMenuDelegate {
         needsLayout = true
     }
 
-    /// View › Thumbnails…: the progress popover, from the pill, or from the sort (else the toolbar) while a narrow
-    /// window hides the pill. False without a state.
+    /// The popover's counts, whether the pill is lit or not (nothing being prepared); nil: none for this folder yet.
+    func show(progressDetail state: ThumbsProgressState?) { progress.showDetail(state) }
+
+    /// View › Thumbnails…: the progress popover with the current counts (zeros before any), from the pill when it
+    /// shows, else from the sort (else the toolbar): the pill out (nothing being prepared) or hidden by a narrow
+    /// window. False outside a window.
     @discardableResult func showProgressPopover() -> Bool {
-        guard progressState != nil else { return false }
         let anchor: NSView = !progress.isHidden ? progress : !sortCapsule.isHidden ? sortCapsule : self
+        guard anchor.window != nil else { return false }
         progress.openPopover(from: anchor)
         return true
     }

@@ -167,6 +167,9 @@ import AppKit
     private(set) var preparedSubtrees: [BrowserLocation] = []
     func pauseThumbs(_ on: Bool, in location: BrowserLocation) { thumbPauses.append((on, location)) }
     func prepareSubtree(of location: BrowserLocation) { preparedSubtrees.append(location) }
+    /// The popover's Stop preparing, with the location it was asked in.
+    private(set) var stoppedSubtrees: [BrowserLocation] = []
+    func stopSubtree(in location: BrowserLocation) { stoppedSubtrees.append(location) }
     func setSort(_ sort: BrowserSort, for location: BrowserLocation) {
         switch location {
         case .places: break

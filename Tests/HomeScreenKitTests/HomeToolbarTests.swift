@@ -361,8 +361,6 @@ import Testing
         window.orderFront(nil)
         bar.frame.size.width = 1400
         bar.layoutSubtreeIfNeeded()
-        #expect(!bar.showProgressPopover())
-        #expect(!bar.progress.isPopoverShown)
         bar.show(progress: Self.running)
         bar.layoutSubtreeIfNeeded()
         #expect(bar.showProgressPopover())
@@ -382,9 +380,61 @@ import Testing
         bar.layoutSubtreeIfNeeded()
         try? await Task.sleep(for: .milliseconds(100))
         #expect(bar.progress.isPopoverShown)
-        // Done: the popover goes with the state.
+        // Done: the pill goes out, the popover from the sort stays with the last counts.
         bar.show(progress: nil)
-        await settle { !bar.progress.isPopoverShown }
-        #expect(!bar.progress.isPopoverShown)
+        try? await Task.sleep(for: .milliseconds(100))
+        #expect(bar.progress.isPopoverShown)
+    }
+
+    /// View › Thumbnails… with nothing being prepared (the pill out): the popover opens from the sort with the counts
+    /// the app gave last, zeros before any; it follows them while open and stays when the work is done.
+    @Test func progressPopoverOpensWithoutWork() async {
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 1400, height: 300), styleMask: [.titled], backing: .buffered,
+                              defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        let bar = toolbar()
+        bar.show(path: [("Places", .places), ("x", .folder(x))], canBack: true, canForward: false, canUp: true)
+        bar.show(sort: .standard, keys: [.name, .date, .size])
+        window.contentView?.addSubview(bar)
+        window.orderFront(nil)
+        bar.frame.size.width = 1400
+        bar.layoutSubtreeIfNeeded()
+        #expect(!bar.isProgressVisible)
+        #expect(bar.showProgressPopover())
+        await settle { bar.progress.isPopoverShown }
+        #expect(bar.progress.isPopoverShown)
+        #expect(!bar.progress.isPopoverOnPill)
+        #expect(bar.progress.panelRowTexts == ["In view 0 / 0", "Rest of folder 0 / 0", "Subfolders 0 / 0"])
+        var done = Self.running
+        done.working = false
+        done.rows = [.init(title: "In view", done: 24, total: 24), .init(title: "Rest of folder", done: 216, total: 216),
+                     .init(title: "Subfolders", done: 48, total: 48)]
+        bar.show(progressDetail: done)
+        #expect(bar.progress.panelRowTexts == ["In view 24 / 24", "Rest of folder 216 / 216", "Subfolders 48 / 48"])
+        #expect(!bar.isProgressVisible)
+        bar.show(progress: nil)
+        try? await Task.sleep(for: .milliseconds(100))
+        #expect(bar.progress.isPopoverShown)
+    }
+
+    /// While a subtree is being prepared the popover's second button stops it.
+    @Test func stopPreparingWhileASubtreeRuns() {
+        let pill = ThumbsProgressPill()
+        var state = Self.running
+        state.subtreeRunning = true
+        pill.show(state)
+        let panel = pill.makePanel()
+        #expect(panel.prepareButton.title == "Stop preparing")
+        var prepares = 0, stops = 0
+        pill.onPrepare = { prepares += 1 }
+        pill.onStopSubtree = { stops += 1 }
+        panel.prepareButton.performClick(nil)
+        #expect(stops == 1 && prepares == 0)
+        state.subtreeRunning = false
+        pill.show(state)
+        #expect(panel.prepareButton.title == "Prepare subfolders")
+        panel.prepareButton.performClick(nil)
+        #expect(stops == 1 && prepares == 1)
     }
 }

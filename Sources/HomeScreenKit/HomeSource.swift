@@ -85,6 +85,9 @@ public struct HomeSourceInfo {
     func pauseThumbs(_ on: Bool, in location: BrowserLocation)
     /// The progress popover's Prepare subfolders: the subtree of `location` to be prepared. The default does nothing.
     func prepareSubtree(of location: BrowserLocation)
+    /// The progress popover's Stop preparing (shown while `ThumbsProgressState.subtreeRunning`), asked in `location`:
+    /// the subtree being prepared stops. The default does nothing.
+    func stopSubtree(in location: BrowserLocation)
 }
 
 public extension HomeSource {
@@ -97,4 +100,5 @@ public extension HomeSource {
     var sendsCardFacts: Bool { false }
     func pauseThumbs(_ on: Bool, in location: BrowserLocation) {}
     func prepareSubtree(of location: BrowserLocation) {}
+    func stopSubtree(in location: BrowserLocation) {}
 }

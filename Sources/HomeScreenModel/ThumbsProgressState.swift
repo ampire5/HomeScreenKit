@@ -31,14 +31,29 @@ public struct ThumbsProgressState: Equatable, Sendable {
     public var pauseNote: String?
     /// The user's own pause (the popover's button then reads "Resume"); the viewer's pause leaves it at "Pause".
     public var pausedByUser: Bool
+    /// Whether something is being prepared now. False: all is done (or nothing was asked); the pill stays out (or
+    /// goes out), and the popover (View › Thumbnails…) still shows these counts.
+    public var working: Bool
+    /// A subtree is being prepared on the user's command (Prepare subfolders, a card's Prepare thumbnails…): the
+    /// popover's second button reads "Stop preparing" and stops it.
+    public var subtreeRunning: Bool
 
     public init(fraction: Double, text: String, paused: Bool = false, rows: [Row] = [], pauseNote: String? = nil,
-                pausedByUser: Bool = false) {
+                pausedByUser: Bool = false, working: Bool = true, subtreeRunning: Bool = false) {
         self.fraction = fraction
         self.text = text
         self.paused = paused
         self.rows = rows
         self.pauseNote = pauseNote
         self.pausedByUser = pausedByUser
+        self.working = working
+        self.subtreeRunning = subtreeRunning
     }
+
+    /// What the popover shows before the app gave any counts for the folder: nothing to do, the three stages at zero.
+    public static let idle = ThumbsProgressState(
+        fraction: 0, text: "",
+        rows: [Row(title: "In view", done: 0, total: 0), Row(title: "Rest of folder", done: 0, total: 0),
+               Row(title: "Subfolders", done: 0, total: 0)],
+        working: false)
 }

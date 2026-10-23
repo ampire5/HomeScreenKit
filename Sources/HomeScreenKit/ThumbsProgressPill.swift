@@ -25,6 +25,8 @@ final class ThumbsProgressPill: NSView, NSPopoverDelegate {
     var onPause: ((Bool) -> Void)?
     /// The popover's Prepare subfolders.
     var onPrepare: (() -> Void)?
+    /// The popover's Stop preparing (while a subtree is being prepared).
+    var onStopSubtree: (() -> Void)?
 
     /// The ring alone, the text in the tooltip (and the popover): the toolbar's step before hiding the pill.
     var isCompact = false {
@@ -38,6 +40,8 @@ final class ThumbsProgressPill: NSView, NSPopoverDelegate {
     }
 
     private(set) var state: ThumbsProgressState?
+    /// The counts the app gave last, the pill lit or not (`showDetail`).
+    private(set) var detail: ThumbsProgressState?
     private(set) var ringColor = Chrome.Palette.card.accent
     private(set) var glyph = Glyph.pause
     var text: String { label.stringValue }
@@ -114,13 +118,15 @@ final class ThumbsProgressPill: NSView, NSPopoverDelegate {
     /// The ring alone, centred in a capsule as wide as it is high.
     var compactSize: NSSize { NSSize(width: Self.height, height: Self.height) }
 
-    /// The state to draw; nil hides the pill (and closes its popover).
+    /// The state to draw; nil hides the pill (and closes its popover if it points at the pill; one the View menu
+    /// opened from the sort stays, with the last counts).
     func show(_ p: ThumbsProgressState?) {
         state = p
         guard let p else {
             isHidden = true
             toolTip = nil
-            closePopover()
+            if isPopoverOnPill { closePopover() }
+            updatePanel()
             return
         }
         isHidden = false
@@ -142,11 +148,21 @@ final class ThumbsProgressPill: NSView, NSPopoverDelegate {
             CATransaction.commit()
         }
         applyColors()
-        if let panel {
-            panel.show(p)
-            // An open popover follows its content: a note coming or going, rows added or taken away.
-            if let popover, popover.isShown { popover.contentSize = panel.fittingSize }
-        }
+        updatePanel()
+    }
+
+    /// The popover's counts whatever the pill shows (`ThumbsProgressState.working` false: nothing being prepared);
+    /// nil: none for this folder yet.
+    func showDetail(_ d: ThumbsProgressState?) {
+        detail = d
+        updatePanel()
+    }
+
+    private func updatePanel() {
+        guard let panel else { return }
+        panel.show(panelState)
+        // An open popover follows its content: a note coming or going, rows added or taken away.
+        if let popover, popover.isShown { popover.contentSize = panel.fittingSize }
     }
 
     /// The board's 8×8 glyphs (`M1 1h2v6H1zM5 1h2v6H5z`, `M1.5 1l5 3-5 3z`), centred in the ring.
@@ -204,12 +220,24 @@ final class ThumbsProgressPill: NSView, NSPopoverDelegate {
         let panel = ThumbsProgressPanel()
         panel.onPause = { [weak self] on in self?.onPause?(on) }
         panel.onPrepare = { [weak self] in self?.onPrepare?() }
-        if let state { panel.show(state) }
+        panel.onStopSubtree = { [weak self] in self?.onStopSubtree?() }
+        panel.show(panelState)
         self.panel = panel
         return panel
     }
 
     var isPopoverShown: Bool { popover?.isShown == true }
+
+    /// What the popover shows: the counts the app gave last, else the lit pill's state, else zeros.
+    var panelState: ThumbsProgressState { detail ?? state ?? .idle }
+
+    /// The popover's lines, open or not (tests).
+    var panelRowTexts: [String] {
+        if let panel { return panel.rowTexts }
+        let p = ThumbsProgressPanel()
+        p.show(panelState)
+        return p.rowTexts
+    }
 
     /// The popover goes when the pill does (done, or a narrow toolbar).
     func closePopover() { popover?.close() }
@@ -232,7 +260,7 @@ final class ThumbsProgressPill: NSView, NSPopoverDelegate {
     /// The popover pointing at `anchor` (the pill, or the sort while a narrow toolbar hides the pill); one already
     /// open stays as it is.
     func openPopover(from anchor: NSView) {
-        guard !isPopoverShown, state != nil, anchor.window != nil else { return }
+        guard !isPopoverShown, anchor.window != nil else { return }
         let panel = makePanel()
         panel.frame.size = panel.fittingSize
         let controller = NSViewController()

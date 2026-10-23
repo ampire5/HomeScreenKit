@@ -264,6 +264,10 @@ public final class HomeBrowserView: NSView {
             guard let self else { return }
             self.source?.prepareSubtree(of: self.location)
         }
+        toolbar.progress.onStopSubtree = { [weak self] in
+            guard let self else { return }
+            self.source?.stopSubtree(in: self.location)
+        }
         toolbar.onFilterEnd = { [weak self] in
             guard let self else { return }
             self.window?.makeFirstResponder(self)
@@ -690,10 +694,14 @@ public final class HomeBrowserView: NSView {
     /// Whether the pill is lit (a narrow toolbar may still leave it out).
     var isShowingProgress: Bool { toolbar.progressState != nil }
 
-    /// How far the thumbnails of the folder on screen are; nil: all done. The pill shows only after `delay` of
-    /// continuous work (a folder served from the catalog finishes sooner and never lights it), follows every state
-    /// while lit, and goes out `progressHideAfter` (1 s) after nil. A move to another folder puts it out at once.
+    /// How far the thumbnails of the folder on screen are; nil or not `working`: all done. The pill shows only after
+    /// `delay` of continuous work (a folder served from the catalog finishes sooner and never lights it), follows every
+    /// state while lit, and goes out `progressHideAfter` (1 s) after the work is done. The popover (the pill's, or
+    /// View › Thumbnails…'s with the pill out) shows the latest state given, done or not. A move to another folder puts
+    /// the pill out at once and leaves the popover at zeros until that folder's state comes.
     public func setProgress(_ state: ThumbsProgressState?, delay: Duration) {
+        toolbar.show(progressDetail: state)
+        let state = state?.working == true ? state : nil
         let lit = isShowingProgress
         guard let state else {
             pendingProgress = nil
@@ -732,10 +740,14 @@ public final class HomeBrowserView: NSView {
         }
     }
 
-    /// The pill is lit (shown, or left out by a narrow toolbar): View › Thumbnails… can open its popover.
-    public var canShowProgressPopover: Bool { isShowingProgress }
+    /// View › Thumbnails… can open the popover: whenever a folder is shown (its counts, zeros included, the pill lit or
+    /// not); elsewhere while the pill is lit.
+    public var canShowProgressPopover: Bool {
+        if case .folder = location { return true }
+        return isShowingProgress
+    }
 
-    /// View › Thumbnails…: the pill's popover, from the pill or, while a narrow toolbar hides it, from the sort.
+    /// View › Thumbnails…: the popover with the current counts, from the pill when it shows, else from the sort.
     public func showProgressPopover() { toolbar.showProgressPopover() }
 
     private func resetProgress() {
@@ -743,6 +755,7 @@ public final class HomeBrowserView: NSView {
         progressTask = nil
         pendingProgress = nil
         if isShowingProgress { toolbar.show(progress: nil) }
+        toolbar.show(progressDetail: nil)
     }
 
     // MARK: Toast

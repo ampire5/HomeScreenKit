@@ -3,7 +3,8 @@ import HomeChrome
 import HomeScreenModel
 
 /// The pill's popover (the board's «По щелчку»): the title, a line per stage — its name, its tabular count and a 4 pt
-/// bar — the pause note, and the buttons Pause / Resume and Prepare subfolders. 13 pt, padding 14, 10 between the parts.
+/// bar — the pause note, and the buttons Pause / Resume and Prepare subfolders (Stop preparing while a subtree is being
+/// prepared). 13 pt, padding 14, 10 between the parts.
 final class ThumbsProgressPanel: NSView {
     static let width: CGFloat = 360
     private static let padding: CGFloat = 14
@@ -18,6 +19,7 @@ final class ThumbsProgressPanel: NSView {
 
     var onPause: ((Bool) -> Void)?
     var onPrepare: (() -> Void)?
+    var onStopSubtree: (() -> Void)?
 
     let pauseButton = PanelButton(title: "Pause")
     let prepareButton = PanelButton(title: "Prepare subfolders")
@@ -26,6 +28,7 @@ final class ThumbsProgressPanel: NSView {
     private let noteLabel = NSTextField(labelWithString: "")
     private var lines: [Line] = []
     private var pausedByUser = false
+    private var subtreeRunning = false
 
     var title: String { titleLabel.stringValue }
     var rowTexts: [String] { lines.map { $0.name.stringValue + " " + $0.count.stringValue } }
@@ -66,13 +69,17 @@ final class ThumbsProgressPanel: NSView {
         noteLabel.isHidden = state.pauseNote == nil
         pausedByUser = state.pausedByUser
         pauseButton.title = state.pausedByUser ? "Resume" : "Pause"
+        subtreeRunning = state.subtreeRunning
+        prepareButton.title = state.subtreeRunning ? "Stop preparing" : "Prepare subfolders"
         applyColors()
         needsLayout = true
         invalidateIntrinsicContentSize()
     }
 
     @objc private func pauseClicked() { onPause?(!pausedByUser) }
-    @objc private func prepareClicked() { onPrepare?() }
+    @objc private func prepareClicked() {
+        if subtreeRunning { onStopSubtree?() } else { onPrepare?() }
+    }
 
     private var lineHeight: CGFloat { ceil(titleLabel.intrinsicContentSize.height) }
 

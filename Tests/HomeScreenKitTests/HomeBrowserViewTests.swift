@@ -988,15 +988,51 @@ import Testing
         #expect(!view.isShowingProgress)
     }
 
-    /// View › Thumbnails… is there only while the pill is lit (shown or left out by a narrow toolbar).
-    @Test func progressPopoverOnlyWithAState() async {
+    /// View › Thumbnails… is there whenever a folder is shown, the pill lit or not; elsewhere only while it is lit.
+    @Test func progressPopoverForEveryFolder() async {
         let view = make(FakeHomeSource())
-        #expect(!view.canShowProgressPopover)
-        view.setProgress(Self.progress, delay: .zero)
-        await settle { view.isShowingProgress }
+        #expect(!view.isShowingProgress)
         #expect(view.canShowProgressPopover)
         view.show(.folder(x.appendingPathComponent("y")), selecting: nil)
+        #expect(view.canShowProgressPopover)
+        view.show(.places, selecting: nil)
         #expect(!view.canShowProgressPopover)
+    }
+
+    /// A state with nothing being prepared (`working` false) leaves the pill out but is what the popover shows; a move
+    /// to another folder drops it (zeros until that folder's counts come).
+    @Test func idleStateFeedsThePopoverNotThePill() async {
+        let view = make(FakeHomeSource())
+        var done = Self.progress
+        done.working = false
+        view.setProgress(done, delay: .zero)
+        try? await Task.sleep(for: .milliseconds(100))
+        #expect(!view.isShowingProgress)
+        #expect(view.toolbar.progress.panelRowTexts == ["In view 24 / 24"])
+        // Lit, then done: the popover has the done counts at once, while the pill still waits to go out.
+        view.setProgress(Self.progress, delay: .zero)
+        await settle { view.isShowingProgress }
+        done.rows = [.init(title: "In view", done: 30, total: 30)]
+        view.setProgress(done, delay: .zero)
+        #expect(view.toolbar.progress.panelRowTexts == ["In view 30 / 30"])
+        await settle(seconds: 5) { !view.isShowingProgress }
+        #expect(!view.isShowingProgress)
+        view.show(.folder(x.appendingPathComponent("y")), selecting: nil)
+        #expect(view.toolbar.progress.panelRowTexts == ["In view 0 / 0", "Rest of folder 0 / 0", "Subfolders 0 / 0"])
+    }
+
+    /// While a subtree is being prepared, the popover's Stop preparing reaches the source.
+    @Test func stopPreparingReachesTheSource() async {
+        let source = FakeHomeSource()
+        let view = make(source)
+        var state = Self.progress
+        state.subtreeRunning = true
+        view.setProgress(state, delay: .zero)
+        await settle { view.isShowingProgress }
+        let panel = view.toolbar.progress.makePanel()
+        panel.prepareButton.performClick(nil)
+        #expect(source.stoppedSubtrees == [.folder(x)])
+        #expect(source.preparedSubtrees.isEmpty)
     }
 
     @Test func pillHidesOneSecondAfterDone() async {
