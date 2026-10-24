@@ -57,15 +57,17 @@ import HomeScreenModel
     private static let ringTip = "Thumbnails"
     private static let keyTitles: [(BrowserSort.Key, String)] = [(.name, "Name"), (.date, "Date"), (.size, "Size")]
 
-    /// The menu of the folders beside one crumb: a submenu of the path pill's item for it.
+    /// The submenu of a crumb of the path pill: first the entry that goes to the crumb itself (a menu item with a submenu
+    /// does nothing when it is chosen), then, after a divider, the folders beside it.
     private final class SiblingMenu: NSMenu {
         let crumb: Int
+        /// The entries before the folders: open, divider.
+        static let heading = 2
         init(crumb: Int, delegate: NSMenuDelegate) {
             self.crumb = crumb
             super.init(title: "")
             self.delegate = delegate
             autoenablesItems = false
-            addItem(withTitle: "Loading…", action: nil, keyEquivalent: "").isEnabled = false
         }
         required init(coder: NSCoder) { fatalError("init(coder:) is not supported") }
     }
@@ -94,7 +96,8 @@ import HomeScreenModel
             menu.delegate = self
             menu.autoenablesItems = false
         }
-        viewMenu.addItem(withTitle: "View", action: nil, keyEquivalent: "")
+        resetPathMenu()
+        resetViewMenu()
     }
 
     // MARK: Items
@@ -153,6 +156,7 @@ import HomeScreenModel
             search.label = "Filter"
             search.toolTip = "Filter by name (⌘F)"
             search.searchField.placeholderString = "Filter"
+            search.preferredWidthForSearchField = 180
             search.searchField.sendsSearchStringImmediately = true
             search.searchField.delegate = self
             search.resignsFirstResponderWithCancel = true
@@ -397,28 +401,34 @@ import HomeScreenModel
 
     var isPathVisible: Bool { items[.path]?.isHidden == false }
     var isViewVisible: Bool { items[.view]?.isHidden == false }
-    var pathMenuTitles: [String] { pathMenu.items.map(\.title) }
-    var pathMenuChecked: [Bool] { pathMenu.items.map { $0.state == .on } }
-    var viewMenuTitles: [String] { viewMenu.items.map(\.title) }
-    var viewMenuChecked: [Bool] { viewMenu.items.map { $0.state == .on } }
-    var siblingTitles: [String] { siblingMenu?.items.map(\.title) ?? [] }
-    var siblingChecked: [Bool] { siblingMenu?.items.map { $0.state == .on } ?? [] }
+    /// What a menu lists, without its first item: a menu toolbar item treats that one as the button's own and never shows
+    /// it (seen with accessibility on macOS 26.7), so every menu starts with one that stands for the button.
+    var pathMenuTitles: [String] { pathMenu.items.dropFirst().map(\.title) }
+    var pathMenuChecked: [Bool] { pathMenu.items.dropFirst().map { $0.state == .on } }
+    var viewMenuTitles: [String] { viewMenu.items.dropFirst().map(\.title) }
+    var viewMenuChecked: [Bool] { viewMenu.items.dropFirst().map { $0.state == .on } }
+    var siblingTitles: [String] { siblingMenu?.items.dropFirst(SiblingMenu.heading).map(\.title) ?? [] }
+    var siblingChecked: [Bool] { siblingMenu?.items.dropFirst(SiblingMenu.heading).map { $0.state == .on } ?? [] }
 
     /// What opening a menu does: AppKit asks the delegate to fill it first.
     func openPathMenu() { menuNeedsUpdate(pathMenu) }
     func openViewMenu() { menuNeedsUpdate(viewMenu) }
-    func clickPathItem(_ i: Int) { pathMenu.performActionForItem(at: i) }
-    func clickViewItem(_ i: Int) { viewMenu.performActionForItem(at: i) }
-    func hasSiblingMenu(atPathItem i: Int) -> Bool { pathMenu.items.indices.contains(i) && pathMenu.items[i].submenu is SiblingMenu }
+    func clickPathItem(_ i: Int) { pathMenu.performActionForItem(at: i + 1) }
+    func clickViewItem(_ i: Int) { viewMenu.performActionForItem(at: i + 1) }
+    /// The entry of path item `i`'s submenu that goes to the crumb itself.
+    func clickPathOpen(_ i: Int) { pathMenu.items.dropFirst().dropFirst(i).first?.submenu?.performActionForItem(at: 0) }
+    /// Whether choosing path item `i` itself goes to its folder (it has no submenu).
+    func pathItemOpensItself(_ i: Int) -> Bool { pathMenu.items.dropFirst().dropFirst(i).first.map { $0.submenu == nil && $0.action != nil } ?? false }
+    func hasSiblingMenu(atPathItem i: Int) -> Bool { pathMenu.items.dropFirst().dropFirst(i).first?.submenu is SiblingMenu }
     func openSiblingMenu(atPathItem i: Int) {
-        if let menu = pathMenu.items[i].submenu { menuNeedsUpdate(menu) }
+        if let menu = pathMenu.items.dropFirst().dropFirst(i).first?.submenu { menuNeedsUpdate(menu) }
     }
 
     /// Until the menu is first opened it holds one item: filling every menu of the window costs more than the window can
     /// spare (`NSPopUpButton` measures each item at about a millisecond), and most are never opened.
     private func resetPathMenu() {
         pathMenu.removeAllItems()
-        pathMenu.addItem(withTitle: windowTitle, action: nil, keyEquivalent: "")
+        pathMenu.addItem(withTitle: "Path", action: nil, keyEquivalent: "")   // the button's own (`pathMenuTitles`)
         items[.path]?.isHidden = crumbs.isEmpty
     }
 
@@ -430,20 +440,34 @@ import HomeScreenModel
     /// The folder and the folders above it, nearest first, the current one checked; each but the first place has the
     /// folders beside it in a submenu.
     private func fillPathMenu() {
-        pathMenu.removeAllItems()
+        resetPathMenu()
         for index in crumbs.indices.reversed() {
             let crumb = crumbs[index]
-            let item = pathMenu.addItem(withTitle: crumb.title, action: #selector(pathItemChosen(_:)), keyEquivalent: "")
-            item.target = self
+            let item = pathMenu.addItem(withTitle: crumb.title, action: nil, keyEquivalent: "")
             item.tag = index
             item.state = index == crumbs.count - 1 ? .on : .off
             item.image = symbol(crumb.location == .places ? "externaldrive" : "folder", crumb.title)
-            if index > 0 { item.submenu = SiblingMenu(crumb: index, delegate: self) }
+            if index > 0 {
+                item.submenu = makeSiblingMenu(for: index, title: crumb.title)
+            } else {
+                item.action = #selector(pathItemChosen(_:))
+                item.target = self
+            }
         }
     }
 
+    private func makeSiblingMenu(for crumb: Int, title: String) -> SiblingMenu {
+        let menu = SiblingMenu(crumb: crumb, delegate: self)
+        let open = menu.addItem(withTitle: "Open “\(title)”", action: #selector(pathItemChosen(_:)), keyEquivalent: "")
+        open.target = self
+        open.tag = crumb
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Loading…", action: nil, keyEquivalent: "").isEnabled = false
+        return menu
+    }
+
     private func fillViewMenu() {
-        viewMenu.removeAllItems()
+        resetViewMenu()
         func add(_ title: String, _ choice: ViewChoice, checked: Bool = false, image: String? = nil) {
             let item = viewMenu.addItem(withTitle: title, action: #selector(viewItemChosen(_:)), keyEquivalent: "")
             item.target = self
@@ -525,7 +549,7 @@ import HomeScreenModel
     }
 
     private func fill(_ menu: NSMenu, _ entries: [(title: String, location: BrowserLocation, current: Bool)]?) {
-        menu.removeAllItems()
+        while menu.items.count > SiblingMenu.heading { menu.removeItem(at: menu.items.count - 1) }
         siblingLocations = entries?.map(\.location) ?? []
         guard let entries else {
             menu.addItem(withTitle: "Loading…", action: nil, keyEquivalent: "").isEnabled = false

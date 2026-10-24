@@ -182,6 +182,15 @@ import Testing
         withExtendedLifetime((w1, w2)) {}
     }
 
+    /// The search field is as wide as Photos' (it would take all the room the window has left otherwise).
+    @Test func searchFieldHasAFixedWidth() {
+        let controller = HomeToolbarController()
+        let window = attach(controller)
+        let search = controller.nsToolbar.items.first { $0.itemIdentifier == HomeToolbarItem.search.identifier } as? NSSearchToolbarItem
+        #expect(search?.preferredWidthForSearchField == 180)
+        withExtendedLifetime(window) {}
+    }
+
     @Test func searchTextAndEscape() {
         let controller = HomeToolbarController()
         var texts: [String] = [], ended = 0

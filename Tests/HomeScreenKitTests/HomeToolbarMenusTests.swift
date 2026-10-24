@@ -19,8 +19,8 @@ import Testing
         showTrips(on: controller)
         controller.show(sort: BrowserSort(key: .name, ascending: true), keys: [.name, .date, .size])
         controller.show(cardStyle: .posters, visible: true)
-        #expect(controller.pathMenuTitles.count == 1)
-        #expect(controller.viewMenuTitles.count == 1)
+        #expect(controller.pathMenuTitles.isEmpty)   // nothing but the item that stands for the button
+        #expect(controller.viewMenuTitles.isEmpty)
         controller.openPathMenu()
         #expect(controller.pathMenuTitles == ["Trips", "Pictures", "Home", "Places"])
         controller.openViewMenu()
@@ -36,10 +36,13 @@ import Testing
         controller.openPathMenu()
         #expect(controller.pathMenuTitles == ["Trips", "Pictures", "Home", "Places"])
         #expect(controller.pathMenuChecked == [true, false, false, false])
-        controller.clickPathItem(2)
+        // A menu item with a submenu opens it and does nothing else (checked with accessibility on macOS 26.7): the
+        // ancestors with folders beside them go through the submenu's first entry; Places has no submenu.
+        controller.clickPathOpen(2)
         #expect(went == [.folder(home)])
         controller.clickPathItem(3)
         #expect(went.last == places)
+        #expect(controller.pathItemOpensItself(3) && !controller.pathItemOpensItself(2))
     }
 
     @Test func longPathKeepsEveryAncestor() {
@@ -80,6 +83,7 @@ import Testing
         #expect(!controller.hasSiblingMenu(atPathItem: 2))
         controller.openSiblingMenu(atPathItem: 1)
         #expect(asked == [1])
+        #expect(controller.siblingTitles == ["Loading…"])   // after the entry that opens the crumb itself
         controller.showSiblings(nil, at: 1)
         #expect(controller.siblingTitles == ["Loading…"])
         let other = URL(fileURLWithPath: "/Volumes/T/Other")

@@ -13,7 +13,8 @@ extension HomeToolbarController {
 
     func clickCrumb(_ i: Int) {
         openPathMenu()
-        clickPathItem(pathMenuTitles.count - 1 - i)
+        let item = pathMenuTitles.count - 1 - i
+        if i == 0 { clickPathItem(item) } else { clickPathOpen(item) }   // the first crumb has no submenu
     }
 
     /// The sort fields of the View menu, the active one with its arrow.
