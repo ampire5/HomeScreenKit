@@ -445,6 +445,7 @@ public final class HomeBrowserView: NSView {
 
     /// The location on screen listed again, its selection, scroll and name filter kept (the app's list changed).
     public func reload() {
+        freeSpaceAsked.remove(location)
         rememberPlace()
         pendingSelection = selectedID
         pendingScroll = scroll.contentView.bounds.origin.y
@@ -505,6 +506,7 @@ public final class HomeBrowserView: NSView {
         anchorsNextShow = false
         footerText = ("", nil)
         containerCount = 0
+        askFreeSpace()
         // A filter is for the place it was set in: a move starts with everything shown. The progress pill was the old
         // folder's: it goes out at once (a reload of the same place keeps both).
         if !keepingFilter {
@@ -746,8 +748,27 @@ public final class HomeBrowserView: NSView {
     /// Under the path: while names come, how many; else the selected card; else the footer line.
     private func updateSubtitle() {
         let loading = listing?.more == true ? listing?.entries.count : nil
-        toolbar.show(subtitle: loading == nil && selectedEntry == nil
-                     ? footerText.line : BrowserSummary.subtitle(selected: selectedEntry, entries: [], loading: loading))
+        var line = loading == nil && selectedEntry == nil
+            ? footerText.line : BrowserSummary.subtitle(selected: selectedEntry, entries: [], loading: loading)
+        // The room the volume has goes at the end of every line but the count of names still coming.
+        if loading == nil, !line.isEmpty, let room = VolumeSpace.line(free: freeSpace[location]) { line += " · " + room }
+        toolbar.show(subtitle: line)
+    }
+
+    /// The bytes free on the volume of each folder shown, from the source's answer; the folders asked already (an answer
+    /// that did not come is not asked for again until `reload`).
+    private var freeSpace: [BrowserLocation: Int64] = [:]
+    private var freeSpaceAsked: Set<BrowserLocation> = []
+
+    /// Asks the source how much room the volume of the folder on screen has, once for each folder.
+    private func askFreeSpace() {
+        guard case .folder = location, let source, freeSpaceAsked.insert(location).inserted else { return }
+        let asked = location
+        Task(priority: .utility) { @MainActor [weak self] in
+            guard let room = await source.freeSpace(for: asked), let self else { return }
+            self.freeSpace[asked] = room
+            if self.location == asked { self.updateSubtitle() }
+        }
     }
 
     // MARK: Loading

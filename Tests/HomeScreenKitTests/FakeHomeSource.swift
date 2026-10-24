@@ -170,6 +170,14 @@ import AppKit
         setCardStyles.append((style, location))
     }
 
+    /// The room each folder's volume has (`HomeSource.freeSpace`), and the folders it was asked for.
+    var freeSpaces: [BrowserLocation: Int64] = [:]
+    private(set) var freeSpaceAsked: [BrowserLocation] = []
+    func freeSpace(for location: BrowserLocation) async -> Int64? {
+        freeSpaceAsked.append(location)
+        return freeSpaces[location]
+    }
+
     /// The progress popover's buttons: the pauses asked for and the subtrees to prepare, with their locations.
     private(set) var thumbPauses: [(Bool, BrowserLocation)] = []
     private(set) var preparedSubtrees: [BrowserLocation] = []

@@ -53,6 +53,29 @@ import Testing
         #expect(view.topInset == HomeBrowserView.defaultTopInset)
     }
 
+    /// The line under the folder's name also tells how much room the volume has, once the source has said; a source
+    /// that does not know leaves the line as it was. The volume is asked once for each folder, not on every return.
+    @Test func subtitleAlsoTellsTheRoomOnTheVolume() async {
+        let plain = FakeHomeSource()
+        let without = await shown(plain, BrowserFixtures.files(2))
+        await settle { !plain.freeSpaceAsked.isEmpty }
+        await settle()
+        let line = without.toolbar.subtitleText
+        #expect(line.hasPrefix(without.entries[0].name) && !line.contains(" free"))
+
+        let source = FakeHomeSource()
+        source.freeSpaces[.folder(x)] = 1_200_000_000_000
+        let view = await shown(source, BrowserFixtures.files(2))
+        await settle { view.toolbar.subtitleText.hasSuffix(" · 1.2 TB free") }
+        #expect(view.toolbar.subtitleText == line + " · 1.2 TB free")
+        let y = URL(fileURLWithPath: "/Volumes/T/y")
+        view.show(.folder(y), selecting: nil)
+        view.show(.folder(x), selecting: nil)
+        await settle()
+        #expect(source.freeSpaceAsked.filter { $0 == .folder(x) }.count == 1)
+        #expect(source.freeSpaceAsked.contains(.folder(y)))
+    }
+
     /// A live window resize changes the slot width on every pass; pictures still pending are not asked for again
     /// each time (the app restarts its decoding on a new ask).
     @Test func resizingDoesNotAskAgainPerPass() async {

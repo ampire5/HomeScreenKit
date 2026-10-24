@@ -93,6 +93,10 @@ public struct HomeSourceInfo {
     /// The progress popover's Stop preparing (shown while `ThumbsProgressState.subtreeRunning`), asked in `location`:
     /// the subtree being prepared stops. The default does nothing.
     func stopSubtree(in location: BrowserLocation)
+    /// The bytes free on the volume `location` is on, for the line under the folder's name; nil when the source does not
+    /// know (the default) or the volume does not answer. Asked once for each folder, off the main thread: the source
+    /// gives a share that is slow a second at most.
+    func freeSpace(for location: BrowserLocation) async -> Int64?
 }
 
 public extension HomeSource {
@@ -107,4 +111,5 @@ public extension HomeSource {
     func pauseThumbs(_ on: Bool, in location: BrowserLocation) {}
     func prepareSubtree(of location: BrowserLocation) {}
     func stopSubtree(in location: BrowserLocation) {}
+    func freeSpace(for location: BrowserLocation) async -> Int64? { nil }
 }
