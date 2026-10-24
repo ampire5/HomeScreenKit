@@ -97,6 +97,25 @@ import Testing
         #expect(closed == 1)
     }
 
+    /// Moving from one ancestor's submenu to the next: the first one's close may come after the second one's opening,
+    /// and must not take back the second's reply.
+    @Test func aSubmenuClosingLateDoesNotCancelTheNextOne() {
+        let controller = HomeToolbarController()
+        var asked: [Int] = [], closed = 0
+        controller.onSiblings = { asked.append($0) }
+        controller.onSiblingsClosed = { closed += 1 }
+        controller.show(path: [("Places", places), ("Home", .folder(home)), ("Pictures", .folder(pictures)),
+                               ("Trips", .folder(trips))], canBack: false, canForward: false, canUp: true)
+        controller.openPathMenu()
+        controller.openSiblingMenu(atPathItem: 1)   // Pictures
+        controller.openSiblingMenu(atPathItem: 2)   // Home
+        #expect(asked == [2, 1])
+        controller.closeSiblingMenu(atPathItem: 1)   // Pictures' close, after Home's opening
+        #expect(closed == 0)
+        controller.closeSiblingMenu(atPathItem: 2)
+        #expect(closed == 1)
+    }
+
     @Test func viewMenuShowsSortWithDirection() {
         let controller = HomeToolbarController()
         var keys: [BrowserSort.Key] = []

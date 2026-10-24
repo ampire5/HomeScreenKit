@@ -46,11 +46,11 @@ import HomeScreenModel
     /// The sort fields of this location, in order; none: the source cannot be sorted.
     private var sortKeys: [BrowserSort.Key] = [.name, .date, .size]
     private var styleSymbol = "rectangle.grid.2x2"
-    /// The sibling menu that is open (or was last), and the folders it lists.
     /// The thumbnails' ring: the progress item's view, the ring alone (its text is the item's tip).
     let progress = ThumbsProgressPill()
     /// The state the ring shows while there is work.
     private(set) var progressState: ThumbsProgressState?
+    /// The sibling menu that is open (or was last), and the folders it lists.
     private var siblingMenu: SiblingMenu?
     private var siblingLocations: [BrowserLocation] = []
 
@@ -420,6 +420,9 @@ import HomeScreenModel
     /// Whether choosing path item `i` itself goes to its folder (it has no submenu).
     func pathItemOpensItself(_ i: Int) -> Bool { pathMenu.items.dropFirst().dropFirst(i).first.map { $0.submenu == nil && $0.action != nil } ?? false }
     func hasSiblingMenu(atPathItem i: Int) -> Bool { pathMenu.items.dropFirst().dropFirst(i).first?.submenu is SiblingMenu }
+    func closeSiblingMenu(atPathItem i: Int) {
+        if let menu = pathMenu.items.dropFirst().dropFirst(i).first?.submenu { menuDidClose(menu) }
+    }
     func openSiblingMenu(atPathItem i: Int) {
         if let menu = pathMenu.items.dropFirst().dropFirst(i).first?.submenu { menuNeedsUpdate(menu) }
     }
@@ -504,7 +507,7 @@ import HomeScreenModel
 
     func menuDidClose(_ menu: NSMenu) {
         // The chosen item's action comes after the close: the menu's items stay readable until the next one opens.
-        if menu is SiblingMenu { onSiblingsClosed?() }
+        if menu === siblingMenu { onSiblingsClosed?() }
     }
 
     @objc private func pathItemChosen(_ sender: NSMenuItem) {
