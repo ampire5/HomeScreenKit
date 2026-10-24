@@ -42,6 +42,30 @@ import HomeScreenModel
     private var kindWanted = true
     private var controlsOn = true
     private var cardsWanted = false
+    private var sort = BrowserSort.standard
+    /// The sort fields of this location, in order; none: the source cannot be sorted.
+    private var sortKeys: [BrowserSort.Key] = [.name, .date, .size]
+    private var styleSymbol = "rectangle.grid.2x2"
+    /// The sibling menu that is open (or was last), and the folders it lists.
+    private var siblingMenu: SiblingMenu?
+    private var siblingLocations: [BrowserLocation] = []
+
+    private static let keyTitles: [(BrowserSort.Key, String)] = [(.name, "Name"), (.date, "Date"), (.size, "Size")]
+
+    /// The menu of the folders beside one crumb: a submenu of the path pill's item for it.
+    private final class SiblingMenu: NSMenu {
+        let crumb: Int
+        init(crumb: Int, delegate: NSMenuDelegate) {
+            self.crumb = crumb
+            super.init(title: "")
+            self.delegate = delegate
+            autoenablesItems = false
+            addItem(withTitle: "Loading…", action: nil, keyEquivalent: "").isEnabled = false
+        }
+        required init(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+    }
+
+    private enum ViewChoice { case sort(BrowserSort.Key), style, card(CardStyle) }
 
     private(set) var windowTitle = ""
     private(set) var subtitleText = ""
@@ -60,6 +84,12 @@ import HomeScreenModel
         items[.pageFilter]?.isHidden = true
         items[.cards]?.isHidden = true
         items[.progress]?.isHidden = true
+        items[.path]?.isHidden = true
+        for menu in [pathMenu, viewMenu] {
+            menu.delegate = self
+            menu.autoenablesItems = false
+        }
+        viewMenu.addItem(withTitle: "View", action: nil, keyEquivalent: "")
     }
 
     // MARK: Items
@@ -80,6 +110,7 @@ import HomeScreenModel
             menu.label = "Path"
             menu.toolTip = "The folder and the folders around it"
             menu.showsIndicator = true
+            menu.menu = NSMenu()
             return menu
         case .filter:
             return titleGroup(id, BrowserKindFilter.allCases.map(\.title), label: "Show", tip: "Show All, Folders or Photos")
@@ -104,6 +135,7 @@ import HomeScreenModel
             menu.label = "View"
             menu.toolTip = "Sort, shape and folder cards"
             menu.showsIndicator = true
+            menu.menu = NSMenu()
             return menu
         case .search:
             let search = NSSearchToolbarItem(itemIdentifier: id)
@@ -162,6 +194,8 @@ import HomeScreenModel
     private var cardsGroup: NSToolbarItemGroup { items[.cards] as! NSToolbarItemGroup }
     private var pageGroup: NSToolbarItemGroup { items[.pageFilter] as! NSToolbarItemGroup }
     private var activeFilter: NSToolbarItemGroup { pageFilterTitles.isEmpty ? kindGroup : pageGroup }
+    private var pathMenu: NSMenu { (items[.path] as! NSMenuToolbarItem).menu }
+    private var viewMenu: NSMenu { (items[.view] as! NSMenuToolbarItem).menu }
     var searchField: NSSearchField { (items[.search] as! NSSearchToolbarItem).searchField }
 
     // MARK: NSToolbarDelegate
@@ -198,6 +232,7 @@ import HomeScreenModel
         historyGroup.subitems[1].isEnabled = canForward
         crumbs = path
         windowTitle = path.last?.title ?? ""
+        resetPathMenu()
         reportWindowText()
     }
 
@@ -206,6 +241,7 @@ import HomeScreenModel
         historyGroup.isHidden = true
         crumbs = []
         windowTitle = title
+        resetPathMenu()
         reportWindowText()
     }
 
@@ -265,6 +301,21 @@ import HomeScreenModel
         items[.zoom]?.isHidden = !controlsOn
         items[.search]?.isHidden = !controlsOn
         cardsGroup.isHidden = !(controlsOn && cardsWanted)
+        items[.view]?.isHidden = sortKeys.isEmpty && !controlsOn
+    }
+
+    /// The sort fields of the location; the active one is shown with its direction in the View menu. None: not sortable.
+    func show(sort: BrowserSort, keys: [BrowserSort.Key]) {
+        self.sort = sort
+        sortKeys = keys
+        updateControls()
+        resetViewMenu()
+    }
+
+    /// The thumbnails' shape, as the View menu's Square / Aspect shows it.
+    func show(style: GridStyle) {
+        styleSymbol = style == .square ? "square.grid.2x2" : "rectangle.grid.2x2"
+        resetViewMenu()
     }
 
     func focusFilter() { (items[.search] as? NSSearchToolbarItem)?.beginSearchInteraction() }
@@ -302,6 +353,154 @@ import HomeScreenModel
     @objc private func zoomClicked(_ sender: NSToolbarItemGroup) { clickZoom(sender.selectedIndex) }
     @objc private func cardsClicked(_ sender: NSToolbarItemGroup) { clickCardStyle(sender.selectedIndex) }
     @objc private func kindClicked(_ sender: NSToolbarItemGroup) { clickKind(sender.selectedIndex) }
+
+    // MARK: Menus
+
+    var isPathVisible: Bool { items[.path]?.isHidden == false }
+    var isViewVisible: Bool { items[.view]?.isHidden == false }
+    var pathMenuTitles: [String] { pathMenu.items.map(\.title) }
+    var pathMenuChecked: [Bool] { pathMenu.items.map { $0.state == .on } }
+    var viewMenuTitles: [String] { viewMenu.items.map(\.title) }
+    var viewMenuChecked: [Bool] { viewMenu.items.map { $0.state == .on } }
+    var siblingTitles: [String] { siblingMenu?.items.map(\.title) ?? [] }
+    var siblingChecked: [Bool] { siblingMenu?.items.map { $0.state == .on } ?? [] }
+
+    /// What opening a menu does: AppKit asks the delegate to fill it first.
+    func openPathMenu() { menuNeedsUpdate(pathMenu) }
+    func openViewMenu() { menuNeedsUpdate(viewMenu) }
+    func clickPathItem(_ i: Int) { pathMenu.performActionForItem(at: i) }
+    func clickViewItem(_ i: Int) { viewMenu.performActionForItem(at: i) }
+    func hasSiblingMenu(atPathItem i: Int) -> Bool { pathMenu.items.indices.contains(i) && pathMenu.items[i].submenu is SiblingMenu }
+    func openSiblingMenu(atPathItem i: Int) {
+        if let menu = pathMenu.items[i].submenu { menuNeedsUpdate(menu) }
+    }
+
+    /// Until the menu is first opened it holds one item: filling every menu of the window costs more than the window can
+    /// spare (`NSPopUpButton` measures each item at about a millisecond), and most are never opened.
+    private func resetPathMenu() {
+        pathMenu.removeAllItems()
+        pathMenu.addItem(withTitle: windowTitle, action: nil, keyEquivalent: "")
+        items[.path]?.isHidden = crumbs.isEmpty
+    }
+
+    private func resetViewMenu() {
+        viewMenu.removeAllItems()
+        viewMenu.addItem(withTitle: "View", action: nil, keyEquivalent: "")
+    }
+
+    /// The folder and the folders above it, nearest first, the current one checked; each but the first place has the
+    /// folders beside it in a submenu.
+    private func fillPathMenu() {
+        pathMenu.removeAllItems()
+        for index in crumbs.indices.reversed() {
+            let crumb = crumbs[index]
+            let item = pathMenu.addItem(withTitle: crumb.title, action: #selector(pathItemChosen(_:)), keyEquivalent: "")
+            item.target = self
+            item.tag = index
+            item.state = index == crumbs.count - 1 ? .on : .off
+            item.image = symbol(crumb.location == .places ? "externaldrive" : "folder", crumb.title)
+            if index > 0 { item.submenu = SiblingMenu(crumb: index, delegate: self) }
+        }
+    }
+
+    private func fillViewMenu() {
+        viewMenu.removeAllItems()
+        func add(_ title: String, _ choice: ViewChoice, checked: Bool = false, image: String? = nil) {
+            let item = viewMenu.addItem(withTitle: title, action: #selector(viewItemChosen(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = choice
+            item.state = checked ? .on : .off
+            if let image { item.image = symbol(image, title) }
+        }
+        if !sortKeys.isEmpty {
+            viewMenu.addItem(.sectionHeader(title: "Sort by"))
+            for key in sortKeys {
+                let name = Self.keyTitles.first { $0.0 == key }?.1 ?? key.rawValue
+                add(key == sort.key ? name + (sort.ascending ? " ↑" : " ↓") : name, .sort(key))
+            }
+        }
+        guard controlsOn else { return }
+        if !sortKeys.isEmpty { viewMenu.addItem(.separator()) }
+        add("Square / Aspect", .style, image: styleSymbol)
+        guard cardsWanted else { return }
+        viewMenu.addItem(.separator())
+        let shown = cardsGroup.selectedIndex
+        for (i, style) in CardStyle.allCases.enumerated() { add(style.rawValue.capitalized, .card(style), checked: i == shown) }
+    }
+
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        if menu === pathMenu {
+            fillPathMenu()
+        } else if menu === viewMenu {
+            fillViewMenu()
+        } else if let sibling = menu as? SiblingMenu {
+            siblingMenu = sibling
+            onSiblings?(sibling.crumb)
+        }
+    }
+
+    func menuDidClose(_ menu: NSMenu) {
+        // The chosen item's action comes after the close: the menu's items stay readable until the next one opens.
+        if menu is SiblingMenu { onSiblingsClosed?() }
+    }
+
+    @objc private func pathItemChosen(_ sender: NSMenuItem) {
+        if crumbs.indices.contains(sender.tag) { onCrumb?(crumbs[sender.tag].location) }
+    }
+
+    @objc private func viewItemChosen(_ sender: NSMenuItem) {
+        switch sender.representedObject as? ViewChoice {
+        case .sort(let key): onSortKey?(key)
+        case .style: onStyle?()
+        case .card(let style): onCardStyle?(style)
+        case nil: break
+        }
+    }
+
+    // MARK: Sibling menus
+
+    /// The submenu of crumb `i` at once: the folders when known, else one `Loading…` line.
+    func showSiblings(_ entries: [(title: String, location: BrowserLocation, current: Bool)]?, at i: Int) {
+        guard let menu = pathMenu.items.compactMap({ $0.submenu as? SiblingMenu }).first(where: { $0.crumb == i }) else { return }
+        siblingMenu = menu
+        fill(menu, entries)
+    }
+
+    /// The reply for the open menu.
+    func updateSiblings(_ entries: [(title: String, location: BrowserLocation, current: Bool)]) {
+        guard let menu = siblingMenu else { return }
+        fill(menu, entries)
+    }
+
+    func chooseSibling(_ i: Int) {
+        guard siblingLocations.indices.contains(i) else { return }
+        let location = siblingLocations[i]
+        pathMenu.cancelTracking()
+        onCrumb?(location)
+    }
+
+    func closeSiblings() {
+        guard siblingMenu != nil else { return }
+        siblingMenu = nil
+        onSiblingsClosed?()
+    }
+
+    private func fill(_ menu: NSMenu, _ entries: [(title: String, location: BrowserLocation, current: Bool)]?) {
+        menu.removeAllItems()
+        siblingLocations = entries?.map(\.location) ?? []
+        guard let entries else {
+            menu.addItem(withTitle: "Loading…", action: nil, keyEquivalent: "").isEnabled = false
+            return
+        }
+        for (i, entry) in entries.enumerated() {
+            let item = menu.addItem(withTitle: entry.title, action: #selector(siblingChosen(_:)), keyEquivalent: "")
+            item.target = self
+            item.tag = i
+            item.state = entry.current ? .on : .off
+        }
+    }
+
+    @objc private func siblingChosen(_ sender: NSMenuItem) { chooseSibling(sender.tag) }
 
     // MARK: Name field
 
