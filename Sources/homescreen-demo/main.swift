@@ -222,6 +222,8 @@ import HomeScreenKit
     }
 }
 
+if CommandLine.arguments.dropFirst().first == "bench-toolbar" { ToolbarBench.main(Array(CommandLine.arguments.dropFirst(2))) }
+
 MainActor.assumeIsolated {
     let app = NSApplication.shared
     app.setActivationPolicy(.regular)
