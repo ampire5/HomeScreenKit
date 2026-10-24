@@ -43,58 +43,70 @@ public final class HomeView: NSView {
         paintBackground()
     }
 
+    /// The sidebar shows or is collapsed: the split view item slides it, as the system's toggle does.
     public var isSidebarVisible = true {
         didSet {
             guard isSidebarVisible != oldValue else { return }
             if !isSidebarVisible, window?.firstResponder === sidebarView { window?.makeFirstResponder(browser) }
-            if !isSidebarVisible { resizeHandle.isHidden = true }
-            let width = isSidebarVisible ? shownSidebarWidth : 0
+            guard sidebarItem.isCollapsed == isSidebarVisible else { return }
             if window?.isVisible == true, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
-                sidebarView.isHidden = false
-                NSAnimationContext.runAnimationGroup({ context in
-                    context.duration = Chrome.Motion.select
-                    context.allowsImplicitAnimation = true
-                    sidebarColumn.animator().constant = width
-                    layoutSubtreeIfNeeded()
-                }, completionHandler: { [weak self] in
-                    MainActor.assumeIsolated {
-                        guard let self else { return }
-                        self.sidebarView.isHidden = !self.isSidebarVisible
-                        self.resizeHandle.isHidden = !self.isSidebarVisible
-                    }
-                })
+                sidebarItem.animator().isCollapsed = !isSidebarVisible
             } else {
-                sidebarColumn.constant = width
-                sidebarView.isHidden = !isSidebarVisible
-                resizeHandle.isHidden = !isSidebarVisible
-                needsLayout = true
+                sidebarItem.isCollapsed = !isSidebarVisible
             }
         }
     }
 
-    /// The sidebar's kept width, within `HomeSidebar.widthRange`: the app sets it, the user drags the sidebar's edge
-    /// (`resizeHandle`). Hidden, the sidebar comes back at this width; shown, at most `widestSidebar`.
+    /// The sidebar's kept width, within `HomeSidebar.widthRange`: the app sets it, the user drags the divider. Collapsed
+    /// and shown again, the sidebar comes back at this width; shown, at most `widestSidebar`.
     public var sidebarWidth = HomeSidebar.width {
         didSet {
             sidebarWidth = min(max(sidebarWidth, HomeSidebar.widthRange.lowerBound), HomeSidebar.widthRange.upperBound)
-            updateColumn()
+            guard sidebarWidth != oldValue, !isAdoptingDrag else { return }
+            wantsSidebarWidth = true
+            needsLayout = true
         }
     }
 
     /// The widest the sidebar shows in this window: a third of it, never under `HomeSidebar.widestAlways`.
     var widestSidebar: CGFloat { max(HomeSidebar.widestAlways, (bounds.width / 3).rounded(.down)) }
-    /// The column the sidebar takes while it shows: the kept width, narrower in a narrow window.
-    var shownSidebarWidth: CGFloat { min(sidebarWidth, widestSidebar) }
 
-    private func updateColumn() {
-        guard isSidebarVisible, let sidebarColumn, sidebarColumn.constant != shownSidebarWidth else { return }
-        sidebarColumn.constant = shownSidebarWidth
-        needsLayout = true
+    /// The width asked for is put on the divider at the next layout, when the split view has a size.
+    private var wantsSidebarWidth = true
+    /// The width follows a drag of the divider: it is not put back on it.
+    private var isAdoptingDrag = false
+    private var widthReport: Task<Void, Never>?
+
+    private func applySidebarWidth() {
+        let split = splitController.splitView
+        guard !sidebarItem.isCollapsed, split.bounds.width > 0 else { return }
+        sidebarItem.maximumThickness = widestSidebar
+        guard wantsSidebarWidth else { return }
+        wantsSidebarWidth = false
+        split.setPosition(min(sidebarWidth, widestSidebar), ofDividerAt: 0)
     }
 
-    override public func setFrameSize(_ newSize: NSSize) {
-        super.setFrameSize(newSize)
-        updateColumn()
+    /// The divider moved: when it is the user's drag (the width differs from the kept one) the new width is kept, and
+    /// told to the app once the pointer has been still for a moment.
+    private func splitDidResize() {
+        guard !sidebarItem.isCollapsed, !wantsSidebarWidth else { return }
+        let width = sidebarView.frame.width.rounded()
+        guard width > 0, abs(width - min(sidebarWidth, widestSidebar)) >= 1, window?.inLiveResize != true else { return }
+        isAdoptingDrag = true
+        sidebarWidth = width
+        isAdoptingDrag = false
+        widthReport?.cancel()
+        widthReport = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(350))
+            guard !Task.isCancelled, let self else { return }
+            self.onSidebarWidthChange?(self.sidebarWidth)
+        }
+    }
+
+    public override func layout() {
+        super.layout()
+        sidebarView.contentTopInset = browser.topInset
+        applySidebarWidth()
     }
 
     /// A folder holding one folder shows with it on one row (`home-sidebar-compact`).
@@ -130,15 +142,18 @@ public final class HomeView: NSView {
         showTree()
     }
 
-    /// The user let go of the sidebar's edge: the width to keep (the app writes it back and sets it next time).
+    /// The user moved the divider: the width to keep (the app writes it back and sets it next time).
     public var onSidebarWidthChange: ((CGFloat) -> Void)?
 
-    /// The strip along the sidebar's right edge, over the panel's edge and the gap beside it, that resizes it.
-    let resizeHandle = SidebarResizeHandle()
+    /// The system's split: the sidebar item (with its material, divider, collapsing and the toolbar's tracking
+    /// separator) and the browser's.
+    let splitController = HomeSplitViewController()
+    private let sidebarItem: NSSplitViewItem
+    private var splitObservers: [any NSObjectProtocol] = []
+    private var collapseObservation: NSKeyValueObservation?
 
     private weak var source: HomeSource?
     private var tree = SidebarTree(sections: [])
-    private var sidebarColumn: NSLayoutConstraint!
     /// Bumped on every move: the path's folders still to come for an older one are not asked. New sections keep them
     /// (they keep what is open under the roots still there).
     private var generation = 0
@@ -151,38 +166,38 @@ public final class HomeView: NSView {
     public init(source: HomeSource) {
         self.source = source
         browser = HomeBrowserView(source: source)
+        let sidebarController = NSViewController()
+        sidebarController.view = sidebarView
+        let browserController = NSViewController()
+        browserController.view = browser
+        sidebarItem = NSSplitViewItem(sidebarWithViewController: sidebarController)
         super.init(frame: .zero)
         wantsLayer = true
         paintBackground()
-        for view in [browser, sidebarView, resizeHandle] as [NSView] {
-            view.translatesAutoresizingMaskIntoConstraints = false
-            addSubview(view)
-        }
-        sidebarColumn = sidebarView.widthAnchor.constraint(equalToConstant: sidebarWidth)
+        sidebarItem.minimumThickness = HomeSidebar.widthRange.lowerBound
+        sidebarItem.maximumThickness = HomeSidebar.widthRange.upperBound
+        splitController.addSplitViewItem(sidebarItem)
+        splitController.addSplitViewItem(NSSplitViewItem(viewController: browserController))
+        let split = splitController.view
+        split.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(split)
         NSLayoutConstraint.activate([
-            sidebarColumn,
-            resizeHandle.trailingAnchor.constraint(equalTo: sidebarView.trailingAnchor,
-                                                   constant: SidebarResizeHandle.outside),
-            resizeHandle.widthAnchor.constraint(equalToConstant: SidebarResizeHandle.inside + HomeSidebar.inset
-                                                    + SidebarResizeHandle.outside),
-            resizeHandle.topAnchor.constraint(equalTo: topAnchor), resizeHandle.bottomAnchor.constraint(equalTo: bottomAnchor),
-            sidebarView.leadingAnchor.constraint(equalTo: leadingAnchor),
-            sidebarView.topAnchor.constraint(equalTo: topAnchor), sidebarView.bottomAnchor.constraint(equalTo: bottomAnchor),
-            browser.leadingAnchor.constraint(equalTo: sidebarView.trailingAnchor),
-            browser.trailingAnchor.constraint(equalTo: trailingAnchor),
-            browser.topAnchor.constraint(equalTo: topAnchor), browser.bottomAnchor.constraint(equalTo: bottomAnchor),
+            split.leadingAnchor.constraint(equalTo: leadingAnchor), split.trailingAnchor.constraint(equalTo: trailingAnchor),
+            split.topAnchor.constraint(equalTo: topAnchor), split.bottomAnchor.constraint(equalTo: bottomAnchor),
         ])
-        browser.toolbar.onSidebar = { [weak self] in self?.onSidebarToggle?() }
+        splitController.onToggleSidebar = { [weak self] in self?.onSidebarToggle?() }
+        splitObservers.append(NotificationCenter.default.addObserver(
+            forName: NSSplitView.didResizeSubviewsNotification, object: splitController.splitView, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.splitDidResize() }
+        })
+        // The divider dragged past its minimum collapses the sidebar: the app is told as for the toggle's click.
+        collapseObservation = sidebarItem.observe(\.isCollapsed, options: [.new]) { [weak self] item, _ in
+            MainActor.assumeIsolated {
+                guard let self, item.isCollapsed == self.isSidebarVisible else { return }
+                self.onSidebarToggle?()
+            }
+        }
         browser.toolbar.onHome = { [weak self] in self?.onHome?() }
-        resizeHandle.currentWidth = { [weak self] in self?.shownSidebarWidth ?? HomeSidebar.width }
-        resizeHandle.onResize = { [weak self] width in
-            guard let self else { return }
-            self.sidebarWidth = min(width, self.widestSidebar)
-        }
-        resizeHandle.onEnd = { [weak self] in
-            guard let self else { return }
-            self.onSidebarWidthChange?(self.sidebarWidth)
-        }
         browser.onMoved = { [weak self] location in self?.moved(to: location) }
         browser.onListingComplete = { [weak self] location, entries in self?.listingComplete(location, entries: entries) }
         sidebarView.onOpen = { [weak self] location in self?.browser.show(location, selecting: nil) }
@@ -200,6 +215,10 @@ public final class HomeView: NSView {
         sidebarView.onEndKeys = { [weak self] in self?.browser.takeFocus() }
         sidebarView.onClickKeys = { [weak self] in self?.browser.takeFocus() }
         reloadSidebar()
+    }
+
+    @objc func toggleSidebar(_ sender: Any?) {
+        onSidebarToggle?()
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
@@ -312,5 +331,15 @@ public final class HomeView: NSView {
     private func fileURL(_ info: any NSDraggingInfo) -> URL? {
         info.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true])?
             .first as? URL
+    }
+}
+
+/// The system's split view controller with its toggle given to the app: the toolbar's Sidebar button (and the menu's
+/// item) reaches `toggleSidebar(_:)` along the responder chain, and the app decides (it keeps `home-sidebar`).
+final class HomeSplitViewController: NSSplitViewController {
+    var onToggleSidebar: (() -> Void)?
+
+    override func toggleSidebar(_ sender: Any?) {
+        if let onToggleSidebar { onToggleSidebar() } else { super.toggleSidebar(sender) }
     }
 }

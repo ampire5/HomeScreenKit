@@ -20,12 +20,11 @@ import Testing
         controller.show(sort: BrowserSort(key: .name, ascending: true), keys: [.name, .date, .size])
         controller.show(cardStyle: .posters, visible: true)
         #expect(controller.pathMenuTitles.isEmpty)   // nothing but the item that stands for the button
-        #expect(controller.viewMenuTitles.isEmpty)
+        #expect(controller.isSortVisible && controller.sortSegmentTitles == ["Name ↑", "Date", "Size"])
         controller.openPathMenu()
         #expect(controller.pathMenuTitles == ["Trips", "Pictures", "Home", "Places"])
-        controller.openViewMenu()
-        #expect(controller.viewMenuTitles.count > 1)
-        #expect(controller.viewMenuTitles.contains("Name ↑"))
+        #expect(controller.isFilterControlVisible)
+        #expect(controller.kindTitles == ["All", "Folders", "Photos"])
     }
 
     @Test func pathMenuListsAncestorsNearestFirst() {
@@ -116,56 +115,38 @@ import Testing
         #expect(closed == 1)
     }
 
-    @Test func viewMenuShowsSortWithDirection() {
+    @Test func sortSegmentsShowTheActiveFieldWithItsDirection() {
         let controller = HomeToolbarController()
         var keys: [BrowserSort.Key] = []
         controller.onSortKey = { keys.append($0) }
         controller.show(sort: BrowserSort(key: .date, ascending: false), keys: [.name, .date, .size])
-        controller.openViewMenu()
-        let titles = controller.viewMenuTitles
-        #expect(Array(titles.dropFirst().prefix(3)) == ["Name", "Date ↓", "Size"])
-        controller.clickViewItem(titles.firstIndex(of: "Size")!)
-        #expect(keys == [.size])
+        #expect(controller.sortSegmentTitles == ["Name", "Date ↓", "Size"] && controller.sortSelection == 1)
+        controller.clickSort(2)
+        controller.clickSort(1)   // the active segment is chosen again: the view reverses it
+        #expect(keys == [.size, .date])
         controller.show(sort: BrowserSort(key: .name, ascending: true), keys: [.name, .date, .size])
-        controller.openViewMenu()
-        #expect(Array(controller.viewMenuTitles.dropFirst().prefix(3)) == ["Name ↑", "Date", "Size"])
+        #expect(controller.sortSegmentTitles == ["Name ↑", "Date", "Size"] && controller.sortSelection == 0)
     }
 
-    @Test func viewMenuHasStyleAndCards() {
+    @Test func sortSegmentsFollowTheLocation() {
         let controller = HomeToolbarController()
-        var styles = 0
-        var cards: [CardStyle] = []
-        controller.onStyle = { styles += 1 }
-        controller.onCardStyle = { cards.append($0) }
-        controller.show(sort: BrowserSort.standard, keys: [.name])
-        controller.show(cardStyle: .cards, visible: true)
-        controller.openViewMenu()
-        var titles = controller.viewMenuTitles
-        controller.clickViewItem(titles.firstIndex(of: "Square / Aspect")!)
-        #expect(styles == 1)
-        let first = titles.firstIndex(of: "Posters")!
-        #expect(Array(titles[first...first + 2]) == ["Posters", "Cards", "List"])
-        #expect(Array(controller.viewMenuChecked[first...first + 2]) == [false, true, false])
-        controller.clickViewItem(first + 2)
-        #expect(cards == [.list])
-        controller.show(cardStyle: .cards, visible: false)
-        controller.openViewMenu()
-        titles = controller.viewMenuTitles
-        #expect(!titles.contains("Posters") && !titles.contains("List"))
-    }
-
-    @Test func viewMenuIsHiddenWithoutAnything() {
-        let controller = HomeToolbarController()
-        #expect(controller.isViewVisible)
-        controller.show(sort: BrowserSort.standard, keys: [])
-        #expect(controller.isViewVisible)   // the shape of the thumbnails is still in it
-        controller.show(controls: false)
-        #expect(!controller.isViewVisible)
         controller.show(sort: BrowserSort.standard, keys: [.name, .date])
-        #expect(controller.isViewVisible)   // a page can still be sorted
-        controller.openViewMenu()
-        #expect(!controller.viewMenuTitles.contains("Square / Aspect"))
-        controller.show(controls: true)
-        #expect(controller.isViewVisible)
+        #expect(controller.isSortVisible && controller.sortSegmentTitles == ["Name ↑", "Date"])
+        controller.show(sort: BrowserSort.standard, keys: [])
+        #expect(!controller.isSortVisible && controller.sortSegmentTitles.isEmpty)
+        controller.show(sort: BrowserSort(key: .size, ascending: true), keys: [.name, .date])   // a field the place lacks
+        #expect(controller.sortSelection == nil)
+    }
+
+    @Test func aspectButtonTogglesThumbnailShape() {
+        let controller = HomeToolbarController()
+        var styles: [GridStyle] = []
+        controller.onStyle = { styles.append($0) }
+        controller.show(style: .square)
+        controller.clickAction(0)
+        #expect(styles == [.aspect])
+        controller.show(style: .aspect)
+        controller.clickAction(0)
+        #expect(styles == [.aspect, .square])
     }
 }

@@ -1,6 +1,6 @@
 import Foundation
 
-/// The toolbar's kind capsule: everything, the folders and archives, or the photos.
+/// The toolbar's kind filter: everything, the folders and archives, or the photos.
 public enum BrowserKindFilter: String, CaseIterable, Sendable {
     case all, folders, photos
 

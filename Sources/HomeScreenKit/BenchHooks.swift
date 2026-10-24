@@ -7,12 +7,9 @@ extension HomeBrowserView {
     /// The toolbar's progress pill with `state`, as `setProgress` shows it once its delay is over.
     @_spi(Bench) public func benchShow(progress state: ThumbsProgressState?) { toolbar.show(progress: state) }
 
-    /// Every sort field chosen in turn from the View menu, as the clicks do: the menu is filled when first opened, the
-    /// source re-sorts and the grid is laid out again.
+    /// Every sort segment clicked in turn, as the clicks do: the source re-sorts and the grid is laid out again.
     @_spi(Bench) public func benchChooseSorts() {
-        toolbar.openViewMenu()
-        let sortItems = 1...3   // after the "Sort by" heading: Name, Date, Size
-        for i in sortItems { toolbar.clickViewItem(i) }
+        for i in 0..<3 { toolbar.clickSort(i) }   // Name, Date, Size
     }
 
     /// The menu of `count` sibling folders beside the folder on screen, built as when its submenu of the path pill opens

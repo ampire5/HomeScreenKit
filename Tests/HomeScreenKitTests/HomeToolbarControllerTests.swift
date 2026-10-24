@@ -26,10 +26,25 @@ import Testing
         withExtendedLifetime(window) {}
     }
 
+    @Test func locationTextUpdatesInItsToolbarItem() {
+        let controller = HomeToolbarController()
+        let window = attach(controller)
+        controller.show(title: "Library")
+        controller.show(subtitle: "16–19 Sep 2026")
+        #expect(controller.windowTitle == "Library")
+        #expect(controller.subtitleText == "16–19 Sep 2026")
+        #expect(controller.nsToolbar.items[1].itemIdentifier == .toggleSidebar)
+        #expect(controller.nsToolbar.items[3].itemIdentifier == HomeToolbarItem.title.identifier)
+        withExtendedLifetime(window) {}
+    }
+
     @Test func everyItemHasALabelAndATip() {
         let controller = HomeToolbarController()
         let window = attach(controller)
-        let items = controller.nsToolbar.items.filter { $0.itemIdentifier != .flexibleSpace }
+        let systemItems: Set<NSToolbarItem.Identifier> = [.toggleSidebar, .sidebarTrackingSeparator]
+        let items = controller.nsToolbar.items.filter {
+            $0.itemIdentifier != .flexibleSpace && !systemItems.contains($0.itemIdentifier)
+        }
         #expect(items.count == HomeToolbarItem.allCases.count)
         for item in items {
             #expect(!item.label.isEmpty, "\(item.itemIdentifier.rawValue) has no label")
@@ -41,7 +56,8 @@ import Testing
     @Test func itemsCarryTheHidePriorities() {
         let controller = HomeToolbarController()
         let window = attach(controller)
-        for item in controller.nsToolbar.items where item.itemIdentifier != .flexibleSpace {
+        for item in controller.nsToolbar.items where item.itemIdentifier != .flexibleSpace
+            && item.itemIdentifier != .toggleSidebar && item.itemIdentifier != .sidebarTrackingSeparator {
             // `NSSearchToolbarItem` ignores a priority it is given and keeps 1001 (probed on macOS 26.7).
             if item.itemIdentifier == HomeToolbarItem.search.identifier { continue }
             let wanted = HomeToolbarItem.allCases.first { $0.identifier == item.itemIdentifier }!.priority
@@ -50,14 +66,16 @@ import Testing
         withExtendedLifetime(window) {}
     }
 
-    @Test func kindSegmentsAreTheFilterTitles() {
+    @Test func filterGroupListsAndSelectsTheKinds() {
         let controller = HomeToolbarController()
         var kinds: [BrowserKindFilter] = []
         controller.onKind = { kinds.append($0) }
         #expect(controller.kindTitles == ["All", "Folders", "Photos"])
         controller.show(filter: .photos, visible: true)
         #expect(controller.kindSelection == 2)
+        #expect(controller.isFilterControlVisible && controller.filterSelection == 2)
         controller.clickKind(1)
+        #expect(controller.filterSelection == 1)
         #expect(kinds == [.folders])
     }
 
@@ -70,11 +88,13 @@ import Testing
         #expect(controller.kindTitles == ["Scenes", "Images"])
         #expect(controller.isFilterVisible)
         #expect(controller.kindSelection == 0)
+        #expect(controller.isFilterControlVisible && controller.filterSelection == 0)
         controller.clickKind(1)
         #expect(pages == [1] && kinds.isEmpty)
         controller.show(pageFilters: ["Scenes", "Images", "Galleries"], selected: 2)
         #expect(controller.kindTitles == ["Scenes", "Images", "Galleries"])
         #expect(controller.kindSelection == 2)
+        #expect(controller.filterSelection == 2)
         controller.show(pageFilters: [], selected: nil)
         #expect(controller.kindTitles == ["All", "Folders", "Photos"])
         controller.clickKind(0)
@@ -108,9 +128,9 @@ import Testing
         let controller = HomeToolbarController()
         controller.show(cardStyle: .posters, visible: true)
         controller.show(controls: false)
-        #expect(!controller.isZoomVisible && !controller.isSearchVisible && !controller.isCardSwitchVisible)
+        #expect(!controller.isStyleVisible && !controller.isZoomVisible && !controller.isSearchVisible && !controller.isCardSwitchVisible)
         controller.show(controls: true)
-        #expect(controller.isZoomVisible && controller.isSearchVisible && controller.isCardSwitchVisible)
+        #expect(controller.isStyleVisible && controller.isZoomVisible && controller.isSearchVisible && controller.isCardSwitchVisible)
         controller.show(cardStyle: .posters, visible: false)
         controller.show(controls: false)
         controller.show(controls: true)
@@ -123,15 +143,13 @@ import Testing
         controller.onBack = { log.append("back") }
         controller.onForward = { log.append("forward") }
         controller.onZoom = { log.append($0 == .smaller ? "smaller" : "larger") }
-        controller.onSidebar = { log.append("sidebar") }
         controller.onHome = { log.append("home") }
         controller.clickHistory(0)
         controller.clickHistory(1)
         controller.clickZoom(0)
         controller.clickZoom(1)
-        controller.clickSidebar()
         controller.clickHome()
-        #expect(log == ["back", "forward", "smaller", "larger", "sidebar", "home"])
+        #expect(log == ["back", "forward", "smaller", "larger", "home"])
     }
 
     @Test func navigationFollowsThePath() {
@@ -162,12 +180,14 @@ import Testing
         let window = attach(controller)
         controller.show(filter: .photos, visible: true)
         controller.show(cardStyle: .list, visible: true)
+        controller.show(style: .square)
         controller.filterText = "sun"
         window.toolbar = nil
         window.toolbar = controller.nsToolbar
         #expect(controller.kindSelection == 2)
         #expect(controller.cardSwitchSelection == 2)
         #expect(controller.isCardSwitchVisible)
+        #expect(controller.isStyleVisible)
         #expect(controller.filterText == "sun")
         #expect(controller.nsToolbar.items.map(\.itemIdentifier) == HomeToolbarItem.browserOrder)
     }

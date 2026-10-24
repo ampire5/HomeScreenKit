@@ -131,13 +131,26 @@ import Testing
         #expect(view.selectedID == view.entries[3].id)
     }
 
-    @Test func clicksOpenByModifiers() async {
+    @Test func singleClickSelectsAndDoubleClickOpens() async {
         let source = FakeHomeSource()
         let view = await shown(source, [BrowserFixtures.file("a.jpg"), BrowserFixtures.folder("sub")])
-        view.card(for: view.entries[1].id)!.onClick?(true, [])
-        #expect(source.opened.last?.1 == .openNewTab)
-        view.card(for: view.entries[0].id)!.onClick?(false, [])
+        let folderID = view.entries.first { $0.name == "sub" }!.id
+        view.card(for: folderID)!.onClick?(false, [], 1)
+        #expect(view.selectedID == folderID)
+        #expect(view.location == .folder(x))
+        view.card(for: folderID)!.onClick?(false, [], 2)
         #expect(view.location == .folder(x.appendingPathComponent("sub")))
+    }
+
+    @Test func modifiedAndMiddleClicksKeepOpeningNewTabs() async {
+        let source = FakeHomeSource()
+        let view = await shown(source, [BrowserFixtures.file("a.jpg"), BrowserFixtures.folder("sub")])
+        let fileID = view.entries.first { $0.name == "a.jpg" }!.id
+        view.card(for: view.entries.first { $0.name == "sub" }!.id)!.onClick?(true, [], 1)
+        #expect(source.opened.last?.1 == .openNewTab)
+        view.card(for: fileID)!.onClick?(false, [.command], 1)
+        #expect(source.opened.last?.0.name == "a.jpg")
+        #expect(source.opened.last?.1 == .openNewTab)
     }
 
     @Test func resizeKeysCallOnResize() async {

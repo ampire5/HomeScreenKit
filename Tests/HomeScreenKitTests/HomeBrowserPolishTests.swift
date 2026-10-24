@@ -48,7 +48,8 @@ import Testing
         source.yield(x, BrowserFixtures.files(5))
         await settle { view.entries.count == 5 }
         #expect(view.footerLines.first?.hasPrefix("5 ") == true)
-        #expect(view.toolbar.subtitleText.hasPrefix(view.entries[0].name))   // the selected card
+        #expect(view.toolbar.subtitleText.hasPrefix("5 photos"))
+        #expect(view.selectionInfoText.hasPrefix(view.entries[0].name))
         #expect(!view.isShowingLoadingLine)
     }
 

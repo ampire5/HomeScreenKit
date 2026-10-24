@@ -51,6 +51,16 @@ import Testing
         group.setSymbol("square", at: 1)
     }
 
+    @Test func hiddenGroupButtonFreesItsSpace() {
+        let group = GlassGroup(items: [(symbol: "square", tip: "Square"), (symbol: "line.3.horizontal", tip: "Filter"),
+                                       (symbol: "ellipsis", tip: "More")])
+        let fullWidth = group.intrinsicContentSize.width
+        group.setHidden(true, at: 0)
+        #expect(group.intrinsicContentSize.width == fullWidth - 30)
+        group.setHidden(false, at: 0)
+        #expect(group.intrinsicContentSize.width == fullWidth)
+    }
+
     @Test func fittingWidthGrowsWithTitles() {
         let short = GlassCapsule(titles: ["A", "B"]), long = GlassCapsule(titles: ["Alphabetical", "Chronological"])
         #expect(long.fittingSize.width > short.fittingSize.width)

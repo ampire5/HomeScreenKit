@@ -69,6 +69,18 @@ import Testing
         #expect(got?.1 == .open)
     }
 
+    @Test func singleClickSelectsAndDoubleClickOpens() {
+        let view = make(ids: ["first", "second"])
+        var got: (String, HomeClick)?
+        view.onCard = { got = ($0, $1) }
+        let second = view.cardView(for: "second")!
+        second.onClick?(false, [], 1)
+        #expect(second.isSelected)
+        #expect(got == nil)
+        second.onClick?(false, [], 2)
+        #expect(got?.0 == "second" && got?.1 == .open)
+    }
+
     @Test func messageHidesGrid() {
         let view = make(ids: ["a"])
         view.showMessage(title: "Cannot open a.mp4", reason: "No video", detail: "-", hints: ["⌘O — open"])

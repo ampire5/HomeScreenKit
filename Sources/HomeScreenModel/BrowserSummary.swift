@@ -38,6 +38,33 @@ public enum BrowserSummary {
         return parts.joined(separator: " · ")
     }
 
+    /// Stable details for the selected card, shown in the browser's fixed bottom status area.
+    public static func selection(_ entry: BrowserEntry?) -> String {
+        guard let entry else { return "" }
+        if entry.isFile { return subtitle(selected: entry, entries: [], loading: nil) }
+
+        var parts = [entry.name]
+        if let summary = entry.summary {
+            if let photos = summary.photos { parts.append(count(photos, "photo")) }
+            if let folders = summary.folders { parts.append(count(folders, "folder")) }
+            if let bytes = summary.bytes, bytes > 0 {
+                parts.append(ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file))
+            }
+            if let first = summary.first, let last = summary.last, first != last {
+                parts.append("\(dateFormat.string(from: first))–\(dateFormat.string(from: last))")
+            } else if let date = summary.last ?? summary.first ?? entry.date {
+                parts.append(dateFormat.string(from: date))
+            }
+        } else if let subtitle = entry.subtitle {
+            parts.append(subtitle)
+            if let date = entry.date { parts.append(dateFormat.string(from: date)) }
+        } else {
+            if let photos = entry.count { parts.append(count(photos, "photo")) }
+            if let date = entry.date { parts.append(dateFormat.string(from: date)) }
+        }
+        return parts.joined(separator: " · ")
+    }
+
     /// `2 719`: grouped as the user's locale groups.
     public static func number(_ n: Int) -> String {
         numberFormat.string(from: NSNumber(value: n)) ?? String(n)

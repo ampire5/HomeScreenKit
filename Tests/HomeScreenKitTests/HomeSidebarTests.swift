@@ -56,7 +56,6 @@ import Testing
         #expect(view.lineFrames[0].height == 28)
         #expect(view.lineFrames[1].height == 26)
         #expect(view.countTexts[3] == "12")
-        #expect(view.panelFrame == CGRect(x: 8, y: 8, width: 220, height: 584))
     }
 
     @Test func clickOpens() {

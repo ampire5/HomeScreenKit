@@ -63,7 +63,7 @@ public struct BrowserSort: Equatable, Sendable {
     }
 }
 
-/// The sort capsule's memory: a click on the active field reverses it, a click on another field takes that field's
+/// The sort controls' memory: choosing the active field reverses it, choosing another field takes that field's
 /// last direction in this view, or its first one (name ascending, date and size descending, newest and largest first).
 public struct BrowserSortChoice: Equatable, Sendable {
     public private(set) var current: BrowserSort

@@ -1,16 +1,14 @@
 import AppKit
+import HomeChrome
 import HomeScreenModel
 
-/// The browser's toolbar as the window's `NSToolbar`, as in Photos: the sidebar and start page buttons, ‹ ›, the path as
-/// a pill menu, the kind filter (or a page's own) in text segments, the thumbnails' ring, the card switch, − +, View ▾
-/// and the search. The window shows the folder's name and the subtitle (`onWindowText`) and the toolbar does not draw
-/// them. Every item is made once, here, and kept: the app gives the toolbar to its window while Home shows and takes it
+/// The browser's toolbar as the window's `NSToolbar`.
+/// Every item is made once, here, and kept: the app gives the toolbar to its window while Home shows and takes it
 /// away while the viewer does, and what was chosen is still there when it comes back. A narrow window hides the items
 /// by `HomeToolbarItem.priority`; the toolbar knows nothing of the window but `nsToolbar`.
 @MainActor final class HomeToolbarController: NSObject, NSToolbarDelegate, NSMenuDelegate, NSSearchFieldDelegate {
     let nsToolbar: NSToolbar
 
-    var onSidebar: (() -> Void)?
     /// The house: back to the start page (the app decides which).
     var onHome: (() -> Void)?
     var onBack: (() -> Void)?
@@ -19,10 +17,10 @@ import HomeScreenModel
     /// A sort field chosen: the view decides the direction (`BrowserSortChoice`).
     var onSortKey: ((BrowserSort.Key) -> Void)?
     var onKind: ((BrowserKindFilter) -> Void)?
-    /// A segment of a page's filter (`show(pageFilters:)`).
+    /// An item of a page's filter (`show(pageFilters:)`).
     var onPageFilter: ((Int) -> Void)?
     var onZoom: ((HomeResize) -> Void)?
-    var onStyle: (() -> Void)?
+    var onStyle: ((GridStyle) -> Void)?
     /// A segment of the posters / cards / list switch: the view saves the choice and re-tiles.
     var onCardStyle: ((CardStyle) -> Void)?
     var onFilterText: ((String) -> Void)?
@@ -36,8 +34,15 @@ import HomeScreenModel
     var onWindowText: ((_ title: String, _ subtitle: String) -> Void)?
 
     private var items: [HomeToolbarItem: NSToolbarItem] = [:]
+    private let titleView = HomeToolbarTitleView()
+    private let filterControl = NSSegmentedControl(labels: BrowserKindFilter.allCases.map(\.title),
+                                                    trackingMode: .selectOne, target: nil, action: nil)
+    /// The sort fields as text segments: the active one carries its direction (↑ ↓), a click on it reverses.
+    private let sortControl = NSSegmentedControl()
     private var crumbs: [(title: String, location: BrowserLocation)] = []
     private var pageFilterTitles: [String] = []
+    private var selectedPageFilter: Int?
+    private var selectedKindFilter = BrowserKindFilter.all
     /// The kind filter is wanted (a folder, not a page or the places); a page's filter takes its place while it has one.
     private var kindWanted = true
     private var controlsOn = true
@@ -45,7 +50,7 @@ import HomeScreenModel
     private var sort = BrowserSort.standard
     /// The sort fields of this location, in order; none: the source cannot be sorted.
     private var sortKeys: [BrowserSort.Key] = [.name, .date, .size]
-    private var styleSymbol = "rectangle.grid.2x2"
+    private var gridStyle = GridStyle.aspect
     /// The thumbnails' ring: the progress item's view, the ring alone (its text is the item's tip).
     let progress = ThumbsProgressPill()
     /// The state the ring shows while there is work.
@@ -72,10 +77,12 @@ import HomeScreenModel
         required init(coder: NSCoder) { fatalError("init(coder:) is not supported") }
     }
 
-    private enum ViewChoice { case sort(BrowserSort.Key), style, card(CardStyle) }
-
-    private(set) var windowTitle = ""
-    private(set) var subtitleText = ""
+    private(set) var windowTitle = "" {
+        didSet { titleView.title = windowTitle }
+    }
+    private(set) var subtitleText = "" {
+        didSet { titleView.subtitle = subtitleText }
+    }
 
     override init() {
         nsToolbar = NSToolbar(identifier: "home.browser")
@@ -84,20 +91,28 @@ import HomeScreenModel
         nsToolbar.displayMode = .iconOnly
         nsToolbar.allowsUserCustomization = false
         nsToolbar.autosavesConfiguration = false
+        filterControl.segmentStyle = .automatic
+        filterControl.controlSize = .regular
+        filterControl.target = self
+        filterControl.action = #selector(filterSegmentClicked(_:))
+        for index in BrowserKindFilter.allCases.indices { filterControl.setWidth(92, forSegment: index) }
+        sortControl.segmentStyle = .automatic
+        sortControl.trackingMode = .selectOne
+        sortControl.target = self
+        sortControl.action = #selector(sortSegmentClicked(_:))
+        sortControl.setAccessibilityLabel("Sort by")
         for item in HomeToolbarItem.allCases { items[item] = make(item) }
         // The search item keeps its own priority, 1001 (set to anything else, it stays): it folds into the magnifier long
-        // before it goes, and the sidebar button, at 1000, is the first of the two to leave.
+        // before it goes. The sidebar toggle is AppKit's standard item.
         for (item, toolbarItem) in items where item != .search { toolbarItem.visibilityPriority = .init(item.priority) }
-        items[.pageFilter]?.isHidden = true
         items[.cards]?.isHidden = true
         items[.progress]?.isHidden = true
         items[.path]?.isHidden = true
-        for menu in [pathMenu, viewMenu] {
-            menu.delegate = self
-            menu.autoenablesItems = false
-        }
+        items[.sort]?.isHidden = true
+        pathMenu.delegate = self
+        pathMenu.autoenablesItems = false
         resetPathMenu()
-        resetViewMenu()
+        updateControls()
     }
 
     // MARK: Items
@@ -105,8 +120,13 @@ import HomeScreenModel
     private func make(_ item: HomeToolbarItem) -> NSToolbarItem {
         let id = item.identifier
         switch item {
-        case .sidebar:
-            return button(id, "sidebar.left", label: "Sidebar", tip: "Sidebar (⌃⌘S)", action: #selector(sidebarClicked))
+        case .title:
+            let toolbarItem = NSToolbarItem(itemIdentifier: id)
+            toolbarItem.label = "Location"
+            toolbarItem.toolTip = "Current location"
+            toolbarItem.view = titleView
+            toolbarItem.isBordered = false
+            return toolbarItem
         case .home:
             return button(id, "house", label: "Start Page", tip: "Start Page (⇧⌘H)", action: #selector(homeClicked))
         case .history:
@@ -120,10 +140,24 @@ import HomeScreenModel
             menu.showsIndicator = true
             menu.menu = NSMenu()
             return menu
+        case .aspect:
+            return button(id, "rectangle.arrowtriangle.2.outward", label: "Aspect", tip: "Aspect thumbnails",
+                          action: #selector(aspectClicked))
         case .filter:
-            return titleGroup(id, BrowserKindFilter.allCases.map(\.title), label: "Show", tip: "Show All, Folders or Photos")
-        case .pageFilter:
-            return titleGroup(id, [""], label: "Page Filter", tip: "Filter this page")
+            let toolbarItem = NSToolbarItem(itemIdentifier: id)
+            toolbarItem.label = "Filter"
+            toolbarItem.toolTip = "Show all, folders or photos"
+            toolbarItem.view = filterControl
+            return toolbarItem
+        case .sort:
+            let toolbarItem = NSToolbarItem(itemIdentifier: id)
+            toolbarItem.label = "Sort"
+            toolbarItem.toolTip = "Sort by name, date or size; click the active one to reverse"
+            toolbarItem.view = sortControl
+            return toolbarItem
+        case .zoom:
+            return group(id, [("minus", "Smaller", "Smaller (⌘−)"), ("plus", "Larger", "Larger (⌘=)")], mode: .momentary,
+                         label: "Zoom", tip: "Smaller or Larger", action: #selector(zoomClicked(_:)))
         case .progress:
             let ring = NSToolbarItem(itemIdentifier: id)
             ring.label = "Thumbnails"
@@ -139,18 +173,6 @@ import HomeScreenModel
             return group(id, [("square.grid.2x2", "Posters", "as Posters (⌥⌘1)"), ("rectangle.grid.1x2", "Cards", "as Cards (⌥⌘2)"),
                               ("list.bullet", "List", "as List (⌥⌘3)")], mode: .selectOne,
                          label: "Folders", tip: "Show folders as Posters, Cards or List", action: #selector(cardsClicked(_:)))
-        case .zoom:
-            return group(id, [("minus", "Smaller", "Smaller (⌘−)"), ("plus", "Larger", "Larger (⌘=)")], mode: .momentary,
-                         label: "Zoom", tip: "Smaller or Larger", action: #selector(zoomClicked(_:)))
-        case .view:
-            let menu = NSMenuToolbarItem(itemIdentifier: id)
-            menu.title = "View"
-            menu.image = symbol("slider.horizontal.3", "View")
-            menu.label = "View"
-            menu.toolTip = "Sort, shape and folder cards"
-            menu.showsIndicator = true
-            menu.menu = NSMenu()
-            return menu
         case .search:
             let search = NSSearchToolbarItem(itemIdentifier: id)
             search.label = "Filter"
@@ -161,6 +183,67 @@ import HomeScreenModel
             search.searchField.delegate = self
             search.resignsFirstResponderWithCancel = true
             return search
+        }
+    }
+
+    /// The location's name over its summary, as the title and subtitle of a Photos window: plain text on the toolbar, in
+    /// the system's label colours, between two widths so a short subtitle is never cut and a long path is.
+    @MainActor private final class HomeToolbarTitleView: NSView {
+        private let titleLabel = NSTextField(labelWithString: "")
+        private let subtitleLabel = NSTextField(labelWithString: "")
+        private let stack = NSStackView()
+        private static let minWidth: CGFloat = 150
+        private static let maxWidth: CGFloat = 300
+
+        var title = "" {
+            didSet {
+                titleLabel.stringValue = title
+                invalidateIntrinsicContentSize()
+            }
+        }
+        var subtitle = "" {
+            didSet {
+                subtitleLabel.stringValue = subtitle
+                subtitleLabel.isHidden = subtitle.isEmpty
+                invalidateIntrinsicContentSize()
+            }
+        }
+
+        override init(frame frameRect: NSRect) {
+            super.init(frame: frameRect)
+            titleLabel.textColor = .labelColor
+            titleLabel.font = .systemFont(ofSize: 14, weight: .semibold)
+            subtitleLabel.font = .systemFont(ofSize: 12)
+            subtitleLabel.textColor = .secondaryLabelColor
+            for label in [titleLabel, subtitleLabel] {
+                label.lineBreakMode = .byTruncatingTail
+                label.maximumNumberOfLines = 1
+                label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+            }
+            subtitleLabel.isHidden = true
+            stack.orientation = .vertical
+            stack.alignment = .leading
+            stack.spacing = 0
+            stack.addArrangedSubview(titleLabel)
+            stack.addArrangedSubview(subtitleLabel)
+            stack.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(stack)
+            NSLayoutConstraint.activate([
+                stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
+                stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
+                stack.centerYAnchor.constraint(equalTo: centerYAnchor),
+                widthAnchor.constraint(greaterThanOrEqualToConstant: Self.minWidth),
+                widthAnchor.constraint(lessThanOrEqualToConstant: Self.maxWidth),
+            ])
+        }
+
+        required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+        override var intrinsicContentSize: NSSize {
+            let titleSize = titleLabel.fittingSize
+            let subtitleSize = subtitleLabel.isHidden ? .zero : subtitleLabel.fittingSize
+            return NSSize(width: max(titleSize.width, subtitleSize.width) + 8,
+                          height: titleSize.height + subtitleSize.height)
         }
     }
 
@@ -193,24 +276,9 @@ import HomeScreenModel
         return group
     }
 
-    /// Text segments, one selected (`All | Folders | Photos`, or a page's own).
-    private func titleGroup(_ id: NSToolbarItem.Identifier, _ titles: [String], label: String, tip: String) -> NSToolbarItemGroup {
-        let group = NSToolbarItemGroup(itemIdentifier: id, titles: titles, selectionMode: .selectOne, labels: titles, target: self,
-                                       action: #selector(kindClicked(_:)))
-        group.controlRepresentation = .expanded
-        group.label = label
-        group.toolTip = tip
-        group.selectedIndex = 0
-        return group
-    }
-
-    private var kindGroup: NSToolbarItemGroup { items[.filter] as! NSToolbarItemGroup }
     private var historyGroup: NSToolbarItemGroup { items[.history] as! NSToolbarItemGroup }
     private var cardsGroup: NSToolbarItemGroup { items[.cards] as! NSToolbarItemGroup }
-    private var pageGroup: NSToolbarItemGroup { items[.pageFilter] as! NSToolbarItemGroup }
-    private var activeFilter: NSToolbarItemGroup { pageFilterTitles.isEmpty ? kindGroup : pageGroup }
     private var pathMenu: NSMenu { (items[.path] as! NSMenuToolbarItem).menu }
-    private var viewMenu: NSMenu { (items[.view] as! NSMenuToolbarItem).menu }
     var searchField: NSSearchField { (items[.search] as! NSSearchToolbarItem).searchField }
 
     // MARK: NSToolbarDelegate
@@ -225,13 +293,19 @@ import HomeScreenModel
 
     // MARK: Shown
 
-    var kindTitles: [String] { activeFilter.subitems.map(\.title) }
-    var kindSelection: Int? { activeFilter.selectedIndex >= 0 ? activeFilter.selectedIndex : nil }
-    var isFilterVisible: Bool { !activeFilter.isHidden }
+    var kindTitles: [String] { pageFilterTitles.isEmpty ? BrowserKindFilter.allCases.map(\.title) : pageFilterTitles }
+    var kindSelection: Int? {
+        if !pageFilterTitles.isEmpty { return selectedPageFilter }
+        return BrowserKindFilter.allCases.firstIndex(of: selectedKindFilter)
+    }
+    var isFilterVisible: Bool { !pageFilterTitles.isEmpty || kindWanted }
     var isNavVisible: Bool { !historyGroup.isHidden }
     var canBack: Bool { historyGroup.subitems[0].isEnabled }
     var canForward: Bool { historyGroup.subitems[1].isEnabled }
     var isCardSwitchVisible: Bool { !cardsGroup.isHidden }
+    var isAspectVisible: Bool { items[.aspect]?.isHidden == false }
+    var isFilterControlVisible: Bool { items[.filter]?.isHidden == false }
+    var filterSelection: Int? { filterControl.selectedSegment >= 0 ? filterControl.selectedSegment : nil }
     /// The lit segment: 0 posters, 1 cards, 2 list.
     var cardSwitchSelection: Int? { cardsGroup.selectedIndex >= 0 ? cardsGroup.selectedIndex : nil }
     var isZoomVisible: Bool { items[.zoom]?.isHidden == false }
@@ -269,34 +343,15 @@ import HomeScreenModel
 
     /// A page's filter (Stash: Scenes · Images · Galleries) in place of the kind filter; empty gives the kind filter back.
     func show(pageFilters titles: [String], selected: Int?) {
-        if titles != pageFilterTitles {
-            pageFilterTitles = titles
-            if !titles.isEmpty { replacePageGroup(titles) }
-        }
-        if !titles.isEmpty { pageGroup.selectedIndex = selected ?? -1 }
-        updateFilterVisibility()
+        pageFilterTitles = titles
+        selectedPageFilter = titles.isEmpty ? nil : selected
+        updateControls()
     }
 
     func show(filter: BrowserKindFilter, visible: Bool) {
         kindWanted = visible
-        kindGroup.selectedIndex = BrowserKindFilter.allCases.firstIndex(of: filter) ?? -1
-        updateFilterVisibility()
-    }
-
-    private func updateFilterVisibility() {
-        let page = !pageFilterTitles.isEmpty
-        pageGroup.isHidden = !page
-        kindGroup.isHidden = page || !kindWanted
-    }
-
-    /// A group cannot change its number of segments: a page whose filter differs gets a new group in the old one's place.
-    private func replacePageGroup(_ titles: [String]) {
-        let group = titleGroup(HomeToolbarItem.pageFilter.identifier, titles, label: "Page Filter", tip: "Filter this page")
-        group.visibilityPriority = .init(HomeToolbarItem.pageFilter.priority)
-        items[.pageFilter] = group
-        guard let index = nsToolbar.items.firstIndex(where: { $0.itemIdentifier == group.itemIdentifier }) else { return }
-        nsToolbar.removeItem(at: index)
-        nsToolbar.insertItem(withItemIdentifier: group.itemIdentifier, at: index)
+        selectedKindFilter = filter
+        updateControls()
     }
 
     /// The card switch lit for `style`; shown only where there are folder cards (`visible`).
@@ -306,7 +361,7 @@ import HomeScreenModel
         updateControls()
     }
 
-    /// The search, − + and the card switch: off on a page.
+    /// The thumbnail-only controls are off on a page; the page's filter remains available.
     func show(controls: Bool) {
         controlsOn = controls
         updateControls()
@@ -316,21 +371,28 @@ import HomeScreenModel
         items[.zoom]?.isHidden = !controlsOn
         items[.search]?.isHidden = !controlsOn
         cardsGroup.isHidden = !(controlsOn && cardsWanted)
-        items[.view]?.isHidden = sortKeys.isEmpty && !controlsOn
+        items[.aspect]?.isHidden = !controlsOn
+        items[.filter]?.isHidden = !isFilterVisible
+        items[.sort]?.isHidden = sortKeys.isEmpty
+        updateFilterGroup()
+        updateSortControl()
+        updateAspectItem()
     }
 
-    /// The sort fields of the location; the active one is shown with its direction in the View menu. None: not sortable.
+    /// The sort fields of the location; the active one is shown with its direction in its segment. None: not sortable.
     func show(sort: BrowserSort, keys: [BrowserSort.Key]) {
         self.sort = sort
         sortKeys = keys
         updateControls()
-        resetViewMenu()
     }
 
-    /// The thumbnails' shape, as the View menu's Square / Aspect shows it.
+    /// The thumbnails' shape, represented by the aspect-ratio button.
     func show(style: GridStyle) {
-        styleSymbol = style == .square ? "square.grid.2x2" : "rectangle.grid.2x2"
-        resetViewMenu()
+        gridStyle = style
+        let isSquare = style == .square
+        let tip = isSquare ? "Square thumbnails" : "Aspect thumbnails"
+        items[.aspect]?.toolTip = tip
+        items[.aspect]?.image = symbol(isSquare ? "rectangle.arrowtriangle.2.inward" : "rectangle.arrowtriangle.2.outward", tip)
     }
 
     var isProgressVisible: Bool { items[.progress]?.isHidden == false }
@@ -365,7 +427,6 @@ import HomeScreenModel
 
     // MARK: Clicks
 
-    func clickSidebar() { onSidebar?() }
     func clickHome() { onHome?() }
 
     func clickHistory(_ i: Int) {
@@ -381,40 +442,56 @@ import HomeScreenModel
         onCardStyle?(CardStyle.allCases[i])
     }
 
+    /// Segment `i` of the sort control: another field takes its last direction, the active one reverses
+    /// (`BrowserSortChoice`, the view's).
+    func clickSort(_ i: Int) {
+        guard sortKeys.indices.contains(i) else { return }
+        onSortKey?(sortKeys[i])
+    }
+
+    func clickAction(_ i: Int) {
+        guard i == 0, controlsOn else { return }
+        onStyle?(gridStyle == .square ? .aspect : .square)
+    }
+
     func clickKind(_ i: Int) {
         if !pageFilterTitles.isEmpty {
-            if pageFilterTitles.indices.contains(i) { onPageFilter?(i) }
+            guard pageFilterTitles.indices.contains(i) else { return }
+            selectedPageFilter = i
+            filterControl.selectedSegment = i
+            onPageFilter?(i)
             return
         }
         guard BrowserKindFilter.allCases.indices.contains(i) else { return }
-        onKind?(BrowserKindFilter.allCases[i])
+        selectedKindFilter = BrowserKindFilter.allCases[i]
+        filterControl.selectedSegment = i
+        onKind?(selectedKindFilter)
     }
 
-    @objc private func sidebarClicked() { clickSidebar() }
     @objc private func homeClicked() { clickHome() }
+    @objc private func aspectClicked() { clickAction(0) }
+    @objc private func filterSegmentClicked(_ sender: NSSegmentedControl) { clickKind(sender.selectedSegment) }
+    @objc private func sortSegmentClicked(_ sender: NSSegmentedControl) { clickSort(sender.selectedSegment) }
     @objc private func historyClicked(_ sender: NSToolbarItemGroup) { clickHistory(sender.selectedIndex) }
     @objc private func zoomClicked(_ sender: NSToolbarItemGroup) { clickZoom(sender.selectedIndex) }
     @objc private func cardsClicked(_ sender: NSToolbarItemGroup) { clickCardStyle(sender.selectedIndex) }
-    @objc private func kindClicked(_ sender: NSToolbarItemGroup) { clickKind(sender.selectedIndex) }
-
     // MARK: Menus
 
     var isPathVisible: Bool { items[.path]?.isHidden == false }
-    var isViewVisible: Bool { items[.view]?.isHidden == false }
-    /// What a menu lists, without its first item: a menu toolbar item treats that one as the button's own and never shows
-    /// it (seen with accessibility on macOS 26.7), so every menu starts with one that stands for the button.
+    var isStyleVisible: Bool { controlsOn }
+    var isSortVisible: Bool { items[.sort]?.isHidden == false }
+    /// The sort segments' texts, the active one with its arrow; the segment lit.
+    var sortSegmentTitles: [String] { (0..<sortControl.segmentCount).map { sortControl.label(forSegment: $0) ?? "" } }
+    var sortSelection: Int? { sortControl.selectedSegment >= 0 ? sortControl.selectedSegment : nil }
+    /// The path menu keeps a placeholder until opened.
     var pathMenuTitles: [String] { pathMenu.items.dropFirst().map(\.title) }
     var pathMenuChecked: [Bool] { pathMenu.items.dropFirst().map { $0.state == .on } }
-    var viewMenuTitles: [String] { viewMenu.items.dropFirst().map(\.title) }
-    var viewMenuChecked: [Bool] { viewMenu.items.dropFirst().map { $0.state == .on } }
     var siblingTitles: [String] { siblingMenu?.items.dropFirst(SiblingMenu.heading).map(\.title) ?? [] }
     var siblingChecked: [Bool] { siblingMenu?.items.dropFirst(SiblingMenu.heading).map { $0.state == .on } ?? [] }
 
     /// What opening a menu does: AppKit asks the delegate to fill it first.
     func openPathMenu() { menuNeedsUpdate(pathMenu) }
-    func openViewMenu() { menuNeedsUpdate(viewMenu) }
     func clickPathItem(_ i: Int) { pathMenu.performActionForItem(at: i + 1) }
-    func clickViewItem(_ i: Int) { viewMenu.performActionForItem(at: i + 1) }
     /// The entry of path item `i`'s submenu that goes to the crumb itself.
     func clickPathOpen(_ i: Int) { pathMenu.items.dropFirst().dropFirst(i).first?.submenu?.performActionForItem(at: 0) }
     /// Whether choosing path item `i` itself goes to its folder (it has no submenu).
@@ -435,9 +512,39 @@ import HomeScreenModel
         items[.path]?.isHidden = crumbs.isEmpty
     }
 
-    private func resetViewMenu() {
-        viewMenu.removeAllItems()
-        viewMenu.addItem(withTitle: "View", action: nil, keyEquivalent: "")
+    private static let kindSymbols: [BrowserKindFilter: String] = [
+        .all: "square.grid.2x2", .folders: "folder", .photos: "photo",
+    ]
+
+    private func updateFilterGroup() {
+        let titles = kindTitles
+        filterControl.segmentCount = titles.count
+        for (index, title) in titles.enumerated() {
+            filterControl.setLabel(title, forSegment: index)
+            let width = ceil((title as NSString).size(withAttributes: [.font: filterControl.font ?? NSFont.systemFont(ofSize: 13)]).width + 32)
+            filterControl.setWidth(max(84, width), forSegment: index)
+        }
+        filterControl.selectedSegment = kindSelection ?? -1
+    }
+
+    /// One text segment per sort field of the location, each of one width so the arrow's coming and going does not move
+    /// the others; the active one is lit and shows its direction.
+    private func updateSortControl() {
+        sortControl.segmentCount = sortKeys.count
+        for (index, key) in sortKeys.enumerated() {
+            let name = Self.keyTitles.first { $0.0 == key }?.1 ?? key.rawValue
+            sortControl.setLabel(key == sort.key ? name + (sort.ascending ? " ↑" : " ↓") : name, forSegment: index)
+            sortControl.setWidth(Self.sortSegmentWidth, forSegment: index)
+        }
+        sortControl.selectedSegment = sortKeys.firstIndex(of: sort.key) ?? -1
+    }
+
+    private static let sortSegmentWidth: CGFloat = 70
+
+    private func updateAspectItem() {
+        let tip = gridStyle == .square ? "Square thumbnails" : "Aspect thumbnails"
+        items[.aspect]?.toolTip = tip
+        items[.aspect]?.image = symbol(gridStyle == .square ? "rectangle.arrowtriangle.2.inward" : "rectangle.arrowtriangle.2.outward", tip)
     }
 
     /// The folder and the folders above it, nearest first, the current one checked; each but the first place has the
@@ -469,36 +576,9 @@ import HomeScreenModel
         return menu
     }
 
-    private func fillViewMenu() {
-        resetViewMenu()
-        func add(_ title: String, _ choice: ViewChoice, checked: Bool = false, image: String? = nil) {
-            let item = viewMenu.addItem(withTitle: title, action: #selector(viewItemChosen(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = choice
-            item.state = checked ? .on : .off
-            if let image { item.image = symbol(image, title) }
-        }
-        if !sortKeys.isEmpty {
-            viewMenu.addItem(.sectionHeader(title: "Sort by"))
-            for key in sortKeys {
-                let name = Self.keyTitles.first { $0.0 == key }?.1 ?? key.rawValue
-                add(key == sort.key ? name + (sort.ascending ? " ↑" : " ↓") : name, .sort(key))
-            }
-        }
-        guard controlsOn else { return }
-        if !sortKeys.isEmpty { viewMenu.addItem(.separator()) }
-        add("Square / Aspect", .style, image: styleSymbol)
-        guard cardsWanted else { return }
-        viewMenu.addItem(.separator())
-        let shown = cardsGroup.selectedIndex
-        for (i, style) in CardStyle.allCases.enumerated() { add(style.rawValue.capitalized, .card(style), checked: i == shown) }
-    }
-
     func menuNeedsUpdate(_ menu: NSMenu) {
         if menu === pathMenu {
             fillPathMenu()
-        } else if menu === viewMenu {
-            fillViewMenu()
         } else if let sibling = menu as? SiblingMenu {
             siblingMenu = sibling
             onSiblings?(sibling.crumb)
@@ -512,15 +592,6 @@ import HomeScreenModel
 
     @objc private func pathItemChosen(_ sender: NSMenuItem) {
         if crumbs.indices.contains(sender.tag) { onCrumb?(crumbs[sender.tag].location) }
-    }
-
-    @objc private func viewItemChosen(_ sender: NSMenuItem) {
-        switch sender.representedObject as? ViewChoice {
-        case .sort(let key): onSortKey?(key)
-        case .style: onStyle?()
-        case .card(let style): onCardStyle?(style)
-        case nil: break
-        }
     }
 
     // MARK: Sibling menus

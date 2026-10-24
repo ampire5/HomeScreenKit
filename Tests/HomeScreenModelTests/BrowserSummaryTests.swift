@@ -58,6 +58,13 @@ import Testing
                 == "Loading… \(BrowserSummary.number(1200))")
     }
 
+    @Test func selectionDetailsIncludeFolderContents() {
+        var entry = folder("Album")
+        entry.summary = CardSummary(photos: 12, folders: 2, bytes: 12_000)
+        #expect(BrowserSummary.selection(entry) == "Album · 12 photos · 2 folders · \(bytes(12_000))")
+        #expect(BrowserSummary.selection(nil).isEmpty)
+    }
+
     @Test func pluralForms() {
         #expect(BrowserSummary.footer(entries: [file("1")], filtered: nil, complete: false, more: false).line == "1 photo")
         #expect(BrowserSummary.footer(entries: [file("1"), file("2")], filtered: nil, complete: false, more: false).line

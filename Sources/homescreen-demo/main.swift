@@ -138,6 +138,8 @@ import HomeScreenKit
         }
         window.styleMask.insert(.fullSizeContentView)
         window.toolbarStyle = .unified
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
         window.toolbar = browser.nsToolbar
         browser.onWindowText = { [weak self] title, subtitle in
             self?.window.title = title

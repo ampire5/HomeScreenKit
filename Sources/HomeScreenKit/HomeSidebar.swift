@@ -2,18 +2,18 @@ import AppKit
 import HomeChrome
 import HomeScreenModel
 
-/// Home's sidebar: a glass panel inset from the window's edge with the app's sources, the
-/// places and the folder tree under them, from a `SidebarTree`. A click on a row opens it in the browser, on its
+/// Home's sidebar: a native sidebar material with the app's sources, the places and the folder tree
+/// under them, from a `SidebarTree`. A click on a row opens it in the browser, on its
 /// triangle opens or closes it; ↑ ↓ ← → move the lit row as in Finder and Return opens it; Tab gives the keys back.
 /// A row whose folders take long to list shows a small spinner where its count goes.
 final class HomeSidebar: NSView {
-    /// The column the sidebar takes: the panel and its inset on both sides.
+    /// The column the sidebar takes by default.
     static let width: CGFloat = 236
     /// How narrow and how wide it can be kept; shown, it is at most a third of the window (`HomeView.widestSidebar`).
     public static let widthRange: ClosedRange<CGFloat> = 180...1600
     /// The widest it may show in any window, however narrow.
     static let widestAlways: CGFloat = 400
-    static let inset: CGFloat = 8
+    static let inset: CGFloat = 10
     static let rowHeight: CGFloat = 28
     static let headingHeight: CGFloat = 26
     static let indent: CGFloat = 14
@@ -46,6 +46,9 @@ final class HomeSidebar: NSView {
     var onMenu: ((String, HomeSidebarRow) -> Void)?
     /// How long a row lists before its spinner shows.
     var slowAfter: Duration = .milliseconds(300)
+    var contentTopInset = HomeBrowserView.defaultTopInset {
+        didSet { if contentTopInset != oldValue { needsLayout = true } }
+    }
 
     var tree = SidebarTree(sections: []) {
         didSet {
@@ -80,7 +83,6 @@ final class HomeSidebar: NSView {
     }
     private var revealsSelected = false
 
-    private let panel = NSGlassEffectView()
     private let scroll = NSScrollView()
     private let document = FlippedView()
     private var lineViews: [SidebarLineView] = []
@@ -92,21 +94,21 @@ final class HomeSidebar: NSView {
 
     init() {
         super.init(frame: .zero)
-        panel.cornerRadius = Chrome.Radius.panel
-        let content = NSView()
-        panel.contentView = content
-        addSubview(panel)
         scroll.drawsBackground = false
         scroll.hasVerticalScroller = true
         scroll.autohidesScrollers = true
         scroll.documentView = document
-        content.addSubview(scroll)
+        addSubview(scroll)   // on the material the split view's sidebar item gives
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+    }
 
     override func becomeFirstResponder() -> Bool {
         lineViews.forEach { $0.hasKeys = true }
@@ -169,13 +171,7 @@ final class HomeSidebar: NSView {
 
     override func layout() {
         super.layout()
-        let i = Self.inset
-        panel.frame = CGRect(x: i, y: i, width: max(0, bounds.width - 2 * i), height: max(0, bounds.height - 2 * i))
-        // From the panel's own size: its content view is sized by the glass's layout, later (shown again after
-        // hiding, the list kept the hidden column's width).
-        let inside = CGRect(origin: .zero, size: panel.frame.size)
-        panel.contentView?.frame = inside
-        scroll.frame = inside
+        scroll.frame = CGRect(x: 0, y: contentTopInset, width: bounds.width, height: max(0, bounds.height - contentTopInset))
         var y = Self.top
         let width = max(0, scroll.contentSize.width)
         for view in lineViews {
@@ -298,7 +294,6 @@ final class HomeSidebar: NSView {
     var scrollWidth: CGFloat { scroll.frame.width }
     var rowTitleWidths: [CGFloat] { lineViews.filter { !$0.isHeading }.map(\.title.frame.width) }
     var countTexts: [String] { lineViews.map(\.count.stringValue) }
-    var panelFrame: CGRect { panel.frame }
     var highlightedLine: Int? { selected }
     func isSpinning(line: Int) -> Bool { lineViews.indices.contains(line) && !lineViews[line].spinner.isHidden }
 }
@@ -411,11 +406,11 @@ private final class SidebarLineView: NSView {
             return
         }
         title.font = .systemFont(ofSize: 13)
-        title.textColor = lit && hasKeys ? .white : .labelColor
+        title.textColor = lit && hasKeys ? .alternateSelectedControlTextColor : .labelColor
         // On the strong light the accent symbol would vanish into it.
-        symbol.contentTintColor = lit && hasKeys ? .white : .controlAccentColor
+        symbol.contentTintColor = lit && hasKeys ? .alternateSelectedControlTextColor : .controlAccentColor
         light.isHidden = !lit
-        light.layer?.backgroundColor = Chrome.resolve(Chrome.Palette.window.accent.withAlphaComponent(hasKeys ? 0.8 : 0.25),
+        light.layer?.backgroundColor = Chrome.resolve(NSColor.selectedContentBackgroundColor.withAlphaComponent(hasKeys ? 1 : 0.55),
                                                       in: self)
     }
 

@@ -1,49 +1,43 @@
 import AppKit
 
-/// The items of the browser's `NSToolbar`, with the order a narrow window hides them in. `visibilityPriority`: the item
-/// with the least priority goes behind the `»` first; the values are all different (equal ones go in an order the system
-/// picks), except the page filter, which takes the kind filter's place and is never shown with it.
+/// The items of the browser's `NSToolbar`, with the order a narrow window hides them in.
 enum HomeToolbarItem: CaseIterable {
-    case sidebar, home, history, path, filter, pageFilter, progress, cards, zoom, view, search
+    case title, home, history, path, aspect, filter, sort, zoom, progress, cards, search
 
     var identifier: NSToolbarItem.Identifier {
         switch self {
-        case .sidebar: .init("home.sidebar")
+        case .title: .init("home.title")
         case .home: .init("home.start")
         case .history: .init("home.history")
         case .path: .init("home.path")
+        case .aspect: .init("home.aspect")
         case .filter: .init("home.filter")
-        case .pageFilter: .init("home.pageFilter")
+        case .sort: .init("home.sort")
+        case .zoom: .init("home.zoom")
         case .progress: .init("home.progress")
         case .cards: .init("home.cards")
-        case .zoom: .init("home.zoom")
-        case .view: .init("home.view")
         case .search: .init("home.search")
         }
     }
 
-    /// Measured on the real window with the probe (2026-10-24): everything shows from 1120 pt; `View` and the card switch
-    /// go at 1100, `− +` at 980, the filter at 900, ‹ › at 640, Start Page at 560, the path at 480, the ring at 420.
     var priority: Int {
         switch self {
-        case .view: -300
+        case .title: 1000
         case .cards: -250
-        case .zoom: -200
-        case .filter, .pageFilter: -100
+        case .aspect: -100
+        case .sort: -90
+        case .filter: 900
         case .history: 0
         case .home: 10
         case .path: 50
         case .progress: 80
         case .search: 100
-        case .sidebar: 1000
+        case .zoom: 300
         }
     }
 
-    /// Left to right: where I am (sidebar, start page, history, path), what is shown (the filter, the ring), how it is
-    /// shown (card switch, zoom, View) and the search. The two flexible spaces centre the filter between the path and
-    /// the ring.
     static let browserOrder: [NSToolbarItem.Identifier] =
-        [HomeToolbarItem.sidebar, .home, .history, .path].map(\.identifier) + [.flexibleSpace]
-        + [HomeToolbarItem.filter, .pageFilter].map(\.identifier) + [.flexibleSpace]
-        + [HomeToolbarItem.progress, .cards, .zoom, .view, .search].map(\.identifier)
+        [.flexibleSpace, .toggleSidebar, .sidebarTrackingSeparator] + [HomeToolbarItem.title, .home, .history, .path].map(\.identifier)
+        + [HomeToolbarItem.zoom].map(\.identifier) + [.flexibleSpace, HomeToolbarItem.filter.identifier, .flexibleSpace]
+        + [HomeToolbarItem.sort, .aspect, .progress, .cards, .search].map(\.identifier)
 }

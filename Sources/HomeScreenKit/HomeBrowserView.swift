@@ -134,12 +134,12 @@ public final class HomeBrowserView: NSView {
     private(set) var entries: [BrowserEntry] = []
     /// How many of `entries` are containers (the first section).
     private var containerCount = 0
-    /// What the filter capsule and the name field leave of the listing.
+    /// What the filter group and the name field leave of the listing.
     private(set) var filter = BrowserFilter()
     private var footerText: (line: String, state: String?) = ("", nil)
     private var indexByID: [String: Int] = [:]
     var sort: BrowserSort { sortChoice.current }
-    /// The folder's sort and the last direction of each field in this view (the capsule and ⌥1–3).
+    /// The folder's sort and the last direction of each field in this view (More and ⌥1–3).
     private var sortChoice = BrowserSortChoice(current: .standard)
     /// The last listing of this place and whether a complete one has come (a sort by date or size waits for it).
     private var listing: BrowserListing?
@@ -218,6 +218,8 @@ public final class HomeBrowserView: NSView {
     var slowAfter: Duration = .seconds(3)
     private var slowTask: Task<Void, Never>?
     let scroll = GridScrollView()
+    private let statusBar = NSVisualEffectView()
+    private let statusLabel = NSTextField(labelWithString: "")
     private let message = HomeMessageView()
     /// A source's empty hint, in the middle.
     private let hint = NSTextField(labelWithString: "")
@@ -279,10 +281,20 @@ public final class HomeBrowserView: NSView {
         hint.textColor = .secondaryLabelColor
         hint.isHidden = true
         hint.translatesAutoresizingMaskIntoConstraints = false
+        statusBar.material = .underWindowBackground
+        statusBar.blendingMode = .withinWindow
+        statusBar.state = .followsWindowActiveState
+        statusBar.translatesAutoresizingMaskIntoConstraints = false
+        statusLabel.font = .systemFont(ofSize: 12)
+        statusLabel.textColor = .secondaryLabelColor
+        statusLabel.lineBreakMode = .byTruncatingMiddle
+        statusLabel.maximumNumberOfLines = 1
+        statusLabel.translatesAutoresizingMaskIntoConstraints = false
+        statusBar.addSubview(statusLabel)
         document.addSubview(footer)
         // The grid runs under the toolbar, as in Photos; the skeleton starts below it.
         loading.translatesAutoresizingMaskIntoConstraints = false
-        for view in [scroll, skeleton, hint, loading, message, toast] { addSubview(view) }
+        for view in [scroll, skeleton, hint, loading, message, toast, statusBar] { addSubview(view) }
         NSLayoutConstraint.activate([
             loading.leadingAnchor.constraint(equalTo: leadingAnchor), loading.trailingAnchor.constraint(equalTo: trailingAnchor),
             loading.heightAnchor.constraint(equalToConstant: 2), loadingBottom, skeletonTop,
@@ -291,11 +303,18 @@ public final class HomeBrowserView: NSView {
             skeleton.leadingAnchor.constraint(equalTo: scroll.leadingAnchor),
             skeleton.trailingAnchor.constraint(equalTo: scroll.trailingAnchor),
             skeleton.bottomAnchor.constraint(equalTo: scroll.bottomAnchor),
+            statusBar.leadingAnchor.constraint(equalTo: leadingAnchor),
+            statusBar.trailingAnchor.constraint(equalTo: trailingAnchor),
+            statusBar.bottomAnchor.constraint(equalTo: bottomAnchor),
+            statusBar.heightAnchor.constraint(equalToConstant: 28),
+            statusLabel.leadingAnchor.constraint(equalTo: statusBar.leadingAnchor, constant: 14),
+            statusLabel.trailingAnchor.constraint(lessThanOrEqualTo: statusBar.trailingAnchor, constant: -14),
+            statusLabel.centerYAnchor.constraint(equalTo: statusBar.centerYAnchor),
             message.centerXAnchor.constraint(equalTo: centerXAnchor), message.centerYAnchor.constraint(equalTo: centerYAnchor),
             hint.centerXAnchor.constraint(equalTo: centerXAnchor), hint.centerYAnchor.constraint(equalTo: centerYAnchor),
             message.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, constant: -32),
             toast.centerXAnchor.constraint(equalTo: centerXAnchor),
-            toast.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -24),
+            toast.bottomAnchor.constraint(equalTo: statusBar.topAnchor, constant: -24),
             toast.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, constant: -64),
         ])
         toolbar.show(style: style)
@@ -305,7 +324,7 @@ public final class HomeBrowserView: NSView {
         toolbar.onSortKey = { [weak self] key in self?.sortKeyChosen(key) }
         toolbar.onCardStyle = { [weak self] style in self?.chooseCardStyle(style) }
         toolbar.onZoom = { [weak self] step in self?.onResize?(step) }
-        toolbar.onStyle = { [weak self] in self?.toggleStyle() }
+        toolbar.onStyle = { [weak self] style in self?.onStyle?(style) }
         toolbar.onKind = { [weak self] kind in self?.filterChanged { $0.kind = kind } }
         toolbar.onPageFilter = { [weak self] i in
             guard let self, case .source(let id) = self.location else { return }
@@ -748,12 +767,19 @@ public final class HomeBrowserView: NSView {
     /// Under the path: while names come, how many; else the selected card; else the footer line.
     private func updateSubtitle() {
         let loading = listing?.more == true ? listing?.entries.count : nil
-        var line = loading == nil && selectedEntry == nil
-            ? footerText.line : BrowserSummary.subtitle(selected: selectedEntry, entries: [], loading: loading)
+        var line = loading.map { "Loading… \(BrowserSummary.number($0))" } ?? footerText.line
+        if loading == nil, let state = footerText.state, !state.isEmpty {
+            line = [line, state].filter { !$0.isEmpty }.joined(separator: " · ")
+        }
         // The room the volume has goes at the end of every line but the count of names still coming.
         if loading == nil, !line.isEmpty, let room = VolumeSpace.line(free: freeSpace[location]) { line += " · " + room }
         toolbar.show(subtitle: line)
+        let selected = loading == nil ? BrowserSummary.selection(selectedEntry) : ""
+        statusLabel.stringValue = selected.isEmpty ? line : selected
+        statusBar.isHidden = statusLabel.stringValue.isEmpty
     }
+
+    var selectionInfoText: String { statusLabel.stringValue }
 
     /// The bytes free on the volume of each folder shown, from the source's answer; the folders asked already (an answer
     /// that did not come is not asked for again until `reload`).
@@ -1141,7 +1167,7 @@ public final class HomeBrowserView: NSView {
         }
     }
 
-    /// The kind capsule or a keystroke in the name field: the listing again through the filter, off the main actor when
+    /// The kind filter or a keystroke in the name field: the listing again through the filter, off the main actor when
     /// it is big; a change while one is ordered drops that one's result.
     private func filterChanged(_ change: (inout BrowserFilter) -> Void) {
         var new = filter
@@ -1152,7 +1178,7 @@ public final class HomeBrowserView: NSView {
         if let listing { apply(listing) }
     }
 
-    /// A segment of the capsule or ⌥1–3: the field, or the other direction of the active one. The capsule shows it at
+    /// A sort choice or ⌥1–3: the field, or the other direction of the active one. More shows it at
     /// once; a sort by date or size before the complete listing leaves the grid as it is until that listing comes.
     func sortKeyChosen(_ key: BrowserSort.Key) {
         guard sortKeys.contains(key) else { return }
@@ -1174,7 +1200,7 @@ public final class HomeBrowserView: NSView {
         tile()
     }
 
-    /// The sort capsule's fields here: a folder's three, a source's own, none at the places or on a page.
+    /// Sort menu fields here: a folder's three, a source's own, none at the places or on a page.
     var sortKeys: [BrowserSort.Key] {
         switch location {
         case .places: []
@@ -1277,9 +1303,14 @@ public final class HomeBrowserView: NSView {
         }
     }
 
-    private func clicked(_ id: String, middle: Bool, flags: NSEvent.ModifierFlags) {
-        activate(id, HomeClick.from(shift: flags.contains(.shift), command: flags.contains(.command), middle: middle,
-                                    supportsTabs: true))
+    private func clicked(_ id: String, middle: Bool, flags: NSEvent.ModifierFlags, clickCount: Int) {
+        if middle || flags.contains(.shift) || flags.contains(.command) {
+            activate(id, HomeClick.from(shift: flags.contains(.shift), command: flags.contains(.command), middle: middle,
+                                        supportsTabs: true))
+            return
+        }
+        select(id: id, scrolls: false)
+        if clickCount > 1 { activate(id, .open) }
     }
 
     // MARK: Keys
@@ -1315,7 +1346,7 @@ public final class HomeBrowserView: NSView {
     }
 
     private var typeSelect = BrowserTypeSelect()
-    /// The digit keys 1 / 2 / 3: with ⌥ the sort capsule's first, second and third field, with ⌥⌘ the card style (⌘
+    /// The digit keys 1 / 2 / 3: with ⌥ the first, second and third sort fields, with ⌥⌘ the card style (⌘
     /// alone is the app's: a window's tabs by number).
     private static let sortKeyIndex: [UInt16: Int] = [18: 0, 19: 1, 20: 2]
 
@@ -1350,7 +1381,10 @@ public final class HomeBrowserView: NSView {
         case (51, true): trashSelected(); return true
         case (120, false): beginRename(); return true
         case (36, _), (76, _):
-            if let id = selectedID { clicked(id, middle: false, flags: event.modifierFlags) }
+            if let id = selectedID {
+                activate(id, HomeClick.from(shift: flags.contains(.shift), command: command, middle: false,
+                                            supportsTabs: true))
+            }
             return true
         default: break
         }
@@ -1574,7 +1608,9 @@ public final class HomeBrowserView: NSView {
         card.image = nil
         card.isSelected = entry.id == selectedID
         let id = entry.id
-        card.onClick = { [weak self] middle, flags in self?.clicked(id, middle: middle, flags: flags) }
+        card.onClick = { [weak self] middle, flags, clickCount in
+            self?.clicked(id, middle: middle, flags: flags, clickCount: clickCount)
+        }
         card.onHover = { [weak self] in self?.select(id: id, scrolls: false) }
         card.onMenu = { [weak self] item in self?.menuChosen(item, id) }
     }

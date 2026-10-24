@@ -12,6 +12,11 @@ import AppKit
     /// The content sits here, on top of the glass (below the rim).
     public let contentView = NSView()
     public var cornerRadius: CGFloat { didSet { applyRadius() } }
+    /// How strongly an over-media glass is tinted, 0...1: the tint's own opacity (the default is the palette's). Has no
+    /// effect on a window glass, which is not tinted.
+    public var tintOpacity: CGFloat? {
+        didSet { applyTint() }
+    }
 
     let glassView = NSGlassEffectView()
     private let rim = RimView()
@@ -39,6 +44,12 @@ import AppKit
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("not used") }
+
+    private func applyTint() {
+        guard case .overMedia(let weight) = style else { return }
+        let base = weight == .regular ? Chrome.Palette.overMedia.glassTint : Chrome.Palette.overMedia.glassTintLight
+        glassView.tintColor = tintOpacity.map { base.withAlphaComponent(min(max($0, 0), 1)) } ?? base
+    }
 
     private func applyRadius() {
         glassView.cornerRadius = cornerRadius

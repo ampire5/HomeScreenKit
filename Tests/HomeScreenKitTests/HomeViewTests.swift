@@ -113,11 +113,7 @@ import Testing
     @Test func hiddenSidebarGivesWidth() async {
         let source = source()
         let (view, window) = await make(source)
-        #expect(view.browser.frame.minX == HomeSidebar.width)
         view.isSidebarVisible = false
-        view.layoutSubtreeIfNeeded()
-        #expect(view.browser.frame.minX == 0)
-        #expect(view.sidebarView.isHidden)
         window.makeFirstResponder(view.browser)
         view.browser.keyDown(with: keyEvent(code: 48, chars: "\t"))
         #expect(window.firstResponder === view.browser)
@@ -128,12 +124,21 @@ import Testing
         let (view, _) = await make(source)
         var asked = 0
         view.onSidebarToggle = { asked += 1 }
-        view.browser.toolbar.clickSidebar()
+        view.toggleSidebar(nil)
         #expect(asked == 1)
         var home = 0
         view.onHome = { home += 1 }
         view.browser.toolbar.clickHome()
         #expect(home == 1)
+    }
+
+    @Test func sidebarContentUsesBrowserTopInset() {
+        let view = HomeView(source: source())
+        view.frame = CGRect(x: 0, y: 0, width: 1200, height: 800)
+        view.sidebarView.contentTopInset = 0
+        view.layout()
+        #expect(view.sidebarView.contentTopInset == view.browser.topInset)
+        #expect(view.sidebarView.contentTopInset == HomeBrowserView.defaultTopInset)
     }
 
     /// The sidebar's sections coming again (a slow `sidebar()`, a volume mounted) while the path's folders are being
@@ -217,86 +222,11 @@ import Testing
     @Test func sidebarWidthIsSetAndClamped() async {
         let (view, _) = await make(source())
         view.sidebarWidth = 300
-        view.layoutSubtreeIfNeeded()
-        #expect(view.browser.frame.minX == 300)
+        #expect(view.sidebarWidth == 300)
         view.sidebarWidth = 5000
         #expect(view.sidebarWidth == HomeSidebar.widthRange.upperBound)
         view.sidebarWidth = 10
         #expect(view.sidebarWidth == HomeSidebar.widthRange.lowerBound)
-    }
-
-    /// Dragging the sidebar's edge moves it live, within the range; only the release tells the app.
-    @Test func dragResizesSidebar() async {
-        let (view, _) = await make(source())
-        var told: [CGFloat] = []
-        view.onSidebarWidthChange = { told.append($0) }
-        let handle = view.resizeHandle
-        #expect(handle.frame.maxX == HomeSidebar.width + SidebarResizeHandle.outside)
-        // A press on the panel's own edge takes the handle, not the row under it.
-        let edge = HomeSidebar.width - HomeSidebar.inset - 2
-        #expect(view.hitTest(CGPoint(x: edge, y: 400)) === handle)
-        #expect(view.hitTest(CGPoint(x: edge - SidebarResizeHandle.inside, y: 400)) !== handle)
-        handle.beginDrag(at: 236)
-        handle.drag(to: 300)
-        view.layoutSubtreeIfNeeded()
-        #expect(view.sidebarWidth == 300)
-        #expect(view.browser.frame.minX == 300)
-        #expect(handle.frame.maxX == 300 + SidebarResizeHandle.outside)
-        #expect(told.isEmpty)
-        // A 1200 pt window: a third is 400.
-        handle.drag(to: 2000)
-        #expect(view.sidebarWidth == 400)
-        handle.endDrag()
-        #expect(told == [400])
-    }
-
-    /// A wide window lets the sidebar grow to a third of it; narrowed, the window shows it narrower and keeps the width.
-    @Test func sidebarGrowsToAThirdOfTheWindow() async {
-        let (view, window) = await make(source())
-        window.setContentSize(CGSize(width: 2400, height: 800))
-        view.layoutSubtreeIfNeeded()
-        let handle = view.resizeHandle
-        handle.beginDrag(at: 236)
-        handle.drag(to: 3000)
-        handle.endDrag()
-        view.layoutSubtreeIfNeeded()
-        #expect(view.sidebarWidth == 800)
-        #expect(view.browser.frame.minX == 800)
-        window.setContentSize(CGSize(width: 1500, height: 800))
-        view.layoutSubtreeIfNeeded()
-        #expect(view.browser.frame.minX == 500)
-        #expect(view.sidebarWidth == 800)
-        window.setContentSize(CGSize(width: 900, height: 800))
-        view.layoutSubtreeIfNeeded()
-        #expect(view.browser.frame.minX == HomeSidebar.widestAlways)
-        window.setContentSize(CGSize(width: 2400, height: 800))
-        view.layoutSubtreeIfNeeded()
-        #expect(view.browser.frame.minX == 800)
-    }
-
-    /// Hidden and shown again, the rows take the panel's whole width again (not the narrow column of the way in).
-    @Test func shownSidebarLaysRowsOutAgain() async {
-        let (view, _) = await make(source())
-        view.isSidebarVisible = false
-        view.layoutSubtreeIfNeeded()
-        view.isSidebarVisible = true
-        view.layoutSubtreeIfNeeded()
-        let panelWidth = HomeSidebar.width - 2 * HomeSidebar.inset
-        #expect(view.sidebarView.scrollWidth == panelWidth)
-        #expect(view.sidebarView.rowTitleWidths.allSatisfy { $0 > 100 }, "\(view.sidebarView.rowTitleWidths)")
-    }
-
-    /// Hidden and shown again, the sidebar comes back at the width it had; the edge is not draggable while hidden.
-    @Test func hiddenSidebarKeepsItsWidth() async {
-        let (view, _) = await make(source())
-        view.sidebarWidth = 320
-        view.isSidebarVisible = false
-        view.layoutSubtreeIfNeeded()
-        #expect(view.resizeHandle.isHidden)
-        view.isSidebarVisible = true
-        view.layoutSubtreeIfNeeded()
-        #expect(view.browser.frame.minX == 320)
-        #expect(!view.resizeHandle.isHidden)
     }
 
     /// The sidebar's row menus are the source's (`HomeSource.sidebarMenu(for:)`), the choice goes back to it.

@@ -3,7 +3,7 @@ import HomeChrome
 import HomeScreenModel
 
 /// The home screen: a switch at the top (with two or more tabs), and on the first tab a grid of cards in sections;
-/// on the others the app's own view goes under the switch (`contentTop`). The arrows move the selection and Return
+/// on the others the app's own view goes under the switch (`contentTop`). A click selects, a double-click or Return
 /// opens it (⌘Return a new tab, ⇧Return a new window, where the app has tabs); the switch never takes the keys.
 /// `showMessage` puts a centred message in place of the grid (why a file did not open).
 public final class HomeScreenView: NSView {
@@ -19,7 +19,7 @@ public final class HomeScreenView: NSView {
     public var layoutMode = HomeLayoutMode.fit { didSet { needsLayout = true } }
     /// The cards' width in points (the largest one with `fit`).
     public var cardSize: CGFloat = 220 { didSet { if cardSize != oldValue { needsLayout = true } } }
-    /// ⌘ / ⇧ / the middle button open in a new tab or window; without tabs every click opens here.
+    /// ⌘ / ⇧ / the middle button open in a new tab or window; without tabs every activation opens here.
     public var supportsTabs = true
     /// Shown in the middle while there are no cards.
     public var emptyHint = "" { didSet { hint.stringValue = emptyHint } }
@@ -201,7 +201,9 @@ public final class HomeScreenView: NSView {
             cardsBySection.append(section.items.enumerated().map { i, item in
                 let card = HomeCard(item: item, aspect: aspect)
                 let index = start + i
-                card.onClick = { [weak self] middle, flags in self?.click(index, middle: middle, flags: flags) }
+                card.onClick = { [weak self] middle, flags, clickCount in
+                    self?.click(index, middle: middle, flags: flags, clickCount: clickCount)
+                }
                 card.onHover = { [weak self] in self?.select(index, scrolls: false) }
                 card.onMenu = { [weak self, id = item.id] itemID in self?.onMenu?(id, itemID) }
                 document.addSubview(card)
@@ -310,7 +312,7 @@ public final class HomeScreenView: NSView {
         case 124: select(selected + 1)
         case 125: if selected + columns < cards.count { select(selected + columns) }
         case 126: if selected - columns >= 0 { select(selected - columns) }
-        case 36, 76: click(selected, middle: false, flags: event.modifierFlags)
+        case 36, 76: activate(selected, middle: false, flags: event.modifierFlags)
         default: return false
         }
         return true
@@ -332,7 +334,18 @@ public final class HomeScreenView: NSView {
         if scrolls { document.scrollToVisible(all[index].frame.insetBy(dx: 0, dy: -metrics.rowSpacing)) }
     }
 
-    private func click(_ index: Int, middle: Bool, flags: NSEvent.ModifierFlags) {
+    private func click(_ index: Int, middle: Bool, flags: NSEvent.ModifierFlags, clickCount: Int) {
+        let all = cards
+        guard all.indices.contains(index) else { return }
+        select(index, scrolls: false)
+        if middle || flags.contains(.shift) || flags.contains(.command) {
+            activate(index, middle: middle, flags: flags)
+        } else if clickCount > 1 {
+            onCard?(all[index].item.id, .open)
+        }
+    }
+
+    private func activate(_ index: Int, middle: Bool, flags: NSEvent.ModifierFlags) {
         let all = cards
         guard all.indices.contains(index) else { return }
         let kind = HomeClick.from(shift: flags.contains(.shift), command: flags.contains(.command), middle: middle,

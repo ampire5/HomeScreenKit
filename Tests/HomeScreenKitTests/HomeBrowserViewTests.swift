@@ -61,7 +61,12 @@ import Testing
         await settle { !plain.freeSpaceAsked.isEmpty }
         await settle()
         let line = without.toolbar.subtitleText
-        #expect(line.hasPrefix(without.entries[0].name) && !line.contains(" free"))
+        #expect(line.hasPrefix("2 photos") && !line.contains(without.entries[0].name))
+        #expect(without.selectionInfoText.hasPrefix(without.entries[0].name))
+        let stableLine = without.toolbar.subtitleText
+        without.select(id: without.entries[1].id, scrolls: false)
+        #expect(without.toolbar.subtitleText == stableLine)
+        #expect(without.selectionInfoText.hasPrefix(without.entries[1].name))
 
         let source = FakeHomeSource()
         source.freeSpaces[.folder(x)] = 1_200_000_000_000
@@ -143,7 +148,8 @@ import Testing
         source.yield(x, BrowserFixtures.files(2))
         await settle { !view.entries.isEmpty }
         #expect(view.footerLines.first?.hasPrefix("2 ") == true)
-        #expect(view.toolbar.subtitleText.hasPrefix(view.entries[0].name))   // the selected card
+        #expect(view.toolbar.subtitleText.hasPrefix("2 photos"))
+        #expect(view.selectionInfoText.hasPrefix(view.entries[0].name))
     }
 
     @Test func crumbsForNestedFolder() async {

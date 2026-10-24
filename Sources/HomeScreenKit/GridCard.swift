@@ -5,7 +5,7 @@ import HomeScreenModel
 /// What every card shares: the whole card is one button, the middle button is a click, a mouse's back and forward go
 /// on to the screen, a right click shows the item's menu. Subclasses draw the item, the picture and the selection.
 class GridCard: NSView {
-    var onClick: ((_ middle: Bool, _ flags: NSEvent.ModifierFlags) -> Void)?
+    var onClick: ((_ middle: Bool, _ flags: NSEvent.ModifierFlags, _ clickCount: Int) -> Void)?
     var onHover: (() -> Void)?
     var onMenu: ((String) -> Void)?
     var isSelected = false { didSet { selectionChanged() } }
@@ -64,7 +64,7 @@ class GridCard: NSView {
     }
     override func mouseUp(with event: NSEvent) {
         guard bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
-        onClick?(false, event.modifierFlags)
+        onClick?(false, event.modifierFlags, event.clickCount)
     }
     /// The middle button is a click; the others (a mouse's back and forward) go on to the screen.
     override func otherMouseDown(with event: NSEvent) {
@@ -73,7 +73,7 @@ class GridCard: NSView {
     override func otherMouseUp(with event: NSEvent) {
         guard event.buttonNumber == 2 else { super.otherMouseUp(with: event); return }
         guard bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
-        onClick?(true, event.modifierFlags)
+        onClick?(true, event.modifierFlags, event.clickCount)
     }
 
     override func menu(for event: NSEvent) -> NSMenu? {
