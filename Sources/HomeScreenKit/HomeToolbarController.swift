@@ -47,9 +47,14 @@ import HomeScreenModel
     private var sortKeys: [BrowserSort.Key] = [.name, .date, .size]
     private var styleSymbol = "rectangle.grid.2x2"
     /// The sibling menu that is open (or was last), and the folders it lists.
+    /// The thumbnails' ring: the progress item's view, the ring alone (its text is the item's tip).
+    let progress = ThumbsProgressPill()
+    /// The state the ring shows while there is work.
+    private(set) var progressState: ThumbsProgressState?
     private var siblingMenu: SiblingMenu?
     private var siblingLocations: [BrowserLocation] = []
 
+    private static let ringTip = "Thumbnails"
     private static let keyTitles: [(BrowserSort.Key, String)] = [(.name, "Name"), (.date, "Date"), (.size, "Size")]
 
     /// The menu of the folders beside one crumb: a submenu of the path pill's item for it.
@@ -119,7 +124,14 @@ import HomeScreenModel
         case .progress:
             let ring = NSToolbarItem(itemIdentifier: id)
             ring.label = "Thumbnails"
-            ring.toolTip = "Thumbnails"
+            ring.toolTip = Self.ringTip
+            ring.isBordered = true
+            progress.isCompact = true
+            progress.drawsBackdrop = false
+            progress.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([progress.widthAnchor.constraint(equalToConstant: ThumbsProgressPill.height),
+                                         progress.heightAnchor.constraint(equalToConstant: ThumbsProgressPill.height)])
+            ring.view = progress
             return ring
         case .cards:
             return group(id, [("square.grid.2x2", "Posters", "as Posters (⌥⌘1)"), ("rectangle.grid.1x2", "Cards", "as Cards (⌥⌘2)"),
@@ -316,6 +328,34 @@ import HomeScreenModel
     func show(style: GridStyle) {
         styleSymbol = style == .square ? "square.grid.2x2" : "rectangle.grid.2x2"
         resetViewMenu()
+    }
+
+    var isProgressVisible: Bool { items[.progress]?.isHidden == false }
+
+    /// The thumbnails' ring with `state`; nil hides it. The text is in the ring's tip.
+    func show(progress state: ThumbsProgressState?) {
+        progressState = state
+        progress.show(state)
+        items[.progress]?.isHidden = state == nil
+        items[.progress]?.toolTip = state?.text ?? Self.ringTip
+    }
+
+    /// The popover's counts, whether the ring is lit or not (nothing being prepared); nil: none for this folder yet.
+    func show(progressDetail state: ThumbsProgressState?) { progress.showDetail(state) }
+
+    /// View › Thumbnails…: the progress popover with the current counts (zeros before any), from the ring when it shows,
+    /// else from the top of the window (the ring is out, or a narrow window put it behind »). False without a window:
+    /// `window` is the one that holds the toolbar, the ring's own when it is in one.
+    @discardableResult func showProgressPopover(in window: NSWindow? = nil) -> Bool {
+        if isProgressVisible, progress.window != nil {
+            progress.openPopover(from: progress)
+            return true
+        }
+        guard let content = (window ?? progress.window)?.contentView else { return false }
+        let top = content.isFlipped ? content.bounds.minY : content.bounds.maxY
+        progress.openPopover(from: content, rect: NSRect(x: content.bounds.midX - 1, y: top - 1, width: 2, height: 2),
+                             edge: content.isFlipped ? .maxY : .minY)
+        return true
     }
 
     func focusFilter() { (items[.search] as? NSSearchToolbarItem)?.beginSearchInteraction() }

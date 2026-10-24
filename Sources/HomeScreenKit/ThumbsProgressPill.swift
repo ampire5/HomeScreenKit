@@ -39,6 +39,14 @@ final class ThumbsProgressPill: NSView, NSPopoverDelegate {
         }
     }
 
+    /// The capsule's own glass and edge. Off where the toolbar draws its own capsule round the item.
+    var drawsBackdrop = true {
+        didSet {
+            glass.isHidden = !drawsBackdrop
+            edge.isHidden = !drawsBackdrop
+        }
+    }
+
     private(set) var state: ThumbsProgressState?
     /// The counts the app gave last, the pill lit or not (`showDetail`).
     private(set) var detail: ThumbsProgressState?
@@ -283,9 +291,9 @@ final class ThumbsProgressPill: NSView, NSPopoverDelegate {
         openPopover(from: self)
     }
 
-    /// The popover pointing at `anchor` (the pill, or the sort while a narrow toolbar hides the pill); one already
-    /// open stays as it is.
-    func openPopover(from anchor: NSView) {
+    /// The popover pointing at `anchor` (the pill, or the window's top while the toolbar hides the pill), at `rect` of it
+    /// (all of it by default) on its `edge`; one already open stays as it is.
+    func openPopover(from anchor: NSView, rect: NSRect? = nil, edge: NSRectEdge = .maxY) {
         guard !isPopoverShown, anchor.window != nil else { return }
         let panel = makePanel()
         panel.frame.size = panel.fittingSize
@@ -297,7 +305,7 @@ final class ThumbsProgressPill: NSView, NSPopoverDelegate {
         popover.delegate = self
         self.popover = popover
         popoverAnchor = anchor
-        popover.show(relativeTo: anchor.bounds, of: anchor, preferredEdge: .maxY)
+        popover.show(relativeTo: rect ?? anchor.bounds, of: anchor, preferredEdge: edge)
     }
 
     func popoverDidClose(_ notification: Notification) {
