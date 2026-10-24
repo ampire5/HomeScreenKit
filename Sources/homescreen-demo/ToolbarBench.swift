@@ -9,8 +9,10 @@ import Foundation
 /// ms, so it is also how long the window does not answer. Prints one line per scenario: the first run, the median and the
 /// max of --rounds (default 12).
 ///
-/// - open: the window made and HomeView built, then shown (`makeKeyAndOrderFront` and the first settle).
-/// - hide, show: Home hidden and shown again, as a switch to the viewer and back does.
+/// - open: the window made, HomeView built and its toolbar given to the window, then shown (`makeKeyAndOrderFront` and
+///   the first settle).
+/// - hide, show: Home hidden and shown again, as a switch to the viewer and back does, the window's toolbar taken away
+///   and given back with it.
 /// - narrow, widen: the window 1300 → 420 pt and back, in steps of 20 pt, per step.
 /// - progress: the thumbnails' progress shown 100 times with a growing share, per call and the layout after it.
 /// - sort: the three sort fields chosen in turn; siblings: a menu of 30 sibling folders built.
@@ -37,13 +39,16 @@ enum ToolbarBench {
         let source = DemoBrowserSource()
         let buildStart = threadCPU()
         let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 1300, height: 760),
-                              styleMask: [.titled, .resizable, .closable, .miniaturizable], backing: .buffered, defer: false)
+                              styleMask: [.titled, .resizable, .closable, .miniaturizable, .fullSizeContentView],
+                              backing: .buffered, defer: false)
+        window.toolbarStyle = .unified
         window.title = "HomeScreenKit bench"
         let homeView = HomeView(source: source)
         let browser = homeView.browser
         source.view = browser
         window.contentView = homeView
         browser.show(.folder(URL(fileURLWithPath: "/Demo/Mixed")), selecting: nil)
+        window.toolbar = browser.nsToolbar
         let built = threadCPU() - buildStart
 
         let showStart = threadCPU()
@@ -57,8 +62,15 @@ enum ToolbarBench {
 
         var hide: [Double] = [], show: [Double] = []
         for _ in 0..<rounds {
-            hide.append(measure(settle) { homeView.isHidden = true })
-            show.append(measure(settle) { homeView.isHidden = false })
+            // As Loupe does: the toolbar goes with Home, and comes back with it.
+            hide.append(measure(settle) {
+                homeView.isHidden = true
+                window.toolbar = nil
+            })
+            show.append(measure(settle) {
+                homeView.isHidden = false
+                window.toolbar = browser.nsToolbar
+            })
         }
         table.append(("hide", hide))
         table.append(("show", show))
