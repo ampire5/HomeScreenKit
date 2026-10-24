@@ -111,17 +111,17 @@ import Testing
         let view = make(FakeHomeSource())
         view.windowVisibleForTests = true
         view.windowVisibilityChanged()
-        #expect(view.isShowingLoadingLine && view.toolbar.loading.isMoving && view.isSkeletonMoving)
+        #expect(view.isShowingLoadingLine && view.loading.isMoving && view.isSkeletonMoving)
         view.windowVisibleForTests = false
         view.windowVisibilityChanged()
-        #expect(view.isShowingLoadingLine && !view.toolbar.loading.isMoving && !view.isSkeletonMoving)
+        #expect(view.isShowingLoadingLine && !view.loading.isMoving && !view.isSkeletonMoving)
         view.windowVisibleForTests = true
         view.windowVisibilityChanged()
-        #expect(view.toolbar.loading.isMoving && view.isSkeletonMoving)
+        #expect(view.loading.isMoving && view.isSkeletonMoving)
         view.isHidden = true
-        #expect(!view.toolbar.loading.isMoving && !view.isSkeletonMoving)
+        #expect(!view.loading.isMoving && !view.isSkeletonMoving)
         view.isHidden = false
-        #expect(view.toolbar.loading.isMoving && view.isSkeletonMoving)
+        #expect(view.loading.isMoving && view.isSkeletonMoving)
     }
 
     @Test func skeletonCardsAreCardSized() {

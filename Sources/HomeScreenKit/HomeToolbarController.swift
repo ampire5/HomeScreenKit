@@ -126,7 +126,6 @@ import HomeScreenModel
             ring.label = "Thumbnails"
             ring.toolTip = Self.ringTip
             ring.isBordered = true
-            progress.isCompact = true
             progress.drawsBackdrop = false
             progress.translatesAutoresizingMaskIntoConstraints = false
             NSLayoutConstraint.activate([progress.widthAnchor.constraint(equalToConstant: ThumbsProgressPill.height),

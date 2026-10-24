@@ -2,24 +2,19 @@ import AppKit
 import HomeChrome
 import HomeScreenModel
 
-/// The toolbar's pill for the thumbnails being prepared (thumbs-ahead spec, "Пилюля в тулбаре"; the progress board's
-/// button): a glass capsule 28 pt high with a 20 pt ring that fills by the current stage's share, a pause glyph in it
-/// while the work runs (play while paused, the ring grey), and the app's text in 12 pt tabular digits. A click opens a
-/// popover with the stages' bars, the pause note and the buttons (`ThumbsProgressPanel`). Compact (a narrow toolbar): the
-/// ring alone in a 28 pt capsule, the text in the tooltip. One view, so it can become an `NSToolbarItem`'s view.
+/// The toolbar's ring for the thumbnails being prepared (thumbs-ahead spec, "Пилюля в тулбаре"; the progress board's
+/// button): a 20 pt ring that fills by the current stage's share, a pause glyph in it while the work runs (play while
+/// paused, the ring grey), in a 28 pt square; the app's text is the tooltip. A click opens a popover with the stages'
+/// bars, the pause note and the buttons (`ThumbsProgressPanel`). One view, the `NSToolbarItem`'s: the toolbar draws the
+/// capsule round it (`drawsBackdrop` off), or this view does (on).
 final class ThumbsProgressPill: NSView, NSPopoverDelegate {
     enum Glyph: Equatable { case pause, play }
 
     static let height: CGFloat = 28
-    /// The board's button: padding 0 12 0 6, gap 8 between the ring and the text.
-    private static let leading: CGFloat = 6
-    private static let gap: CGFloat = 8
-    private static let trailing: CGFloat = 12
     /// The ring: a 20 pt box, radius 8, stroke 2.5.
     private static let ringBox: CGFloat = 20
     private static let ringRadius: CGFloat = 8
     private static let ringWidth: CGFloat = 2.5
-    private static let font = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .regular)
 
     /// The popover's Pause (true) or Resume (false).
     var onPause: ((Bool) -> Void)?
@@ -27,17 +22,6 @@ final class ThumbsProgressPill: NSView, NSPopoverDelegate {
     var onPrepare: (() -> Void)?
     /// The popover's Stop preparing (while a subtree is being prepared).
     var onStopSubtree: (() -> Void)?
-
-    /// The ring alone, the text in the tooltip (and the popover): the toolbar's step before hiding the pill.
-    var isCompact = false {
-        didSet {
-            guard isCompact != oldValue else { return }
-            label.isHidden = isCompact
-            toolTip = isCompact && state != nil ? text : nil
-            invalidateIntrinsicContentSize()
-            needsLayout = true
-        }
-    }
 
     /// The capsule's own glass and edge. Off where the toolbar draws its own capsule round the item.
     var drawsBackdrop = true {
@@ -52,30 +36,10 @@ final class ThumbsProgressPill: NSView, NSPopoverDelegate {
     private(set) var detail: ThumbsProgressState?
     private(set) var ringColor = Chrome.Palette.card.accent
     private(set) var glyph = Glyph.pause
-    var text: String { label.stringValue }
+    /// The app's text for the state: the tooltip.
+    var text: String { state?.text ?? "" }
     /// The ring's fill, 0…1 (the model value; the layer animates to it).
     var ringEnd: CGFloat { fill.strokeEnd }
-    var textWidth: CGFloat { Self.width(text) }
-    /// The text area's width: that of the widest count for the current total and stage word ("Thumbnails 0000 / 1480"
-    /// for "Thumbnails 52 / 1480": the digits are tabular, all one width), so the pill keeps its width, and its place
-    /// under the pointer, while the count grows; a text with no "n / N" at its end is as wide as itself.
-    private(set) var reservedTextWidth: CGFloat = 0
-
-    /// The widest text for `text`'s total: its done count as many digits as the total has.
-    static func widestText(_ text: String) -> String {
-        guard let slash = text.range(of: " / ", options: .backwards) else { return text }
-        let total = text[slash.upperBound...]
-        func isDigit(_ c: Character) -> Bool { ("0"..."9").contains(c) }
-        guard !total.isEmpty, total.allSatisfy(isDigit) else { return text }
-        let head = text[..<slash.lowerBound]
-        let digits = head.reversed().prefix(while: isDigit).count
-        guard digits > 0 else { return text }
-        return head.dropLast(digits) + String(repeating: "0", count: total.count) + " / " + total
-    }
-
-    private static func width(_ text: String) -> CGFloat {
-        ceil((text as NSString).size(withAttributes: [.font: font]).width)
-    }
 
     private let glass = NSGlassEffectView()
     private let content = FlippedLayerView()
@@ -83,7 +47,6 @@ final class ThumbsProgressPill: NSView, NSPopoverDelegate {
     private let track = CAShapeLayer()
     private let fill = CAShapeLayer()
     private let glyphLayer = CAShapeLayer()
-    private let label = NSTextField(labelWithString: "")
     private let edge = EdgeView()
     private var panel: ThumbsProgressPanel?
     private var popover: NSPopover?
@@ -94,7 +57,7 @@ final class ThumbsProgressPill: NSView, NSPopoverDelegate {
         isHidden = true
         glass.cornerRadius = Chrome.Radius.capsule(Self.height)
         addSubview(glass)
-        // The ring and the text sit over the glass, not in it: their colours are the board's own in each appearance.
+        // The ring sits over the glass, not in it: its colours are the board's own in each appearance.
         addSubview(content)
         let circle = CGMutablePath()
         // From 12 o'clock, clockwise (the view is flipped: y grows down).
@@ -110,9 +73,6 @@ final class ThumbsProgressPill: NSView, NSPopoverDelegate {
         fill.strokeEnd = 0
         ring.layer?.addSublayer(glyphLayer)
         content.addSubview(ring)
-        label.font = Self.font
-        label.lineBreakMode = .byClipping
-        content.addSubview(label)
         addSubview(edge)
         setAccessibilityElement(true)
         setAccessibilityRole(.button)
@@ -138,15 +98,7 @@ final class ThumbsProgressPill: NSView, NSPopoverDelegate {
         return true
     }
 
-    override var intrinsicContentSize: NSSize { isCompact ? compactSize : fullSize }
-
-    /// With the text: the board's button.
-    var fullSize: NSSize {
-        NSSize(width: Self.leading + Self.ringBox + Self.gap + reservedTextWidth + Self.trailing, height: Self.height)
-    }
-
-    /// The ring alone, centred in a capsule as wide as it is high.
-    var compactSize: NSSize { NSSize(width: Self.height, height: Self.height) }
+    override var intrinsicContentSize: NSSize { NSSize(width: Self.height, height: Self.height) }
 
     /// The state to draw; nil hides the pill (and closes its popover if it points at the pill; one the View menu
     /// opened from the sort stays, with the last counts).
@@ -160,17 +112,8 @@ final class ThumbsProgressPill: NSView, NSPopoverDelegate {
             return
         }
         isHidden = false
-        if label.stringValue != p.text {
-            label.stringValue = p.text
-            let reserved = max(textWidth, Self.width(Self.widestText(p.text)))
-            if reserved != reservedTextWidth {
-                reservedTextWidth = reserved
-                invalidateIntrinsicContentSize()
-                needsLayout = true
-            }
-        }
         setAccessibilityLabel(p.text)
-        toolTip = isCompact ? p.text : nil
+        toolTip = p.text
         glyph = p.paused ? .play : .pause
         ringColor = p.paused ? Chrome.Palette.progress.pausedRing : Chrome.Palette.card.accent
         glyphLayer.path = Self.glyphPath(glyph)
@@ -224,7 +167,6 @@ final class ThumbsProgressPill: NSView, NSPopoverDelegate {
         edge.rim.borderColor = Chrome.resolve(Chrome.Palette.card.separator, in: self)
         edge.highlight.fillColor = Chrome.resolve(Chrome.Palette.progress.highlight, in: self)
         CATransaction.commit()
-        label.textColor = Chrome.Palette.card.label
     }
 
     override func viewDidChangeEffectiveAppearance() {
@@ -237,13 +179,8 @@ final class ThumbsProgressPill: NSView, NSPopoverDelegate {
         glass.frame = bounds
         content.frame = bounds
         edge.frame = bounds
-        let ringX = isCompact ? (bounds.width - Self.ringBox) / 2 : Self.leading
-        ring.frame = CGRect(x: ringX, y: (bounds.height - Self.ringBox) / 2, width: Self.ringBox,
+        ring.frame = CGRect(x: (bounds.width - Self.ringBox) / 2, y: (bounds.height - Self.ringBox) / 2, width: Self.ringBox,
                             height: Self.ringBox)
-        let h = label.intrinsicContentSize.height
-        let x = ring.frame.maxX + Self.gap
-        label.frame = CGRect(x: x, y: ((bounds.height - h) / 2).rounded(), width: max(0, bounds.width - x - Self.trailing + 2),
-                             height: h)
         edge.place(radius: Chrome.Radius.capsule(bounds.height))
     }
 

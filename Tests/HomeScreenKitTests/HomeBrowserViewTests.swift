@@ -21,6 +21,38 @@ import Testing
         return view
     }
 
+    /// The grid runs under the window's toolbar, as in Photos: its first row starts below the inset the toolbar takes.
+    /// Without a window (here) that is a constant.
+    @Test func gridStartsBelowTheToolbarInset() async {
+        let source = FakeHomeSource()
+        let view = await shown(source, ["p.jpg", "q.jpg"].map { BrowserFixtures.file($0) })
+        #expect(view.topInset == HomeBrowserView.defaultTopInset)
+        #expect(view.grid.frame(of: 0).minY >= HomeBrowserView.defaultTopInset)
+        source.cardStyles[.folder(x)] = .list
+        let list = await shown(source, (0..<5).map { BrowserFixtures.folder("f\($0)") })
+        #expect(list.listHeader?.frame.minY == HomeBrowserView.defaultTopInset)
+    }
+
+    /// In a window with the toolbar and `fullSizeContentView` the inset is the safe area's top (the title bar and the
+    /// toolbar); once the toolbar is taken away it is the constant again.
+    @Test func topInsetFollowsTheSafeArea() async {
+        let source = FakeHomeSource()
+        let view = HomeBrowserView(source: source)
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 1200, height: 800),
+                              styleMask: [.titled, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        window.toolbarStyle = .unified
+        window.contentView = view
+        window.toolbar = view.nsToolbar
+        window.orderFront(nil)
+        view.layoutSubtreeIfNeeded()
+        #expect(view.safeAreaInsets.top > 0)
+        #expect(view.topInset == view.safeAreaInsets.top)
+        window.toolbar = nil
+        #expect(view.topInset == HomeBrowserView.defaultTopInset)
+    }
+
     /// A live window resize changes the slot width on every pass; pictures still pending are not asked for again
     /// each time (the app restarts its decoding on a new ask).
     @Test func resizingDoesNotAskAgainPerPass() async {
@@ -110,7 +142,6 @@ import Testing
         let source = FakeHomeSource()
         source.folderReplies[x.path] = siblings
         let view = make(source, at: .folder(nested))
-        view.toolbar.popUp = { _, _ in }
         view.toolbar.clickSiblings(3)   // the › before "b": the folders in x
         await settle { view.toolbar.siblingTitles == ["a", "b", "c"] }
         #expect(view.toolbar.siblingTitles == ["a", "b", "c"])
@@ -124,7 +155,6 @@ import Testing
         let source = FakeHomeSource()
         source.holdsFolders = true
         let view = make(source, at: .folder(nested))
-        view.toolbar.popUp = { _, _ in }
         view.toolbar.clickSiblings(3)
         await settle { !source.foldersAsked.isEmpty }
         view.show(.places, selecting: nil)
@@ -137,10 +167,7 @@ import Testing
         let source = FakeHomeSource()
         source.holdsFolders = true
         let view = make(source, at: .folder(nested))
-        var popped = 0
-        view.toolbar.popUp = { _, _ in popped += 1 }
         view.toolbar.clickSiblings(3)
-        #expect(popped == 1)
         #expect(view.toolbar.siblingTitles == ["Loading…"])
         await settle { !source.foldersAsked.isEmpty }
         source.answerFolders(siblings)
@@ -724,9 +751,9 @@ import Testing
         source.cardStyles[.folder(x)] = .list
         let view = await shown(source, (0..<200).map { BrowserFixtures.folder("f\($0)") })
         let header = view.listHeader!
-        #expect(header.frame.minY == HomeToolbar.height)
+        #expect(header.frame.minY == HomeBrowserView.defaultTopInset)
         view.scrollGrid(to: 1000)
-        #expect(header.frame.minY == view.scrollOffset + HomeToolbar.height)
+        #expect(header.frame.minY == view.scrollOffset + HomeBrowserView.defaultTopInset)
         #expect(header.superview?.subviews.last === header)
         view.scrollGrid(to: view.gridContentHeight)
         #expect(header.frame.maxY <= view.listPlate!.frame.maxY)
@@ -1140,55 +1167,6 @@ import Testing
         view.setProgress(nil, delay: .zero)
         await settle(seconds: 5) { !view.isShowingProgress }
         #expect(!view.isShowingProgress)
-    }
-
-    /// The toolbar keeps every click inside its bounds: over a card scrolled under it, a press where the pill was a
-    /// moment ago (it went out) or on an empty stretch of the toolbar never reaches the card; the wheel still scrolls
-    /// the grid. The pill takes the click that activates the window.
-    @Test func clickOnTheToolbarNeverReachesTheGrid() async throws {
-        let source = FakeHomeSource()
-        let view = await shown(source, (0..<60).map { BrowserFixtures.folder("f\($0)") })
-        view.scroll.contentView.scroll(to: CGPoint(x: 0, y: 200))
-        view.scroll.reflectScrolledClipView(view.scroll.contentView)
-        view.layoutSubtreeIfNeeded()
-        view.setProgress(Self.progress, delay: .zero)
-        await settle { view.isShowingProgress }
-        view.layoutSubtreeIfNeeded()
-        let pill = view.toolbar.progressFrame
-        #expect(view.toolbar.progress.acceptsFirstMouse(for: nil))
-        func hit(_ point: CGPoint) -> NSView? { view.hitTest(view.toolbar.convert(point, to: view)) }
-        #expect(hit(CGPoint(x: pill.midX, y: pill.midY)) === view.toolbar.progress)
-        // Below the toolbar, the same column reaches a card: one is under the toolbar too.
-        let below = view.toolbar.convert(CGPoint(x: pill.midX, y: HomeToolbar.height + 40), to: view)
-        #expect(view.hitTest(below).map { $0 is GridCard || $0.superview is GridCard } == true)
-        view.setProgress(nil, delay: .zero)
-        await settle(seconds: 5) { !view.isShowingProgress }
-        for point in [CGPoint(x: pill.midX, y: pill.midY), CGPoint(x: pill.midX, y: 3),
-                      CGPoint(x: view.toolbar.kindFrame.maxX + 4, y: HomeToolbar.height / 2)] {
-            let target = hit(point)
-            #expect(target === view.toolbar, "\(point) -> \(String(describing: target))")
-        }
-        #expect(view.toolbar.mouseDownCanMoveWindow)
-    }
-
-    /// The wheel and a pinch over the toolbar's glass go through to the grid under it (scroll, resize); a control
-    /// keeps its own.
-    @Test func wheelAndPinchPassThroughTheToolbar() async {
-        let source = FakeHomeSource()
-        let view = await shown(source, (0..<60).map { BrowserFixtures.folder("f\($0)") })
-        view.scroll.contentView.scroll(to: CGPoint(x: 0, y: 200))
-        view.scroll.reflectScrolledClipView(view.scroll.contentView)
-        view.layoutSubtreeIfNeeded()
-        let gap = view.toolbar.convert(CGPoint(x: view.toolbar.kindFrame.maxX + 4, y: HomeToolbar.height / 2), to: view)
-        let sort = view.toolbar.convert(CGPoint(x: view.toolbar.sortFrame.midX, y: view.toolbar.sortFrame.midY), to: view)
-        for type in [NSEvent.EventType.scrollWheel, .magnify] {
-            view.toolbar.eventType = { type }
-            let target = view.hitTest(gap)
-            #expect(target.map { $0 === view.scroll || $0.isDescendant(of: view.scroll) } == true, "\(type)")
-            #expect(view.hitTest(sort).map { $0.isDescendant(of: view.toolbar) } == true)
-        }
-        view.toolbar.eventType = { .leftMouseDown }
-        #expect(view.hitTest(gap) === view.toolbar)
     }
 
     @Test func popoverButtonsReachTheSource() async {

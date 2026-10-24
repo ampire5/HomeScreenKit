@@ -96,8 +96,15 @@ import Testing
         let source = source()
         let (view, window) = await make(source)
         view.browser.show(.folder(url("/Volumes/T/x")), selecting: nil)
+        window.isReleasedWhenClosed = false
+        window.toolbar = view.browser.nsToolbar   // the field is the toolbar's
+        window.orderFront(nil)
+        defer { window.close() }
+        await settle { view.browser.toolbar.searchField.window != nil }   // the toolbar puts its items in the window a turn later
         view.browser.toolbar.focusFilter()
+        await settle { view.browser.toolbar.searchField.currentEditor() != nil }
         let focused = window.firstResponder
+        #expect(focused !== view.browser)
         view.keyDown(with: keyEvent(code: 48, chars: "\t"))
         #expect(window.firstResponder === focused)
         #expect(window.firstResponder !== view.sidebarView)
@@ -121,11 +128,11 @@ import Testing
         let (view, _) = await make(source)
         var asked = 0
         view.onSidebarToggle = { asked += 1 }
-        view.browser.toolbar.sidebarButton.press(0)
+        view.browser.toolbar.clickSidebar()
         #expect(asked == 1)
         var home = 0
         view.onHome = { home += 1 }
-        view.browser.toolbar.homeButton.press(0)
+        view.browser.toolbar.clickHome()
         #expect(home == 1)
     }
 

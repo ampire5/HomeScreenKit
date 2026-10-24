@@ -246,8 +246,14 @@ import Testing
         let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 1200, height: 800), styleMask: [.titled],
                               backing: .buffered, defer: true)
         window.contentView = view
+        window.isReleasedWhenClosed = false
+        window.toolbar = view.nsToolbar   // the field is the toolbar's
+        window.orderFront(nil)
+        defer { window.close() }
+        await settle { view.toolbar.searchField.window != nil }   // the toolbar puts its items in the window a turn later
         #expect(view.handleKey(key(3, "f", [.command])))
-        #expect(view.toolbar.field.currentEditor() != nil)
+        await settle { view.toolbar.searchField.currentEditor() != nil }
+        #expect(view.toolbar.searchField.currentEditor() != nil)
     }
 
     @Test func optionKeysNeverTypeSelect() async {

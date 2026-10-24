@@ -21,7 +21,7 @@ public final class HomeView: NSView {
         }
     }
 
-    /// What Home is drawn on (the app's background); the toolbar's backdrop fades from it.
+    /// What Home is drawn on (the app's background).
     /// Unset, it is the window's background in the view's appearance and follows it; once the owner sets it, it stays.
     public var background: CGColor {
         get { customBackground ?? Chrome.resolve(Chrome.Palette.window.background, in: self) }
@@ -36,7 +36,6 @@ public final class HomeView: NSView {
 
     private func paintBackground() {
         layer?.backgroundColor = background
-        browser.toolbar.background = customBackground.flatMap { NSColor(cgColor: $0) } ?? Chrome.Palette.window.background
     }
 
     public override func viewDidChangeEffectiveAppearance() {

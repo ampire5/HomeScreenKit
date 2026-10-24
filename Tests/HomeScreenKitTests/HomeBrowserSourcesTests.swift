@@ -29,7 +29,7 @@ import Testing
         source.yieldSource("recent", ["a", "b", "c"].map { BrowserFixtures.collection($0) })
         await settle { view.entries.count == 3 }
         view.layoutSubtreeIfNeeded()
-        #expect(view.toolbar.crumbTitles == ["Recent"])
+        #expect(view.toolbar.windowTitle == "Recent")
         #expect(!view.toolbar.isNavVisible)
         #expect(view.toolbar.sortTitles == ["Date ↓", "Name"])
         #expect(!view.toolbar.isFilterVisible)
@@ -78,7 +78,7 @@ import Testing
         view.layoutSubtreeIfNeeded()
         #expect(page.superview === view)
         #expect(!page.isHidden)
-        #expect(page.frame.maxY <= view.bounds.height - HomeToolbar.height + 0.5)
+        #expect(page.frame.maxY <= view.bounds.height - HomeBrowserView.defaultTopInset + 0.5)
         #expect(view.isGridHidden)
         #expect(source.listedSources.isEmpty)
         #expect(view.toolbar.kindTitles == ["Scenes", "Images", "Galleries"])

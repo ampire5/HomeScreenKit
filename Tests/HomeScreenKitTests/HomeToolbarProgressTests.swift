@@ -29,7 +29,7 @@ import Testing
         #expect(!controller.isProgressVisible)
         controller.show(progress: Self.running)
         #expect(controller.isProgressVisible)
-        #expect(controller.progress.isCompact)
+        #expect(controller.progress.text == Self.running.text)
         #expect(controller.progressState == Self.running)
         controller.show(progress: nil)
         #expect(!controller.isProgressVisible)

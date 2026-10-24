@@ -136,13 +136,44 @@ import HomeScreenKit
             }
             return
         }
+        window.styleMask.insert(.fullSizeContentView)
+        window.toolbarStyle = .unified
+        window.toolbar = browser.nsToolbar
+        browser.onWindowText = { [weak self] title, subtitle in
+            self?.window.title = title
+            self?.window.subtitle = subtitle
+        }
         window.center()
         window.makeKeyAndOrderFront(nil)
         window.makeFirstResponder(browser)
         NSApp.activate()
+        if let prefix = env["HOMESCREEN_SHOTS"] { shoot(prefix: prefix, dark: env["HOMESCREEN_DARK"] != nil) }
+    }
+
+    /// Window pictures at 1200, 900, 700 and 560 pt for looking at the toolbar (`HOMESCREEN_SHOTS=<prefix>`, with
+    /// `HOMESCREEN_DARK` for the dark appearance): `<prefix>-<width>.png` by `screencapture` of the window itself.
+    func shoot(prefix: String, dark: Bool) {
+        NSApp.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+        if ProcessInfo.processInfo.environment["HOMESCREEN_PROGRESS"] != nil {   // the thumbnails' ring, lit
+            homeView.browser.setProgress(ThumbsProgressState(fraction: 0.4, text: "Thumbnails 120 / 300"), delay: .zero)
+        }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(1500))
+            for width in [1200.0, 900.0, 700.0, 560.0] {
+                self.window.setContentSize(CGSize(width: width, height: 760))
+                try? await Task.sleep(for: .milliseconds(700))
+                let capture = Process()
+                capture.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+                capture.arguments = ["-x", "-o", "-l", String(self.window.windowNumber), "\(prefix)-\(Int(width)).png"]
+                try? capture.run()
+                capture.waitUntilExit()
+            }
+            exit(0)
+        }
     }
 
     func showTab(_ tab: Int) {
+        window.toolbar = tab == 1 ? browser.nsToolbar : nil   // the folders' toolbar is the window's
         browser.isHidden = tab != 1
         window.makeFirstResponder(tab == 1 ? browser : home)
     }

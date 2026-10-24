@@ -21,8 +21,8 @@ import Testing
     private var mixed: [BrowserEntry] { (0..<3).map { BrowserFixtures.folder("f\($0)") } + BrowserFixtures.files(20) }
 
     private func type(_ text: String, in view: HomeBrowserView) {
-        view.toolbar.field.stringValue = text
-        view.toolbar.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification, object: view.toolbar.field))
+        view.toolbar.searchField.stringValue = text
+        view.toolbar.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification, object: view.toolbar.searchField))
     }
 
     @Test func kindFilterKeepsSelection() async {
@@ -74,7 +74,7 @@ import Testing
         view.toolbar.focusFilter()
         type("img1", in: view)
         await settle { view.entries.count == 11 }
-        _ = view.toolbar.control(view.toolbar.field, textView: NSTextView(),
+        _ = view.toolbar.control(view.toolbar.searchField, textView: NSTextView(),
                                  doCommandBy: #selector(NSResponder.cancelOperation(_:)))
         await settle { view.entries.count == 23 }
         #expect(view.entries.count == 23)

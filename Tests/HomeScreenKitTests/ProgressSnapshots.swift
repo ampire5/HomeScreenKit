@@ -5,7 +5,8 @@ import Testing
 @testable import HomeScreenModel
 
 /// Pictures of the thumbnails' progress pill for comparing with the progress board («Пилюля в тулбаре: три состояния»,
-/// «По щелчку»): the toolbar running, paused and done (no pill), in both appearances, and the popover's content.
+/// «По щелчку»): the pill running and paused, in both appearances, and the popover's content. The pill in the toolbar is
+/// the system's to draw now (`NSToolbar`): its pictures are screenshots of the window.
 /// Runs only with `HOMESCREEN_SNAPSHOTS=<folder>` set: `HOMESCREEN_SNAPSHOTS=/tmp/x swift test --filter ProgressSnapshots`.
 @MainActor @Suite struct ProgressSnapshots {
     nonisolated static let folder = ProcessInfo.processInfo.environment["HOMESCREEN_SNAPSHOTS"]
@@ -17,20 +18,9 @@ import Testing
     static let paused = ThumbsProgressState(fraction: 0.25, text: "Paused · 120 / 480", paused: true, rows: rows,
                                             pauseNote: "Paused while you browse")
 
-    static func toolbar(_ state: ThumbsProgressState?, width: CGFloat) -> HomeToolbar {
-        let bar = HomeToolbar()
-        bar.frame = CGRect(x: 0, y: 0, width: width, height: HomeToolbar.height)
-        let folder = URL(fileURLWithPath: "/Volumes/T/Vacation 2024")
-        bar.show(path: [("Places", .places), ("Vacation 2024", .folder(folder))], canBack: true, canForward: false, canUp: true)
-        bar.show(subtitle: "248 photos · 3 folders")
-        bar.show(progress: state)
-        return bar
-    }
-
     /// System glass (`NSGlassEffectView`) and what sits in it do not draw off screen, so the pictures put the board's
-    /// own fills where the glass is: its glass (white .7 / #3C3C40 .7) under the pill and its track under the sort
-    /// capsule (whose titles, in the glass, stay out of the picture). The pill's ring, glyph, text, rim and highlight
-    /// are the real ones.
+    /// own fills where the glass is: its glass (white .7 / #3C3C40 .7) under the pill. The pill's ring, glyph, text, rim
+    /// and highlight are the real ones.
     static func standIn(_ frame: CGRect, in host: NSView, light: NSColor, dark: NSColor, isDark: Bool) {
         let plate = NSView(frame: frame)
         plate.wantsLayer = true
@@ -48,98 +38,15 @@ import Testing
 
     static let boardGlass = (light: NSColor(white: 1, alpha: 0.7),
                              dark: NSColor(srgbRed: 60 / 255, green: 60 / 255, blue: 64 / 255, alpha: 0.7))
-    static let boardTrack = (light: NSColor(white: 0, alpha: 0.1), dark: NSColor(white: 1, alpha: 0.16))
 
-    /// The board's three bars, one under the other, in the real toolbar (1400 pt wide, room for the pill).
-    @Test(.enabled(if: folder != nil)) func pill() throws {
-        let width: CGFloat = 1400
-        for dark in [false, true] {
-            try CardSnapshots.write("P-pill", size: CGSize(width: width, height: 3 * HomeToolbar.height + 40), dark: dark) { host in
-                for (i, state) in [Self.running, Self.paused, nil].enumerated() {
-                    let bar = Self.toolbar(state, width: width)
-                    bar.frame.origin = CGPoint(x: 0, y: 10 + CGFloat(i) * (HomeToolbar.height + 10))
-                    bar.layoutSubtreeIfNeeded()
-                    let y = bar.frame.minY
-                    Self.standIn(bar.sortFrame.offsetBy(dx: 0, dy: y), in: host, light: Self.boardTrack.light,
-                                 dark: Self.boardTrack.dark, isDark: dark)
-                    if bar.isProgressVisible {
-                        Self.standIn(bar.progressFrame.offsetBy(dx: 0, dy: y), in: host, light: Self.boardGlass.light,
-                                     dark: Self.boardGlass.dark, isDark: dark)
-                    }
-                    Self.hideGlass(in: bar)
-                    host.addSubview(bar)
-                }
-            }
-        }
-    }
-
-    /// The right group of the toolbar (sort, zoom, the aspect toggle, the card switch, the filter) with and without
-    /// the card switch, the pill running: the order of the controls. The glass is left out off screen, so each icon
-    /// group gets the board's glass under it and its symbols drawn over it (30 pt a button, as `GlassGroup` lays them).
-    @Test(.enabled(if: folder != nil)) func toolbarControls() throws {
-        let width: CGFloat = 1400
-        for dark in [false, true] {
-            try CardSnapshots.write("V-toolbar", size: CGSize(width: width, height: 2 * HomeToolbar.height + 30), dark: dark) { host in
-                for (i, cards) in [true, false].enumerated() {
-                    let bar = Self.toolbar(Self.running, width: width)
-                    bar.show(cardStyle: .posters, visible: cards)
-                    bar.frame.origin = CGPoint(x: 0, y: 10 + CGFloat(i) * (HomeToolbar.height + 10))
-                    bar.layoutSubtreeIfNeeded()
-                    let y = bar.frame.minY
-                    Self.standIn(bar.sortFrame.offsetBy(dx: 0, dy: y), in: host, light: Self.boardTrack.light,
-                                 dark: Self.boardTrack.dark, isDark: dark)
-                    Self.standIn(bar.progressFrame.offsetBy(dx: 0, dy: y), in: host, light: Self.boardGlass.light,
-                                 dark: Self.boardGlass.dark, isDark: dark)
-                    let groups: [(GlassGroup, [String])] = [(bar.zoom, ["minus", "plus"]), (bar.styleButton, [bar.styleSymbol]),
-                                                            (bar.cardSwitch, ["square.grid.2x2", "rectangle.grid.1x2", "list.bullet"])]
-                    for (group, symbols) in groups where !group.isHidden {
-                        let frame = group.frame.offsetBy(dx: 0, dy: y)
-                        Self.standIn(frame, in: host, light: Self.boardGlass.light, dark: Self.boardGlass.dark, isDark: dark)
-                        for (j, symbol) in symbols.enumerated() {
-                            let icon = NSImageView(image: NSImage(systemSymbolName: symbol, accessibilityDescription: nil)!)
-                            icon.contentTintColor = .labelColor
-                            icon.frame = CGRect(x: frame.minX + CGFloat(j) * 30, y: frame.minY, width: 30, height: frame.height)
-                            host.addSubview(icon)
-                        }
-                    }
-                    Self.hideGlass(in: bar)
-                    host.addSubview(bar)
-                }
-            }
-        }
-    }
-
-    /// The compact step (a toolbar of 1150 pt, no card switch): the ring alone, running and paused.
-    @Test(.enabled(if: folder != nil)) func pillCompact() throws {
-        let width: CGFloat = 1150
-        for dark in [false, true] {
-            try CardSnapshots.write("P-pill-compact", size: CGSize(width: width, height: 2 * HomeToolbar.height + 30), dark: dark) { host in
-                for (i, state) in [Self.running, Self.paused].enumerated() {
-                    let bar = Self.toolbar(state, width: width)
-                    bar.frame.origin = CGPoint(x: 0, y: 10 + CGFloat(i) * (HomeToolbar.height + 10))
-                    bar.layoutSubtreeIfNeeded()
-                    #expect(bar.progressStep == .compact)
-                    let y = bar.frame.minY
-                    Self.standIn(bar.sortFrame.offsetBy(dx: 0, dy: y), in: host, light: Self.boardTrack.light,
-                                 dark: Self.boardTrack.dark, isDark: dark)
-                    Self.standIn(bar.progressFrame.offsetBy(dx: 0, dy: y), in: host, light: Self.boardGlass.light,
-                                 dark: Self.boardGlass.dark, isDark: dark)
-                    Self.hideGlass(in: bar)
-                    host.addSubview(bar)
-                }
-            }
-        }
-    }
-
-    /// The pill alone: running and paused, full and compact, side by side.
+    /// The ring alone: running and paused, side by side.
     @Test(.enabled(if: folder != nil)) func pillCloseUp() throws {
         for dark in [false, true] {
-            try CardSnapshots.write("P-pill-close", size: CGSize(width: 520, height: 60), dark: dark) { host in
+            try CardSnapshots.write("P-pill-close", size: CGSize(width: 120, height: 60), dark: dark) { host in
                 var x: CGFloat = 20
-                for (state, compact) in [(Self.running, false), (Self.paused, false), (Self.running, true), (Self.paused, true)] {
+                for state in [Self.running, Self.paused] {
                     let pill = ThumbsProgressPill()
                     pill.show(state)
-                    pill.isCompact = compact
                     let s = pill.intrinsicContentSize
                     pill.frame = CGRect(x: x, y: 16, width: s.width, height: s.height)
                     Self.standIn(pill.frame, in: host, light: Self.boardGlass.light, dark: Self.boardGlass.dark, isDark: dark)

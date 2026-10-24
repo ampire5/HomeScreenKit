@@ -44,12 +44,12 @@ extension HomeBrowserView {
         header.sortable = sortKeys
         header.sort = sort
         let x = GridMetrics().collectionEdge, w = max(0, width - 2 * x)
-        let top = HomeToolbar.height
+        let top = topInset
         let bottom = grid.count > 0 ? grid.frame(of: grid.count - 1).maxY : top + ListHeader.height
         let plateFrame = CGRect(x: x, y: top, width: w, height: max(ListHeader.height, bottom - top))
         if plate.frame != plateFrame { plate.frame = plateFrame }
         let visible = scroll.contentView.documentVisibleRect
-        let y = min(max(top, visible.minY + HomeToolbar.height), plateFrame.maxY - ListHeader.height)
+        let y = min(max(top, visible.minY + topInset), plateFrame.maxY - ListHeader.height)
         let headerFrame = CGRect(x: x, y: y, width: w, height: ListHeader.height)
         if header.frame != headerFrame { header.frame = headerFrame }
         if document.subviews.last !== header { document.addSubview(header, positioned: .above, relativeTo: nil) }

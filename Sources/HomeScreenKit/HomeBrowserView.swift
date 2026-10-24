@@ -179,7 +179,40 @@ public final class HomeBrowserView: NSView {
 
     // MARK: Parts
 
-    let toolbar = HomeToolbar()
+    /// Below the window's toolbar the grid starts; without a window (tests) or a toolbar this far from its top.
+    static let defaultTopInset: CGFloat = 52
+
+    /// What the toolbar and the title bar take at the view's top: the safe area's, once the window has a toolbar.
+    var topInset: CGFloat { window?.toolbar != nil ? safeAreaInsets.top : Self.defaultTopInset }
+
+    /// The toolbar for the window of the app to show while Home is on screen (`window.toolbar = browser.nsToolbar`).
+    public var nsToolbar: NSToolbar { toolbar.nsToolbar }
+
+    /// The window's title and subtitle for the folder on screen (its name, and the count line under it), as the app
+    /// shows them in the window: set whenever either changes.
+    public var onWindowText: ((_ title: String, _ subtitle: String) -> Void)? {
+        get { toolbar.onWindowText }
+        set { toolbar.onWindowText = newValue }
+    }
+
+    /// The edges that follow `topInset`: the loading line's bottom and the skeleton's and a page's top.
+    private lazy var loadingBottom = loading.bottomAnchor.constraint(equalTo: topAnchor, constant: Self.defaultTopInset)
+    private lazy var skeletonTop = skeleton.topAnchor.constraint(equalTo: topAnchor, constant: Self.defaultTopInset)
+    private var pageTop: NSLayoutConstraint?
+
+    private func updateTopInset() {
+        let inset = topInset
+        guard loadingBottom.constant != inset || skeletonTop.constant != inset || pageTop?.constant != inset else { return }
+        loadingBottom.constant = inset
+        skeletonTop.constant = inset
+        pageTop?.constant = inset
+        needsLayout = true
+    }
+
+
+    let toolbar = HomeToolbarController()
+    /// Runs along the bottom of the toolbar's inset while a folder loads.
+    let loading = LoadingLine()
     private let skeleton = BrowserSkeleton()
     /// After this long without all the names, the skeleton says why it waits.
     var slowAfter: Duration = .seconds(3)
@@ -230,7 +263,6 @@ public final class HomeBrowserView: NSView {
     public init(source: HomeSource) {
         self.source = source
         super.init(frame: .zero)
-        toolbar.translatesAutoresizingMaskIntoConstraints = false
         scroll.translatesAutoresizingMaskIntoConstraints = false
         scroll.drawsBackground = false
         scroll.hasVerticalScroller = true
@@ -249,16 +281,16 @@ public final class HomeBrowserView: NSView {
         hint.translatesAutoresizingMaskIntoConstraints = false
         document.addSubview(footer)
         // The grid runs under the toolbar, as in Photos; the skeleton starts below it.
-        for view in [scroll, skeleton, hint, toolbar, message, toast] { addSubview(view) }
+        loading.translatesAutoresizingMaskIntoConstraints = false
+        for view in [scroll, skeleton, hint, loading, message, toast] { addSubview(view) }
         NSLayoutConstraint.activate([
-            toolbar.leadingAnchor.constraint(equalTo: leadingAnchor), toolbar.trailingAnchor.constraint(equalTo: trailingAnchor),
-            toolbar.topAnchor.constraint(equalTo: topAnchor),
-            toolbar.heightAnchor.constraint(equalToConstant: HomeToolbar.height),
+            loading.leadingAnchor.constraint(equalTo: leadingAnchor), loading.trailingAnchor.constraint(equalTo: trailingAnchor),
+            loading.heightAnchor.constraint(equalToConstant: 2), loadingBottom, skeletonTop,
             scroll.leadingAnchor.constraint(equalTo: leadingAnchor), scroll.trailingAnchor.constraint(equalTo: trailingAnchor),
             scroll.topAnchor.constraint(equalTo: topAnchor), scroll.bottomAnchor.constraint(equalTo: bottomAnchor),
             skeleton.leadingAnchor.constraint(equalTo: scroll.leadingAnchor),
             skeleton.trailingAnchor.constraint(equalTo: scroll.trailingAnchor),
-            skeleton.topAnchor.constraint(equalTo: toolbar.bottomAnchor), skeleton.bottomAnchor.constraint(equalTo: scroll.bottomAnchor),
+            skeleton.bottomAnchor.constraint(equalTo: scroll.bottomAnchor),
             message.centerXAnchor.constraint(equalTo: centerXAnchor), message.centerYAnchor.constraint(equalTo: centerYAnchor),
             hint.centerXAnchor.constraint(equalTo: centerXAnchor), hint.centerYAnchor.constraint(equalTo: centerYAnchor),
             message.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, constant: -32),
@@ -270,7 +302,6 @@ public final class HomeBrowserView: NSView {
         toolbar.onCrumb = { [weak self] location in self?.show(location, selecting: nil) }
         toolbar.onBack = { [weak self] in self?.goBack() }
         toolbar.onForward = { [weak self] in self?.goForward() }
-        toolbar.onUp = { [weak self] in self?.goUp() }
         toolbar.onSortKey = { [weak self] key in self?.sortKeyChosen(key) }
         toolbar.onCardStyle = { [weak self] style in self?.chooseCardStyle(style) }
         toolbar.onZoom = { [weak self] step in self?.onResize?(step) }
@@ -401,7 +432,7 @@ public final class HomeBrowserView: NSView {
         loadingTask?.cancel()
         toast.hide()
         slowTask?.cancel()
-        toolbar.loading.run(false)
+        loading.run(false)
         skeleton.stop()
         endRename()
         resetProgress()
@@ -569,10 +600,12 @@ public final class HomeBrowserView: NSView {
             if new.superview !== self {
                 new.removeFromSuperview()
                 new.translatesAutoresizingMaskIntoConstraints = false
-                addSubview(new, positioned: .below, relativeTo: toolbar)
+                addSubview(new, positioned: .below, relativeTo: loading)
+                let top = new.topAnchor.constraint(equalTo: topAnchor, constant: topInset)
+                pageTop = top
                 NSLayoutConstraint.activate([
                     new.leadingAnchor.constraint(equalTo: leadingAnchor), new.trailingAnchor.constraint(equalTo: trailingAnchor),
-                    new.topAnchor.constraint(equalTo: toolbar.bottomAnchor), new.bottomAnchor.constraint(equalTo: bottomAnchor),
+                    top, new.bottomAnchor.constraint(equalTo: bottomAnchor),
                 ])
             }
             new.isHidden = false
@@ -729,7 +762,7 @@ public final class HomeBrowserView: NSView {
             && !filter.isActive
         hint.stringValue = info?.emptyHint ?? ""
         hint.isHidden = !empty
-        toolbar.loading.run(!hasComplete && !failed)
+        loading.run(!hasComplete && !failed)
         let showSkeleton = entries.isEmpty && !hasComplete && !failed
         skeleton.isHidden = !showSkeleton
         // Started on the first load too: the skeleton is not hidden before it.
@@ -772,7 +805,7 @@ public final class HomeBrowserView: NSView {
     var hasCompleteListing: Bool { hasComplete }
     /// The entries of that complete listing (none before it), unfiltered.
     var completeEntries: [BrowserEntry] { hasComplete ? listing?.entries ?? [] : [] }
-    var isShowingLoadingLine: Bool { toolbar.loading.isRunning }
+    var isShowingLoadingLine: Bool { loading.isRunning }
     var isSkeletonMoving: Bool { skeleton.isMoving }
     var isShowingSkeleton: Bool { !skeleton.isHidden }
     var skeletonPictureFrames: [CGRect] { skeleton.pictureFrames }
@@ -906,8 +939,8 @@ public final class HomeBrowserView: NSView {
         return isShowingProgress
     }
 
-    /// View › Thumbnails…: the popover with the current counts, from the pill when it shows, else from the sort.
-    public func showProgressPopover() { toolbar.showProgressPopover() }
+    /// View › Thumbnails…: the popover with the current counts, from the ring when it shows, else from the window's top.
+    public func showProgressPopover() { toolbar.showProgressPopover(in: window) }
 
     private func resetProgress() {
         progressTask?.cancel()
@@ -965,7 +998,7 @@ public final class HomeBrowserView: NSView {
     /// the pool's keep still).
     private func updateMotion() {
         let onScreen = isWindowVisible && !isHiddenOrHasHiddenAncestor
-        toolbar.loading.mayMove = onScreen
+        loading.mayMove = onScreen
         skeleton.mayMove = onScreen
         var slots = onScreen ? Self.shimmerCap : 0
         let visible = scroll.contentView.documentVisibleRect
@@ -1189,8 +1222,8 @@ public final class HomeBrowserView: NSView {
         if scrolls, let i = indexByID[id] {
             // Clear of the toolbar over the grid's top.
             let frame = grid.frame(of: i)
-            document.scrollToVisible(CGRect(x: frame.minX, y: frame.minY - HomeToolbar.height - 8, width: frame.width,
-                                            height: frame.height + HomeToolbar.height + 16))
+            document.scrollToVisible(CGRect(x: frame.minX, y: frame.minY - topInset - 8, width: frame.width,
+                                            height: frame.height + topInset + 16))
         }
         updateSubtitle()
     }
@@ -1333,6 +1366,7 @@ public final class HomeBrowserView: NSView {
 
     public override func layout() {
         super.layout()
+        updateTopInset()   // AppKit lays the view out when the window's toolbar changes its safe area
         tile()
     }
 
@@ -1359,7 +1393,7 @@ public final class HomeBrowserView: NSView {
         gridWidth = width
         sections = makeSections()
         var metrics = GridMetrics()
-        metrics.top = HomeToolbar.height
+        metrics.top = topInset
         // The list has its column heads under the toolbar, above the first row.
         let shownStyle = shownCardStyle(width: width)
         let showsListHeader = shownStyle == .list && !entries.isEmpty && isShowingEntries
