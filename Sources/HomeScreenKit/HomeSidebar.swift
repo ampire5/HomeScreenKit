@@ -298,6 +298,8 @@ final class HomeSidebar: NSView {
     var scrollWidth: CGFloat { scroll.frame.width }
     var rowTitleWidths: [CGFloat] { lineViews.filter { !$0.isHeading }.map(\.title.frame.width) }
     var countTexts: [String] { lineViews.map(\.count.stringValue) }
+    var lineRedraws: Int { lineViews.reduce(0) { $0 + $1.redraws } }
+    var titleBreakModes: [NSLineBreakMode] { lineViews.map(\.title.lineBreakMode) }
     var highlightedLine: Int? { selected }
     func isSpinning(line: Int) -> Bool { lineViews.indices.contains(line) && !lineViews[line].spinner.isHidden }
 }
@@ -319,8 +321,15 @@ private final class SidebarLineView: NSView {
     private let triangle = NSImageView()
     private let light = NSView()
     private(set) var isHeading = false
+    /// How many times `show` changed what the line draws (for tests).
+    private(set) var redraws = 0
+    /// What the line draws now: the tree set again leaves an unchanged line as it is (a new symbol image is drawn
+    /// again at the next commit, a title set again is laid out again).
+    private var shown: (line: SidebarTree.Line, lit: Bool, spinning: Bool)?
     private var depth = 0
-    var compactIndent = true
+    var compactIndent = true {
+        didSet { if compactIndent != oldValue { needsLayout = true } }
+    }
     /// Thin lines down the levels above the row (compact indent).
     private let guides = CAShapeLayer()
     private var lit = false
@@ -341,7 +350,7 @@ private final class SidebarLineView: NSView {
         layer?.addSublayer(guides)
         light.wantsLayer = true
         light.layer?.cornerRadius = Chrome.Radius.control
-        title.lineBreakMode = .byTruncatingMiddle
+        title.lineBreakMode = .byTruncatingTail
         count.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
         count.textColor = .secondaryLabelColor
         count.alignment = .right
@@ -366,6 +375,9 @@ private final class SidebarLineView: NSView {
     override func mouseExited(with event: NSEvent) { hovering = false; paint() }
 
     func show(_ line: SidebarTree.Line, lit: Bool, spinning: Bool) {
+        if let shown, shown.line == line, shown.lit == lit, shown.spinning == spinning { return }
+        shown = (line, lit, spinning)
+        redraws += 1
         self.lit = lit
         switch line {
         case .heading(_, let text, let folded):
@@ -382,15 +394,23 @@ private final class SidebarLineView: NSView {
             depth = d
             title.stringValue = row.title
             count.stringValue = row.count.map(BrowserSummary.number) ?? ""
-            symbol.image = NSImage(systemSymbolName: row.symbol, accessibilityDescription: nil)
-            triangle.image = row.expandable
-                ? NSImage(systemSymbolName: expanded ? "chevron.down" : "chevron.right", accessibilityDescription: nil)
-                : nil
+            symbol.image = Self.symbol(row.symbol)
+            triangle.image = row.expandable ? Self.symbol(expanded ? "chevron.down" : "chevron.right") : nil
             alphaValue = row.isDimmed ? 0.45 : 1
             showSpinner(spinning)
         }
         paint()
         needsLayout = true
+    }
+
+    /// The rows' symbols, one image per name for every line.
+    private static var symbols: [String: NSImage] = [:]
+
+    private static func symbol(_ name: String) -> NSImage? {
+        if let image = symbols[name] { return image }
+        let image = NSImage(systemSymbolName: name, accessibilityDescription: nil)
+        symbols[name] = image
+        return image
     }
 
     private func showSpinner(_ on: Bool) {
@@ -403,9 +423,7 @@ private final class SidebarLineView: NSView {
         if isHeading {
             title.font = .systemFont(ofSize: 11, weight: .semibold)
             title.textColor = .secondaryLabelColor
-            triangle.image = hovering
-                ? NSImage(systemSymbolName: collapsed ? "chevron.right" : "chevron.down", accessibilityDescription: nil)
-                : nil
+            triangle.image = hovering ? Self.symbol(collapsed ? "chevron.right" : "chevron.down") : nil
             light.isHidden = true
             return
         }

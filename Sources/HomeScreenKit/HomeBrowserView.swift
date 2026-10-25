@@ -1037,8 +1037,16 @@ public final class HomeBrowserView: NSView {
 
     public override func viewDidUnhide() {
         super.viewDidUnhide()
+        if tilesWhenShown {
+            tilesWhenShown = false
+            needsLayout = true
+        }
         updateMotion()
     }
+
+    /// A layout came while the browser was hidden (the window resized under a parked Home): the cards are laid out
+    /// when it shows again, not for a size nobody sees.
+    private var tilesWhenShown = false
 
     /// What may move: nothing while the window is off screen or the browser hidden; else the loading line, the
     /// skeleton, and the waiting cards in view, the first `shimmerCap` of them in the grid's order (the margin's and
@@ -1421,6 +1429,10 @@ public final class HomeBrowserView: NSView {
 
     public override func layout() {
         super.layout()
+        guard !isHiddenOrHasHiddenAncestor else {
+            tilesWhenShown = true
+            return
+        }
         updateTopInset()   // AppKit lays the view out when the window's toolbar changes its safe area
         tile()
     }

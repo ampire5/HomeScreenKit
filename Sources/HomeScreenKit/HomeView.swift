@@ -48,11 +48,29 @@ public final class HomeView: NSView {
         didSet {
             guard isSidebarVisible != oldValue else { return }
             if !isSidebarVisible, window?.firstResponder === sidebarView { window?.makeFirstResponder(browser) }
-            guard sidebarItem.isCollapsed == isSidebarVisible else { return }
+            guard !isParked, sidebarItem.isCollapsed == isSidebarVisible else { return }
             if window?.isVisible == true, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
                 sidebarItem.animator().isCollapsed = !isSidebarVisible
             } else {
                 sidebarItem.isCollapsed = !isSidebarVisible
+            }
+        }
+    }
+
+    /// Home hidden in its window while the app shows something else there (a viewer): it stays in the window as it was
+    /// built, so showing it again moves no view between windows and lays nothing out from scratch (a view taken out
+    /// and put back costs its whole tree: `_setWindow`, the layout engine, vibrancy, its images prepared again). Its
+    /// sidebar item is collapsed meanwhile, without animation: an open one makes the system keep a sidebar's room in
+    /// the window's other toolbar. Unparked, the sidebar comes back as `isSidebarVisible` says, at its width.
+    public var isParked = false {
+        didSet {
+            guard isParked != oldValue else { return }
+            if isParked {
+                sidebarItem.isCollapsed = true
+            } else {
+                sidebarItem.isCollapsed = !isSidebarVisible
+                wantsSidebarWidth = true
+                needsLayout = true
             }
         }
     }
@@ -193,7 +211,7 @@ public final class HomeView: NSView {
         // The divider dragged past its minimum collapses the sidebar: the app is told as for the toggle's click.
         collapseObservation = sidebarItem.observe(\.isCollapsed, options: [.new]) { [weak self] item, _ in
             MainActor.assumeIsolated {
-                guard let self, item.isCollapsed == self.isSidebarVisible else { return }
+                guard let self, !self.isParked, item.isCollapsed == self.isSidebarVisible else { return }
                 self.onSidebarToggle?()
             }
         }

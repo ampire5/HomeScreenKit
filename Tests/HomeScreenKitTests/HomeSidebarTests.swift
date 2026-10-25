@@ -49,6 +49,26 @@ import Testing
         #expect(view.guideCounts.allSatisfy { $0 == 0 })
     }
 
+    /// The tree set again (the browser moved, a reply came) redraws only the lines whose row changed: unchanged ones
+    /// keep their symbol, title and count as they are (each redraw makes their images again at the next commit).
+    @Test func treeAgainRedrawsOnlyChangedLines() {
+        var t = tree
+        let view = sidebar(t)
+        let drawn = view.lineRedraws
+        view.tree = t
+        #expect(view.lineRedraws == drawn)
+        t.setChildren([BrowserEntry(url: url("/Volumes/T/a"), name: "a", kind: .folder, count: 13)], of: url("/Volumes/T"))
+        view.tree = t
+        #expect(view.lineRedraws == drawn + 1)
+        #expect(view.countTexts[3] == "13")
+    }
+
+    /// A name too long for the row loses its end, not its middle: the start says which folder it is.
+    @Test func longNamesTruncateAtTheEnd() {
+        let view = sidebar(tree)
+        #expect(view.titleBreakModes.allSatisfy { $0 == .byTruncatingTail })
+    }
+
     @Test func drawsLines() {
         let view = sidebar(tree)
         #expect(view.titles == ["Recent", "Places", "T", "a"])

@@ -219,6 +219,40 @@ import Testing
     }
 
     /// The app's width is kept within the range; the browser starts where the sidebar ends.
+    /// Parked (hidden in its window while the app's viewer shows): the sidebar item is collapsed, the app is not
+    /// asked to toggle anything and the kept visibility stays; unparked, the sidebar is back as it was, or stays
+    /// collapsed if it was hidden meanwhile.
+    @Test func parkedCollapsesTheSidebarWithoutAsking() async {
+        let (view, _) = await make(source())
+        var asked = 0
+        view.onSidebarToggle = { asked += 1 }
+        let item = view.splitController.splitViewItems[0]
+        view.isParked = true
+        #expect(item.isCollapsed)
+        #expect(view.isSidebarVisible)
+        view.isParked = false
+        #expect(!item.isCollapsed)
+        view.isParked = true
+        view.isSidebarVisible = false
+        #expect(item.isCollapsed)
+        view.isParked = false
+        #expect(item.isCollapsed)
+        #expect(asked == 0)
+    }
+
+    /// The window resized while Home is hidden: the cards are not laid out for it until Home shows again.
+    @Test func hiddenBrowserTilesWhenShown() async {
+        let (view, window) = await make(source())
+        let width = view.browser.gridWidth
+        view.isHidden = true
+        window.setContentSize(CGSize(width: 900, height: 800))
+        view.layoutSubtreeIfNeeded()
+        #expect(view.browser.gridWidth == width)
+        view.isHidden = false
+        view.layoutSubtreeIfNeeded()
+        #expect(view.browser.gridWidth != width)
+    }
+
     @Test func sidebarWidthIsSetAndClamped() async {
         let (view, _) = await make(source())
         view.sidebarWidth = 300
