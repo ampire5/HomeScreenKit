@@ -1457,6 +1457,11 @@ public final class HomeBrowserView: NSView {
         let height = max(grid.contentHeight, scroll.contentSize.height)
         if document.frame.size != CGSize(width: width, height: height) {
             document.frame = CGRect(x: 0, y: 0, width: width, height: height)
+            // A legacy scroller shows or hides for the new height and takes its width now, not at the next layout:
+            // laid out at the old width, the cards would move under a scroll just set from their frames (a session's
+            // anchor). A narrower grid is only taller, so the second pass keeps the scroller as it is.
+            scroll.tile()
+            if scroll.contentSize.width != width { return tile() }
         }
         let visible = scroll.contentView.documentVisibleRect
         let range = grid.indices(in: visible, margin: max(visible.height, 1))

@@ -172,6 +172,10 @@ final class HomeSidebar: NSView {
     override func layout() {
         super.layout()
         scroll.frame = CGRect(x: 0, y: contentTopInset, width: bounds.width, height: max(0, bounds.height - contentTopInset))
+        // The height first: a legacy scroller shows or hides for it and takes its width before the rows are laid out.
+        let height = lineViews.reduce(2 * Self.top) { $0 + ($1.isHeading ? Self.headingHeight : Self.rowHeight) }
+        document.frame.size.height = max(height, scroll.contentSize.height)
+        scroll.tile()
         var y = Self.top
         let width = max(0, scroll.contentSize.width)
         for view in lineViews {
@@ -181,7 +185,7 @@ final class HomeSidebar: NSView {
             view.frame = frame
             y += h
         }
-        document.frame = CGRect(x: 0, y: 0, width: width, height: max(y + Self.top, scroll.contentSize.height))
+        document.frame = CGRect(x: 0, y: 0, width: width, height: max(height, scroll.contentSize.height))
         if revealsSelected, let selected, lineViews.indices.contains(selected) {
             revealsSelected = false
             document.scrollToVisible(lineViews[selected].frame.insetBy(dx: 0, dy: -Self.rowHeight))
