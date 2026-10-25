@@ -253,6 +253,39 @@ import Testing
         #expect(view.browser.gridWidth != width)
     }
 
+    /// The split view moving the divider itself (the window narrowed and widened again, Home put in a window not yet
+    /// at its size) changes no kept width: only the user's drag of the divider does.
+    @Test func systemResizesKeepTheWidth() async {
+        let (view, window) = await make(source())
+        view.sidebarWidth = 300
+        view.layoutSubtreeIfNeeded()
+        #expect(view.sidebarView.frame.width == 300)
+        window.setContentSize(CGSize(width: 250, height: 800))
+        view.layoutSubtreeIfNeeded()
+        window.setContentSize(CGSize(width: 1200, height: 800))
+        view.layoutSubtreeIfNeeded()
+        #expect(view.sidebarWidth == 300)
+        view.isUserDrag = { true }
+        view.splitController.splitView.setPosition(340, ofDividerAt: 0)
+        #expect(view.sidebarWidth == 340)
+    }
+
+    /// Shown first in a window not at its size yet (a split view of a few points), the sidebar still comes up at its
+    /// width once the window has its size, not squeezed to its minimum.
+    @Test func widthHoldsOnceTheSplitHasRoom() async {
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 268, height: 800), styleMask: [.titled],
+                              backing: .buffered, defer: true)
+        let view = HomeView(source: source())
+        view.frame = CGRect(x: 0, y: 0, width: 268, height: 800)
+        window.contentView = view
+        view.sidebarWidth = 236
+        view.layoutSubtreeIfNeeded()
+        window.setContentSize(CGSize(width: 1200, height: 800))
+        view.layoutSubtreeIfNeeded()
+        #expect(view.sidebarView.frame.width == 236)
+        #expect(view.sidebarWidth == 236)
+    }
+
     @Test func sidebarWidthIsSetAndClamped() async {
         let (view, _) = await make(source())
         view.sidebarWidth = 300

@@ -90,24 +90,45 @@ public final class HomeView: NSView {
     var widestSidebar: CGFloat { max(HomeSidebar.widestAlways, (bounds.width / 3).rounded(.down)) }
 
     /// The width asked for is put on the divider at the next layout, when the split view has a size.
-    private var wantsSidebarWidth = true
+    private var wantsSidebarWidth = true {
+        didSet { if wantsSidebarWidth { triedAtWidth = nil } }
+    }
     /// The width follows a drag of the divider: it is not put back on it.
     private var isAdoptingDrag = false
     private var widthReport: Task<Void, Never>?
+    /// Whether the divider is moving under the user's drag now: a left-button drag in this window (the split view's
+    /// tracking loop makes each of its events the current one). The split view moves the divider itself too — the
+    /// window not at its size yet, narrowed, the sidebar's minimum — and none of that is a width to keep.
+    lazy var isUserDrag: () -> Bool = { [weak self] in
+        guard let event = NSApp.currentEvent, event.window === self?.window else { return false }
+        return event.type == .leftMouseDragged || event.type == .leftMouseUp
+    }
+    /// The split view's width when the kept width was last put on the divider without holding (the split too narrow
+    /// for it): it is put again once the split has another width, not at every layout.
+    private var triedAtWidth: CGFloat?
 
     private func applySidebarWidth() {
         let split = splitController.splitView
         guard !sidebarItem.isCollapsed, split.bounds.width > 0 else { return }
         sidebarItem.maximumThickness = widestSidebar
-        guard wantsSidebarWidth else { return }
-        wantsSidebarWidth = false
-        split.setPosition(min(sidebarWidth, widestSidebar), ofDividerAt: 0)
+        guard wantsSidebarWidth, triedAtWidth != split.bounds.width else { return }
+        let target = min(sidebarWidth, widestSidebar)
+        split.setPosition(target, ofDividerAt: 0)
+        // Put on a split not yet at its size (Home shown in a window still being laid out), the divider stops at the
+        // sidebar's minimum: tried again when the split's width changes.
+        wantsSidebarWidth = abs(sidebarView.frame.width - target) >= 1
+        triedAtWidth = wantsSidebarWidth ? split.bounds.width : nil
     }
 
-    /// The divider moved: when it is the user's drag (the width differs from the kept one) the new width is kept, and
-    /// told to the app once the pointer has been still for a moment.
+    /// The divider moved: when it is the user's drag (`isUserDrag`, the width differs from the kept one) the new width
+    /// is kept, and told to the app once the pointer has been still for a moment.
     private func splitDidResize() {
-        guard !sidebarItem.isCollapsed, !wantsSidebarWidth else { return }
+        guard !sidebarItem.isCollapsed else { return }
+        guard isUserDrag() else {
+            // The split took its size (or another): a width that did not hold yet is put on the divider again.
+            if wantsSidebarWidth { needsLayout = true }
+            return
+        }
         let width = sidebarView.frame.width.rounded()
         guard width > 0, abs(width - min(sidebarWidth, widestSidebar)) >= 1, window?.inLiveResize != true else { return }
         isAdoptingDrag = true
