@@ -105,7 +105,7 @@ import Testing
         #expect(live > 0 && live <= 80)
         view.scrollGrid(to: view.gridContentHeight)
         #expect(view.liveCardCount <= 80)
-        #expect(view.liveIDs.contains(view.entries.last!.id))
+        #expect(view.entries.last.map { view.liveIDs.contains($0.id) } == true)   // a listing not in yet under load fails, not crashes
         #expect(view.liveIDs.count == view.liveCardCount && Set(view.visibleIDs).isSubset(of: view.liveIDs))
     }
 
@@ -922,7 +922,7 @@ import Testing
         #expect(view.liveCardCount > 0 && view.liveCardCount <= 80)
         view.scrollGrid(to: view.gridContentHeight)
         #expect(view.liveCardCount <= 80)
-        #expect(view.liveIDs.contains(view.entries.last!.id))
+        #expect(view.entries.last.map { view.liveIDs.contains($0.id) } == true)   // a listing not in yet under load fails, not crashes
         #expect(view.liveIDs.count == view.liveCardCount && Set(view.visibleIDs).isSubset(of: view.liveIDs))
     }
 
