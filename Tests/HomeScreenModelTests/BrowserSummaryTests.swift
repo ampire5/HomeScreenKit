@@ -72,4 +72,13 @@ import Testing
         #expect(BrowserSummary.footer(entries: [folder("a"), folder("b")], filtered: nil, complete: false, more: false).line
                 == "2 folders")
     }
+
+    /// A video app names its files (`FileStyle.noun`) in the footer and in the subtitle with nothing selected.
+    @Test func filesAreCountedByTheirNoun() {
+        let entries = [file("a.mp4"), file("b.mkv"), folder("x")]
+        #expect(BrowserSummary.footer(entries: entries, filtered: nil, complete: false, more: false, fileNoun: "video").line
+                == "2 videos · 1 folder")
+        #expect(BrowserSummary.subtitle(selected: nil, entries: [file("a.mp4")], loading: nil, fileNoun: "video") == "1 video")
+        #expect(FileStyle.videos.heading == "Videos" && FileStyle.photos.heading == "Photos")
+    }
 }

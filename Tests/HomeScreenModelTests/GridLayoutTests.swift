@@ -193,4 +193,16 @@ import Testing
         #expect(grid.section(of: 3) == 1)
         #expect(grid.indices(in: CGRect(x: 0, y: 0, width: 900, height: 2000), margin: 0) == 0..<23)
     }
+
+    /// A video app's files (`FileStyle.videos`): 16:9 slots, the picture the slot's width, the name line under it.
+    @Test func filesTakeTheirAspect() {
+        let grid = GridLayout(sections: [photos(10)], width: 960, target: 220, names: .below, fileAspect: 16.0 / 9)
+        let slot = grid.frame(of: 0)
+        #expect(grid.pictureFrame(of: 0) == CGRect(x: slot.minX, y: slot.minY, width: slot.width,
+                                                   height: (slot.width * 9 / 16).rounded()))
+        #expect(slot.height == (slot.width * 9 / 16).rounded() + GridMetrics().belowText)
+        // Photos stay square.
+        let square = GridLayout(sections: [photos(10)], width: 960, target: 220, names: .off)
+        #expect(square.frame(of: 0).height == square.frame(of: 0).width)
+    }
 }

@@ -7,7 +7,9 @@ import HomeScreenModel
 /// selection a 2.5 pt ring inside it with a dark hairline inside the ring, a dot at the top right for a photo not
 /// viewed yet, a ⧉ chip at the top left for a page of a pair, and on hover a strip along the bottom with the format
 /// and the size. The dot, the chip and the strip are made the first time they show. The name goes on the picture,
-/// under the square, or nowhere.
+/// under the square, or nowhere. The slot's picture box is `aspect` wide over tall (a square for photos); with
+/// `showsFacts` (`FileStyle.facts`, a video app) the card's own line sits in a chip at the picture's bottom right and
+/// its progress is a track along the bottom edge.
 final class PhotoCard: GridCard {
     var style = GridStyle.aspect { didSet { if style != oldValue { needsLayout = true } } }
     var names = GridNames.off { didSet { if names != oldValue { needsLayout = true } } }
@@ -19,6 +21,8 @@ final class PhotoCard: GridCard {
     var isPaired = false { didSet { if isPaired != oldValue { marksChanged() } } }
     /// The pointer is over the card; another photo shown in it takes it back.
     var isHovered = false { didSet { if isHovered != oldValue { marksChanged() } } }
+    var aspect: CGFloat = 1 { didSet { if aspect != oldValue { needsLayout = true } } }
+    var showsFacts = false { didSet { if showsFacts != oldValue { itemChanged() } } }
 
     let ring = CALayer()
     let nameLabel = NSTextField(labelWithString: "")
@@ -30,6 +34,10 @@ final class PhotoCard: GridCard {
     private(set) var strip: NSView?
     private var stripFormat: NSTextField?
     private var stripSize: NSTextField?
+    /// The facts (`showsFacts`): the progress track and its fill along the picture's bottom, the line's chip.
+    private let track = CALayer()
+    private let fill = CALayer()
+    private let factsChip = NSTextField(labelWithString: "")
 
     private static let aspectInset: CGFloat = 8
     private static let ringWidth: CGFloat = 2.5
@@ -59,6 +67,18 @@ final class PhotoCard: GridCard {
         layer?.addSublayer(ring)
         nameLabel.lineBreakMode = .byTruncatingMiddle
         addSubview(nameLabel)
+        // Over the picture: dark whatever the window is, as the over-media chrome.
+        track.backgroundColor = NSColor(white: 0, alpha: 0.55).cgColor
+        track.addSublayer(fill)
+        layer?.addSublayer(track)
+        factsChip.font = .monospacedDigitSystemFont(ofSize: 10, weight: .medium)
+        factsChip.textColor = Chrome.Palette.overMedia.text
+        factsChip.drawsBackground = false
+        factsChip.wantsLayer = true
+        factsChip.layer?.backgroundColor = NSColor(white: 0, alpha: 0.6).cgColor
+        factsChip.layer?.cornerRadius = 3
+        factsChip.alignment = .center
+        addSubview(factsChip)
         show(item)
         appearanceChanged()
     }
@@ -67,6 +87,7 @@ final class PhotoCard: GridCard {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         picture.backgroundColor = Chrome.resolve(Chrome.Palette.window.fill, in: self)
+        fill.backgroundColor = Chrome.Palette.card.accent.cgColor   // the progress fill, the same blue in both appearances
         ring.borderColor = Chrome.resolve(Chrome.Palette.window.accent, in: self)
         dotLayer?.sublayers?.first?.backgroundColor = Chrome.resolve(Chrome.Palette.window.accent, in: self)
         CATransaction.commit()
@@ -74,14 +95,34 @@ final class PhotoCard: GridCard {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
-    /// Square: the slot's square. Aspect: the image fitted in the square inset by 8 pt (that square while there is none).
+    /// The track along the picture's bottom edge (3 pt, only with a progress) and the chip 6 pt in from its bottom
+    /// right corner, above the track (only with a line, and on a picture wide enough for it).
+    private func layoutFacts(in rect: CGRect) {
+        let progress = showsFacts ? item.progress : nil
+        track.isHidden = progress == nil
+        if let progress {
+            track.frame = CGRect(x: rect.minX, y: rect.maxY - 3, width: rect.width, height: 3)
+            fill.frame = CGRect(x: 0, y: 0, width: (rect.width * min(1, max(0, progress))).rounded(), height: 3)
+        }
+        let line = showsFacts ? item.subtitle ?? "" : ""
+        let size = factsChip.intrinsicContentSize
+        let width = size.width + 8, height = size.height + 2
+        factsChip.isHidden = line.isEmpty || width > rect.width - 12
+        factsChip.frame = CGRect(x: rect.maxX - 6 - width, y: rect.maxY - (progress == nil ? 6 : 9) - height,
+                            width: width, height: height)
+    }
+
+    /// The slot's picture box: its width, `aspect` wide over tall.
+    private var boxHeight: CGFloat { aspect == 1 ? bounds.width : (bounds.width / max(0.1, aspect)).rounded() }
+
+    /// Square: the slot's box. Aspect: the image fitted in the box inset by 8 pt (that box while there is none).
     var pictureRect: CGRect {
         let side = bounds.width
         switch style {
         case .square:
-            return CGRect(x: 0, y: 0, width: side, height: side)
+            return CGRect(x: 0, y: 0, width: side, height: boxHeight)
         case .aspect:
-            let box = CGRect(x: 0, y: 0, width: side, height: side).insetBy(dx: Self.aspectInset, dy: Self.aspectInset)
+            let box = CGRect(x: 0, y: 0, width: side, height: boxHeight).insetBy(dx: Self.aspectInset, dy: Self.aspectInset)
             guard let image, image.width > 0, image.height > 0, box.width > 0 else { return box }
             let scale = min(box.width / CGFloat(image.width), box.height / CGFloat(image.height))
             let w = CGFloat(image.width) * scale, h = CGFloat(image.height) * scale
@@ -106,7 +147,9 @@ final class PhotoCard: GridCard {
             stripFormat.stringValue = text.format
             stripSize.stringValue = text.size
         }
+        factsChip.stringValue = item.subtitle ?? ""
         marksChanged()
+        needsLayout = true
     }
 
     override func imageChanged() {
@@ -225,7 +268,7 @@ final class PhotoCard: GridCard {
 
     override func layout() {
         super.layout()
-        let rect = pictureRect, side = bounds.width
+        let rect = pictureRect
         let radius = min(Chrome.Radius.photo, min(rect.width, rect.height) / 2)
         CATransaction.begin()
         CATransaction.setDisableActions(true)
@@ -274,8 +317,9 @@ final class PhotoCard: GridCard {
             nameLabel.font = Chrome.Text.font(.label)
             nameLabel.textColor = Chrome.Palette.window.secondaryLabel
             nameLabel.shadow = nil
-            nameLabel.frame = CGRect(x: 0, y: side + 3, width: side, height: 16)
+            nameLabel.frame = CGRect(x: 0, y: boxHeight + 3, width: bounds.width, height: 16)
         }
+        layoutFacts(in: rect)
         CATransaction.commit()
     }
 }
