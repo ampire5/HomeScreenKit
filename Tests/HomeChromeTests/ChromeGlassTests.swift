@@ -86,6 +86,15 @@ import Testing
         toast.hide()
     }
 
+    @Test func toastGrowsByItsLines() {
+        let toast = ChromeToastView(style: .window)
+        toast.show("one line", for: 5)
+        let one = toast.fittingSize.height
+        toast.show("one line\ntwo lines\nthree lines", for: 5)
+        #expect(toast.fittingSize.height > one * 2)
+        toast.hide()
+    }
+
     @Test func rimIsOnePoint() {
         let glass = ChromeGlass(style: .overMedia(.regular), cornerRadius: 10)
         #expect(glass.rimLayer.borderWidth == 1)

@@ -1221,9 +1221,10 @@ public final class HomeBrowserView: NSView {
     // MARK: Toast
 
     /// A short line at the bottom for 3 s: an action that failed.
-    public func showToast(_ text: String) {
+    /// A message over the grid, above the status line: one line, or several separated by "\n".
+    public func showToast(_ text: String, for seconds: TimeInterval = 3) {
         toastLine = text
-        toast.show(text, for: 3)
+        toast.show(text, for: seconds)
     }
 
     var toastText: String? { toast.isShowing ? toastLine : nil }
@@ -1674,7 +1675,10 @@ public final class HomeBrowserView: NSView {
         if showsListHeader { metrics.top += ListHeader.height }
         grid = GridLayout(sections: sections, width: width, target: cardSize, names: names, style: shownStyle,
                           fileAspect: files.aspect, metrics: metrics)
-        let height = max(grid.contentHeight, scroll.contentSize.height)
+        // At least the view's height less the inset AppKit gives the scroll view under the toolbar: as tall as the
+        // whole view, a grid that fits scrolled by that inset and kept a legacy scroller (a mouse plugged in).
+        let insets = scroll.contentInsets
+        let height = max(grid.contentHeight, scroll.contentSize.height - insets.top - insets.bottom)
         if document.frame.size != CGSize(width: width, height: height) {
             document.frame = CGRect(x: 0, y: 0, width: width, height: height)
             // A legacy scroller shows or hides for the new height and takes its width now, not at the next layout:

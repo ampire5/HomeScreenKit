@@ -16,7 +16,8 @@ import AppKit
         case .overMedia: Chrome.Palette.overMedia.text
         case .window: Chrome.Palette.window.label
         }
-        label.lineBreakMode = .byTruncatingTail
+        label.lineBreakMode = .byTruncatingTail   // each line of a several-line message ("\n") on its own
+        label.maximumNumberOfLines = 0
         label.translatesAutoresizingMaskIntoConstraints = false
         glass.contentView.addSubview(label)
         NSLayoutConstraint.activate([

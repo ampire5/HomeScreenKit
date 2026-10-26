@@ -73,8 +73,8 @@ import Testing
         let view = sidebar(tree)
         #expect(view.titles == ["Recent", "Places", "T", "a"])
         #expect(view.titleFrames[3].minX - view.titleFrames[2].minX == 14)
-        #expect(view.lineFrames[0].height == 28)
-        #expect(view.lineFrames[1].height == 26)
+        #expect(view.lineFrames[0].height == 32)   // Photos' 32 pt lines
+        #expect(view.lineFrames[1].height == 32)
         #expect(view.countTexts[3] == "12")
     }
 

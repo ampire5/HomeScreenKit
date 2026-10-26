@@ -14,8 +14,10 @@ final class HomeSidebar: NSView {
     /// The widest it may show in any window, however narrow.
     static let widestAlways: CGFloat = 400
     static let inset: CGFloat = 10
-    static let rowHeight: CGFloat = 28
-    static let headingHeight: CGFloat = 26
+    // Photos' sidebar (macOS 26, the owner's reference of 2026-10-27): 32 pt lines for rows and headings alike, a
+    // 20 pt symbol, 13 pt names, the light a neutral plate 10 pt in from the sides.
+    static let rowHeight: CGFloat = 32
+    static let headingHeight: CGFloat = 32
     static let indent: CGFloat = 14
     /// Compact indent: the step past the first three levels.
     static let deepIndent: CGFloat = 6
@@ -30,7 +32,7 @@ final class HomeSidebar: NSView {
     var compactIndent = true {
         didSet { if compactIndent != oldValue { rebuild() } }
     }
-    private static let top: CGFloat = 10
+    private static let top: CGFloat = 4
 
     var onOpen: ((BrowserLocation) -> Void)?
     var onExpand: ((URL) -> Void)?
@@ -186,7 +188,7 @@ final class HomeSidebar: NSView {
         scroll.frame = CGRect(x: 0, y: contentTopInset, width: bounds.width, height: max(0, bounds.height - contentTopInset))
         // The height first: a legacy scroller shows or hides for it and takes its width before the rows are laid out.
         let height = lineViews.reduce(2 * Self.top) { $0 + ($1.isHeading ? Self.headingHeight : Self.rowHeight) }
-        document.frame.size.height = max(height, scroll.contentSize.height)
+        document.frame.size.height = max(height, fillHeight)
         scroll.tile()
         var y = Self.top
         let width = max(0, scroll.contentSize.width)
@@ -197,11 +199,19 @@ final class HomeSidebar: NSView {
             view.frame = frame
             y += h
         }
-        document.frame = CGRect(x: 0, y: 0, width: width, height: max(height, scroll.contentSize.height))
+        document.frame = CGRect(x: 0, y: 0, width: width, height: max(height, fillHeight))
         if revealsSelected, let selected, lineViews.indices.contains(selected) {
             revealsSelected = false
             document.scrollToVisible(lineViews[selected].frame.insetBy(dx: 0, dy: -Self.rowHeight))
         }
+    }
+
+    /// The height that fills the view and no more: the scroll view's less the inset AppKit gives it under the title
+    /// bar. A list as tall as the whole view was taller than what shows by that inset, and a legacy scroller (a mouse
+    /// plugged in) stayed with nothing to scroll.
+    private var fillHeight: CGFloat {
+        let insets = scroll.contentInsets
+        return max(0, scroll.contentSize.height - insets.top - insets.bottom)
     }
 
     // MARK: Mouse
@@ -361,7 +371,7 @@ private final class SidebarLineView: NSView {
         guides.fillColor = nil
         layer?.addSublayer(guides)
         light.wantsLayer = true
-        light.layer?.cornerRadius = Chrome.Radius.control
+        light.layer?.cornerRadius = Chrome.Radius.photo
         title.lineBreakMode = .byTruncatingTail
         count.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
         count.textColor = .secondaryLabelColor
@@ -371,7 +381,9 @@ private final class SidebarLineView: NSView {
         spinner.isDisplayedWhenStopped = false
         spinner.isHidden = true
         triangle.contentTintColor = .secondaryLabelColor
+        triangle.symbolConfiguration = .init(pointSize: 10, weight: .semibold)
         symbol.contentTintColor = .controlAccentColor
+        symbol.symbolConfiguration = .init(pointSize: 15, weight: .regular, scale: .large)
         for view in [light, triangle, symbol, title, count, spinner] { addSubview(view) }
         addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect],
                                        owner: self, userInfo: nil))
@@ -434,18 +446,17 @@ private final class SidebarLineView: NSView {
     private func paint() {
         if isHeading {
             title.font = .systemFont(ofSize: 11, weight: .semibold)
-            title.textColor = .secondaryLabelColor
+            title.textColor = .tertiaryLabelColor
             triangle.image = hovering ? Self.symbol(collapsed ? "chevron.right" : "chevron.down") : nil
             light.isHidden = true
             return
         }
-        title.font = .systemFont(ofSize: 13)
-        title.textColor = lit && hasKeys ? .alternateSelectedControlTextColor : .labelColor
-        // On the strong light the accent symbol would vanish into it.
-        symbol.contentTintColor = lit && hasKeys ? .alternateSelectedControlTextColor : .controlAccentColor
+        // As in Photos: the lit row's name in semibold on a neutral plate, its symbol keeps the accent.
+        title.font = .systemFont(ofSize: 13, weight: lit ? .semibold : .regular)
+        title.textColor = .labelColor
+        symbol.contentTintColor = .controlAccentColor
         light.isHidden = !lit
-        light.layer?.backgroundColor = Chrome.resolve(NSColor.selectedContentBackgroundColor.withAlphaComponent(hasKeys ? 1 : 0.55),
-                                                      in: self)
+        light.layer?.backgroundColor = Chrome.resolve(NSColor.labelColor.withAlphaComponent(hasKeys ? 0.14 : 0.09), in: self)
     }
 
     override func viewDidChangeEffectiveAppearance() {
@@ -456,27 +467,33 @@ private final class SidebarLineView: NSView {
 
     /// The triangle's frame (rows that open; headings put their chevron at the right).
     var disclosureFrame: CGRect {
-        isHeading ? .zero : CGRect(x: 8 + HomeSidebar.offset(depth: depth, compact: compactIndent), y: (bounds.height - 12) / 2,
+        isHeading ? .zero : CGRect(x: Self.lead + HomeSidebar.offset(depth: depth, compact: compactIndent), y: (bounds.height - 12) / 2,
                                    width: 12, height: 12)
     }
+
+    /// Where a top-level row's triangle starts; its symbol's column is 22 pt from 13.5 pt after it, the name 41 pt
+    /// after it (Photos: chevron at 16, symbol centred at 37.5, name at 55).
+    static let lead: CGFloat = 14
 
     override func layout() {
         super.layout()
         let h = bounds.height, w = bounds.width
-        light.frame = CGRect(x: 6, y: 1, width: max(0, w - 12), height: h - 2)
+        light.frame = CGRect(x: HomeSidebar.inset, y: 0, width: max(0, w - 2 * HomeSidebar.inset), height: h)
         if isHeading {
-            title.frame = CGRect(x: 12, y: (h - 15) / 2 + 2, width: max(0, w - 44), height: 15)
-            triangle.frame = CGRect(x: w - 26, y: (h - 12) / 2, width: 12, height: 12)
+            // Photos sets a heading low in its line, nearer the rows it heads.
+            title.frame = CGRect(x: 16, y: h - 15 - 4, width: max(0, w - 48), height: 15)
+            triangle.frame = CGRect(x: w - 30, y: h - 12 - 5, width: 12, height: 12)
             return
         }
-        let x = 8 + HomeSidebar.offset(depth: depth, compact: compactIndent)
+        let x = Self.lead + HomeSidebar.offset(depth: depth, compact: compactIndent)
         layoutGuides()
         triangle.frame = CGRect(x: x, y: (h - 12) / 2, width: 12, height: 12)
-        symbol.frame = CGRect(x: x + 14, y: (h - 16) / 2, width: 16, height: 16)
+        symbol.frame = CGRect(x: x + 12.5, y: (h - 22) / 2, width: 22, height: 22)
         let countWidth: CGFloat = count.stringValue.isEmpty ? 0 : 40
-        count.frame = CGRect(x: w - 12 - countWidth, y: (h - 15) / 2, width: countWidth, height: 15)
-        spinner.frame = CGRect(x: w - 28, y: (h - 16) / 2, width: 16, height: 16)
-        title.frame = CGRect(x: x + 36, y: (h - 17) / 2, width: max(0, w - 12 - countWidth - (x + 36) - 4), height: 17)
+        let right = w - HomeSidebar.inset - 10
+        count.frame = CGRect(x: right - countWidth, y: (h - 15) / 2, width: countWidth, height: 15)
+        spinner.frame = CGRect(x: right - 16, y: (h - 16) / 2, width: 16, height: 16)
+        title.frame = CGRect(x: x + 41, y: (h - 17) / 2, width: max(0, right - countWidth - (x + 41) - 4), height: 17)
     }
 
     /// A line under each level's triangle, from the first level down to the row's own.
@@ -484,7 +501,7 @@ private final class SidebarLineView: NSView {
         let path = CGMutablePath()
         if compactIndent, !isHeading {
             for level in 0..<depth {
-                let x = (8 + HomeSidebar.offset(depth: level, compact: true) + 6).rounded() + 0.5
+                let x = (Self.lead + HomeSidebar.offset(depth: level, compact: true) + 6).rounded() + 0.5
                 path.move(to: CGPoint(x: x, y: 0))
                 path.addLine(to: CGPoint(x: x, y: bounds.height))
             }
