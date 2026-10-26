@@ -89,10 +89,14 @@ public struct BrowserListing: Sendable {
     public var entries: [BrowserEntry]
     public var complete: Bool
     public var more: Bool
+    /// Kept by the app from an earlier visit (a run before, its catalog) and not checked yet: shown as a complete
+    /// listing, with the browser saying it is still checking it, until the share's own complete listing replaces it.
+    public var isProvisional: Bool
 
-    public init(entries: [BrowserEntry], complete: Bool, more: Bool = false) {
+    public init(entries: [BrowserEntry], complete: Bool, more: Bool = false, isProvisional: Bool = false) {
         self.entries = entries
         self.complete = complete
         self.more = more
+        self.isProvisional = isProvisional
     }
 }

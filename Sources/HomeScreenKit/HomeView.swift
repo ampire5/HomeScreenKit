@@ -326,6 +326,14 @@ public final class HomeView: NSView {
         }
     }
 
+    /// The app checked `folder`'s subfolders after answering `folders(in:)` from what it kept (a catalog of an earlier
+    /// run): a folder the tree has listed takes the checked ones; one it has not is left to its own asking.
+    public func sidebarFoldersChanged(_ entries: [BrowserEntry], in folder: URL) {
+        guard tree.isListed(folder) else { return }
+        tree.setChildren(entries, of: folder)
+        showTree()
+    }
+
     /// A row opened by the user: its folders are asked now, whatever else is listing.
     private func expand(_ folder: URL) {
         let asks = tree.expand(folder)

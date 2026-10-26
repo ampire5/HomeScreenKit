@@ -82,6 +82,22 @@ import Testing
         #expect(source.foldersAsked == [url("/Volumes/T")])
     }
 
+    /// The app's check of a folder answered from what it kept (`folders(in:)` from the catalog, then the share): the
+    /// tree takes the checked subfolders for a folder it has listed, and leaves one it has not listed as it is.
+    @Test func checkedFoldersReplaceTheKeptOnes() async {
+        let source = source()
+        source.folderReplies["/Volumes/T"] = [BrowserEntry(url: url("/Volumes/T/a"), name: "a", kind: .folder)]
+        let (view, _) = await make(source)
+        let t = view.sidebarView.titles.firstIndex(of: "T")!
+        view.sidebarView.clickDisclosure(line: t)
+        await settle { view.sidebarView.titles.contains("a") }
+        view.sidebarFoldersChanged([BrowserEntry(url: url("/Volumes/T/b"), name: "b", kind: .folder)], in: url("/Volumes/T"))
+        #expect(view.sidebarView.titles.contains("b"))
+        #expect(!view.sidebarView.titles.contains("a"))
+        view.sidebarFoldersChanged([BrowserEntry(url: url("/Volumes/U/c"), name: "c", kind: .folder)], in: url("/Volumes/U"))
+        #expect(!view.sidebarView.titles.contains("c"))
+    }
+
     @Test func tabMovesKeys() async {
         let source = source()
         let (view, window) = await make(source)

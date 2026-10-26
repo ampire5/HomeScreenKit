@@ -114,4 +114,59 @@ import Testing
         #expect(!view.isGridHidden)
         #expect(view.entries.count == 10)
     }
+
+    /// A folder whose listing the app kept from an earlier run: its cards show at once, in the order chosen, and the
+    /// browser says it is still checking them (the loading line, "Checking…" first in the subtitle) until the share's
+    /// own listing comes; that one adds and takes away what changed, the cards still there keep their pictures.
+    @Test func storedListingShowsWhileItIsChecked() async {
+        let source = FakeHomeSource()
+        let view = make(source)
+        source.yieldStored(x, BrowserFixtures.files(12))
+        await settle { view.entries.count == 12 }
+        #expect(view.isChecking)
+        #expect(view.isShowingLoadingLine)
+        #expect(view.toolbar.subtitleText.hasPrefix("Checking…"))
+        #expect(!view.isShowingSkeleton)
+        view.layoutSubtreeIfNeeded()
+        let kept = view.liveIDs.filter { $0 != view.entries[0].id }
+        for id in kept { view.setImage(HomeScreenViewTests.image(), for: id) }
+
+        source.yield(x, Array(BrowserFixtures.files(12).dropFirst()))
+        await settle { view.entries.count == 11 }
+        #expect(!view.isChecking)
+        #expect(!view.isShowingLoadingLine)
+        #expect(!view.toolbar.subtitleText.contains("Checking"))
+        for id in kept { #expect(view.card(for: id)?.image != nil, "\(id)") }
+    }
+
+    /// The share's names-only first part says nothing the kept listing does not (it has no dates): the cards stay as
+    /// they are. The share's complete listing the same as the kept one only ends the checking.
+    @Test func sameListingOnlyEndsTheChecking() async {
+        let source = FakeHomeSource()
+        let view = make(source)
+        source.yieldStored(x, BrowserFixtures.files(12))
+        await settle { view.entries.count == 12 }
+        source.yieldPartial(x, BrowserFixtures.files(3))
+        await settle()
+        #expect(view.entries.count == 12)
+        #expect(view.isChecking)
+        source.yield(x, BrowserFixtures.files(12))
+        await settle { !view.isChecking }
+        #expect(view.entries.count == 12)
+        #expect(!view.toolbar.subtitleText.contains("Checking"))
+    }
+
+    /// The share does not answer: the kept grid stays, the failure is a toast and the checking ends.
+    @Test func failedCheckKeepsTheStoredGrid() async {
+        let source = FakeHomeSource()
+        let view = make(source)
+        source.yieldStored(x, BrowserFixtures.files(10))
+        await settle { view.entries.count == 10 }
+        source.fail(x, CocoaError(.fileReadUnknown))
+        await settle { view.toastText != nil }
+        #expect(!view.isShowingMessage)
+        #expect(view.entries.count == 10)
+        #expect(!view.isChecking)
+        #expect(!view.isShowingLoadingLine)
+    }
 }

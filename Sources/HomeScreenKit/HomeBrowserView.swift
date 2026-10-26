@@ -437,8 +437,28 @@ public final class HomeBrowserView: NSView {
     /// delivered by the stream) changes nothing.
     private func received(_ new: BrowserListing) {
         if new.complete, hasComplete, let listing, listing.complete, listing.more == new.more,
-           listing.entries == new.entries { return }
+           listing.entries == new.entries {
+            // The share's listing is the one kept: nothing to redraw, the checking ends.
+            if listing.isProvisional, !new.isProvisional {
+                self.listing = new
+                endChecking(new)
+            }
+            return
+        }
         apply(new)
+    }
+
+    /// The listing on screen was kept by the app and is not checked yet (`BrowserListing.isProvisional`).
+    var isChecking: Bool { listing?.isProvisional == true }
+
+    /// The share's complete listing replaced a kept one: the pictures are asked again (with the stamps now known) and
+    /// the sidebar has the folder's checked entries.
+    private func endChecking(_ new: BrowserListing) {
+        lastWanted = []
+        lastVisibleSent = []
+        onListingComplete?(location, new.entries)
+        updateLoading()
+        updateSubtitle()
     }
 
     /// The window closes: no more listing, timers or toasts.
@@ -650,7 +670,9 @@ public final class HomeBrowserView: NSView {
         // Names only after a complete listing (the one remembered, shown on Back): it has nothing the other lacks.
         if !new.complete, hasComplete { return }
         let before = shownSort
+        let checked = new.complete && !new.isProvisional && isChecking
         listing = new
+        if checked { endChecking(new) }
         if new.complete, !hasComplete {
             hasComplete = true
             // Pictures asked with names only are asked again: the app makes thumbnails of files whose date and size
@@ -773,6 +795,7 @@ public final class HomeBrowserView: NSView {
         }
         // The room the volume has goes at the end of every line but the count of names still coming.
         if loading == nil, !line.isEmpty, let room = VolumeSpace.line(free: freeSpace[location]) { line += " · " + room }
+        if isChecking { line = line.isEmpty ? "Checking…" : "Checking… · " + line }
         toolbar.show(subtitle: line)
         let selected = loading == nil ? BrowserSummary.selection(selectedEntry) : ""
         statusLabel.stringValue = selected.isEmpty ? line : selected
@@ -809,7 +832,7 @@ public final class HomeBrowserView: NSView {
             && !filter.isActive
         hint.stringValue = info?.emptyHint ?? ""
         hint.isHidden = !empty
-        loading.run(!hasComplete && !failed)
+        loading.run((!hasComplete || isChecking) && !failed)
         let showSkeleton = entries.isEmpty && !hasComplete && !failed
         skeleton.isHidden = !showSkeleton
         // Started on the first load too: the skeleton is not hidden before it.
@@ -864,7 +887,10 @@ public final class HomeBrowserView: NSView {
         loadingTask?.cancel()
         guard case .folder(let url) = location else { return }
         if hasComplete {
+            // A kept listing stays, unchecked: the toast says why, the checking line goes.
+            listing?.isProvisional = false
             showToast("Could not list \(url.lastPathComponent): \(error.localizedDescription)")
+            updateSubtitle()
             return updateLoading()
         }
         toolbar.show(subtitle: "")

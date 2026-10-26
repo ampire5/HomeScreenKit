@@ -74,6 +74,12 @@ import AppKit
         continuations[folder.standardizedFileURL.path]?.yield(BrowserListing(entries: entries, complete: complete))
     }
 
+    /// The listing the app kept from an earlier visit, shown while the share's is still to come (`isProvisional`).
+    func yieldStored(_ folder: URL, _ entries: [BrowserEntry]) {
+        continuations[folder.standardizedFileURL.path]?.yield(BrowserListing(entries: entries, complete: true,
+                                                                             isProvisional: true))
+    }
+
     /// Names still coming (a slow share): more of them follow.
     func yieldPartial(_ folder: URL, _ entries: [BrowserEntry]) {
         continuations[folder.standardizedFileURL.path]?.yield(BrowserListing(entries: entries, complete: false, more: true))
