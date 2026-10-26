@@ -30,7 +30,13 @@ public final class HomeBrowserView: NSView {
     public var names = GridNames.off { didSet { if names != oldValue { tile() } } }
     /// What the files are (`FileStyle`: photos, or a video app's videos): their noun in the counts, their slot's shape
     /// and the length and progress on their pictures. Set before the first `show`; a change re-tiles.
-    public var files = FileStyle.photos { didSet { if files != oldValue { tile() } } }
+    public var files = FileStyle.photos {
+        didSet {
+            guard files != oldValue else { return }
+            toolbar.filesTitle = files.heading
+            tile()
+        }
+    }
     /// The name filter, as the field shows it; setting it filters as typing does.
     public var filterText: String {
         get { filter.text }
