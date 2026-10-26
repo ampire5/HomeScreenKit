@@ -150,6 +150,35 @@ import Testing
         }
     }
 
+    /// The board «Эскизы фото тем же языком» (photo-cards spec): the mockup's five photos at 104 pt, 10 apart: plain;
+    /// not viewed, hovered; not viewed, a pair; a pair, selected; not viewed. Square, then Aspect on 3:2 pictures.
+    @Test(.enabled(if: folder != nil)) func photos() throws {
+        let photos: [(c0: UInt32, c1: UInt32, unseen: Bool, pair: Bool, hover: Bool, selected: Bool)] = [
+            (0x3E6E8E, 0x2B4F66, false, false, false, false), (0xD9B26A, 0xA8834A, true, false, true, false),
+            (0x6F8F5A, 0x4E6A3E, true, true, false, false), (0xA5573E, 0x7C3E2B, false, true, false, true),
+            (0x5E8C86, 0x40665F, true, false, false, false),
+        ]
+        for dark in [false, true] {
+            try Self.write("photos", size: CGSize(width: 40 + 5 * 104 + 4 * 10, height: 40 + 2 * 104 + 10), dark: dark) { host in
+                for (row, style) in [GridStyle.square, .aspect].enumerated() {
+                    for (i, p) in photos.enumerated() {
+                        let card = PhotoCard(item: HomeCardItem(id: "p\(i)", title: "p\(i).jxl", tooltip: "", symbol: "photo",
+                                                                format: "JXL", bytes: 24_000_000))
+                        card.style = style
+                        card.frame = CGRect(x: 20 + CGFloat(i) * 114, y: 20 + CGFloat(row) * 114, width: 104, height: 104)
+                        card.image = Self.picture(p.c0, hill: p.c1, size: style == .square ? CGSize(width: 300, height: 300)
+                                                                                         : CGSize(width: 300, height: 200))
+                        card.isUnseen = p.unseen
+                        card.isPaired = p.pair
+                        card.isHovered = p.hover
+                        card.isSelected = p.selected
+                        host.addSubview(card)
+                    }
+                }
+            }
+        }
+    }
+
     @Test(.enabled(if: folder != nil)) func compactCards() throws {
         let savedNow = FolderCard.now
         defer { FolderCard.now = savedNow }
