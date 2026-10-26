@@ -49,10 +49,10 @@ side for video; `4032 × 3024` for a photo), `stream` (`1080p · HEVC · 60 fps`
 
 - **FrameScrub:** `KeyframeThumbnail` already opens the file with FFmpeg for the poster; it returns the stream's
   codec, size, rate, bitrate and HDR with the duration. They are kept in `FileFactsStore` (what `DurationStore` was,
-  keyed by path, size and mtime). A card whose poster comes from the cache without facts gets a probe without a
+  keyed by path, as the durations were). A card whose poster comes from the cache without facts gets a probe without a
   decode (`avformat_find_stream_info`), on the poster queue, visible cards first.
-- **Loupe:** `ThumbnailMaker` reads the photo's properties for the thumbnail already; the EXIF goes into the catalog
-  next to the thumbnail. A thumbnail made before has no facts: its properties are read once (the header only), on
+- **Loupe:** the generator has the photo's bytes for the thumbnail already; `PhotoFacts` reads their properties and
+  the EXIF goes into the catalog next to the thumbnail (`file_facts`, by file id, gone when the file changes). A thumbnail made before has no facts: its properties are read once (the header only), on
   the thumbnail queue, visible cards first.
 
 No file is read for facts alone beyond that one header read, and none for a card off screen.
