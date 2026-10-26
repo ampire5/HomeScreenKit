@@ -55,6 +55,8 @@ public struct BrowserEntry: Equatable, Sendable {
     public var leads: Bool
     /// The facts of a folder or archive card (counts, dates, how much was seen); nil until the app knows them.
     public var summary: CardSummary?
+    /// A file's facts (its stream, its EXIF), when the app has them; `HomeBrowserView.setFacts` adds later ones.
+    public var facts: FileFacts?
 
     /// Folders, archives and places open as folders in the browser; the rest open in the app.
     public var isContainer: Bool { kind == .folder || kind == .archive || kind == .place }
@@ -63,8 +65,9 @@ public struct BrowserEntry: Equatable, Sendable {
     public init(url: URL, name: String, kind: Kind, date: Date? = nil, size: Int64? = nil, count: Int? = nil,
                 isDimmed: Bool = false, canRename: Bool = false, canTrash: Bool = false, key: String? = nil,
                 subtitle: String? = nil, progress: Double? = nil, badge: String? = nil, leads: Bool = false,
-                summary: CardSummary? = nil) {
+                summary: CardSummary? = nil, facts: FileFacts? = nil) {
         self.summary = summary
+        self.facts = facts
         self.key = key
         self.subtitle = subtitle
         self.progress = progress

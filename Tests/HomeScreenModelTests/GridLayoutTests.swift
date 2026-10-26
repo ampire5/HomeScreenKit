@@ -138,11 +138,24 @@ import Testing
         #expect(below.frame(of: 0).height == grid.frame(of: 0).height)
     }
 
-    @Test func photosKeepTheirLayoutInPosterAndCardStyles() {
+    /// Files keep their tiles in Posters; in Cards they are cards, their picture the files' aspect (file-cards spec).
+    @Test func filesAreCardsInTheCardsStyle() {
         let a = GridLayout(sections: [photos(100)], width: 1000, target: 200, names: .below)
-        for style in [CardStyle.posters, .cards] {
-            #expect(GridLayout(sections: [photos(100)], width: 1000, target: 200, names: .below, style: style) == a)
-        }
+        #expect(GridLayout(sections: [photos(100)], width: 1000, target: 200, names: .below, style: .posters) == a)
+        let cards = GridLayout(sections: [photos(10)], width: 960, target: 200, names: .below, style: .cards, fileAspect: 16.0 / 9)
+        #expect(cards.columns(inSection: 0) == 3)
+        #expect(cards.frame(of: 0).height == 92)
+        #expect(cards.pictureFrame(of: 0).size == CGSize(width: 135, height: 76))
+        let square = GridLayout(sections: [photos(10)], width: 960, target: 200, names: .below, style: .cards)
+        #expect(square.pictureFrame(of: 0).size == CGSize(width: 76, height: 76))
+    }
+
+    @Test func factsLineIsReservedOnlyWhenAsked() {
+        let plain = GridLayout(sections: [photos(10)], width: 1000, target: 200, names: .below)
+        let facts = GridLayout(sections: [photos(10)], width: 1000, target: 200, names: .below, factsLine: true)
+        #expect(facts.frame(of: 0).height == plain.frame(of: 0).height + 15)
+        let off = GridLayout(sections: [photos(10)], width: 1000, target: 200, names: .off, factsLine: true)
+        #expect(off == GridLayout(sections: [photos(10)], width: 1000, target: 200, names: .off))
     }
 
     @Test func listDrawsFilesAsRowsToo() {

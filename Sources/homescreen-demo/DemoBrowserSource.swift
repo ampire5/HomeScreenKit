@@ -38,7 +38,24 @@ import HomeScreenKit
         let waiting = root.appendingPathComponent("Waiting")
         tree[waiting.path] = (0..<48).map { folder("Waiting \($0)", in: waiting) }
         let small = root.appendingPathComponent("Small")
-        tree[small.path] = (0..<12).map { file("photo \($0).jxl", in: small, $0) }
+        tree[small.path] = (0..<12).map { n in
+            var e = file("photo \(n).jxl", in: small, n)
+            e.facts = FileFacts(width: 6000, height: 4000, camera: "Sony ILCE-7M4", lens: "FE 24-70mm F2.8 GM II",
+                                exposure: 1.0 / Double(125 * (n % 4 + 1)), aperture: 2.8, iso: 100 * (n % 5 + 1),
+                                focalLength: Double(24 + n * 4), taken: e.date)
+            return e
+        }
+        // Videos with their streams' facts (file-cards spec), for `HOMESCREEN_FILES=videos`.
+        let videos = root.appendingPathComponent("Videos")
+        tree[videos.path] = (0..<12).map { n in
+            var e = file("clip \(n).mp4", in: videos, n)
+            e.size = Int64(300_000_000 + n * 97_000_000)
+            e.facts = FileFacts(width: n % 3 == 0 ? 3840 : 1920, height: n % 3 == 0 ? 2160 : 1080, duration: Double(90 + n * 431),
+                                codec: n % 2 == 0 ? "HEVC" : "H.264", fps: n % 4 == 0 ? 59.94 : 30, hdr: n % 3 == 0)
+            e.progress = n % 3 == 1 ? 0.35 : nil
+            e.subtitle = n % 3 == 1 ? "1:02 / " + FileFactsText.length(Double(90 + n * 431)) : nil
+            return e
+        }
         for i in 0..<30 {
             let set = huge.appendingPathComponent("Set \(i)")
             tree[set.path] = (0..<(i + 1) * 3).map { file("\(i)-\($0).jpg", in: set, $0) }

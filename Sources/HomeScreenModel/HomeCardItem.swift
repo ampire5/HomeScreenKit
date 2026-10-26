@@ -40,6 +40,8 @@ public struct HomeCardItem: Equatable, Sendable {
     public var format: String?
     public var date: Date?
     public var bytes: Int64?
+    /// A file's facts (file-cards spec): the facts line under a poster, the rows of a file card.
+    public var facts: FileFacts?
     /// The source may still send this card's facts or cover (`HomeSource.sendsCardFacts`): set while it has no
     /// facts, or while its facts expect a cover (no problem, photos here or inside), and the source has not given up
     /// on it (`HomeBrowserView.stopWaiting`). The card shimmers while the facts or the cover are missing: a
@@ -49,7 +51,8 @@ public struct HomeCardItem: Equatable, Sendable {
     public init(id: String, title: String, subtitle: String? = nil, tooltip: String, symbol: String,
                 progress: Double? = nil, badge: String? = nil, isDimmed: Bool = false, menu: [HomeMenuItem] = [],
                 glassSymbol: Bool = false, summary: CardSummary? = nil, count: Int? = nil, format: String? = nil,
-                date: Date? = nil, bytes: Int64? = nil, waiting: Bool = false) {
+                date: Date? = nil, bytes: Int64? = nil, facts: FileFacts? = nil, waiting: Bool = false) {
+        self.facts = facts
         self.waiting = waiting
         self.format = format
         self.date = date

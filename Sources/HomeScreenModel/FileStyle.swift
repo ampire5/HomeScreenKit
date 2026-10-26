@@ -7,15 +7,19 @@ public struct FileStyle: Equatable, Sendable {
     public var noun: String
     public var aspect: CGFloat
     public var facts: Bool
+    /// A line of the file's facts (`FileFacts`: a video's stream and size, a photo's exposure) under its name, when
+    /// names are under the pictures (file-cards spec §2).
+    public var factsLine: Bool
 
-    public init(noun: String, aspect: CGFloat, facts: Bool) {
+    public init(noun: String, aspect: CGFloat, facts: Bool, factsLine: Bool = false) {
         self.noun = noun
         self.aspect = aspect
         self.facts = facts
+        self.factsLine = factsLine
     }
 
     public static let photos = FileStyle(noun: "photo", aspect: 1, facts: false)
-    public static let videos = FileStyle(noun: "video", aspect: 16.0 / 9, facts: true)
+    public static let videos = FileStyle(noun: "video", aspect: 16.0 / 9, facts: true, factsLine: true)
 
     /// `Photos`, `Videos`: the heading over a folder's files.
     public var heading: String { noun.prefix(1).uppercased() + noun.dropFirst() + "s" }

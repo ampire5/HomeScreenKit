@@ -115,6 +115,9 @@ import HomeScreenKit
         if let style = env["HOMESCREEN_STYLE"].flatMap(GridStyle.init) { browser.style = style }
         if let names = env["HOMESCREEN_NAMES"].flatMap(GridNames.init) { browser.names = names }
         if env["HOMESCREEN_NOSIDEBAR"] != nil { homeView.isSidebarVisible = false }
+        if env["HOMESCREEN_FILES"] == "videos" { browser.files = .videos }
+        if env["HOMESCREEN_FACTS_LINE"] != nil { browser.files.factsLine = true }
+        if let style = env["HOMESCREEN_CARDS"].flatMap(CardStyle.init) { browser.chooseCardStyle(style) }
         let location: BrowserLocation
         switch env["HOMESCREEN_SOURCE"] ?? "recent" {
         case "recent": location = .source("recent")

@@ -56,6 +56,8 @@ public struct GridMetrics: Equatable, Sendable {
     public var footerHeight: CGFloat = 72
     /// The name line under a slot in `.below` (collections always have it there).
     public var belowText: CGFloat = 22
+    /// A file's facts line under its name in `.below` (file-cards spec §2), when the app has one (`FileStyle.factsLine`).
+    public var belowFacts: CGFloat = 15
     /// Names and badges only on slots at least this wide.
     public var minNamed: CGFloat = 90
     /// A poster is one card: the square cover, a 3 pt seam (the progress track) under it, then the band of facts
@@ -151,6 +153,8 @@ public struct GridLayout: Equatable, Sendable {
         /// The cover's side and where it sits in the slot: the full width for a poster, a square at the left otherwise.
         var cover: CGFloat
         var coverInset: CGPoint
+        /// A file card's picture is wider than tall by the files' aspect (a video's 135 × 76); nil: `cover` square.
+        var coverWidth: CGFloat? = nil
         var rows: Int { (count + columns - 1) / columns }
         var pitch: CGFloat { slotHeight + gap }
     }
@@ -162,8 +166,10 @@ public struct GridLayout: Equatable, Sendable {
 
     /// `style` is for the collection sections (a narrow column falls back to posters); the photo sections do not use it.
     /// `fileAspect` is a photo slot's width over its picture's height (`FileStyle.aspect`: 1 for photos, 16:9 for video).
+    /// `factsLine`: the files' facts under their names (`FileStyle.factsLine`); in the Cards style files take card
+    /// slots too, their picture `fileAspect` × the cover's height.
     public init(sections: [GridSection], width: CGFloat, target: CGFloat, names: GridNames, style: CardStyle = .posters,
-                fileAspect: CGFloat = 1, metrics: GridMetrics = .init()) {
+                fileAspect: CGFloat = 1, factsLine: Bool = false, metrics: GridMetrics = .init()) {
         self.metrics = metrics
         var y = metrics.top, first = 0, placed: [Placed] = []
         for section in sections {
@@ -173,12 +179,20 @@ public struct GridLayout: Equatable, Sendable {
             let wanted = isPhotos ? target : target * metrics.collectionScale
             var columns = Self.columns(width: width, target: wanted, gap: gap, edge: edge)
             var slot = max(1, (width - 2 * edge - gap * CGFloat(columns - 1)) / CGFloat(columns))
-            var slotHeight: CGFloat, cover = slot, coverInset = CGPoint.zero
-            // Photos keep their tiles, except in the list, where files are rows like the folders.
-            let used = (isPhotos && style != .list) || width < metrics.minStyled ? CardStyle.posters : style
-            if isPhotos && used != .list {
+            var slotHeight: CGFloat, cover = slot, coverInset = CGPoint.zero, coverWidth: CGFloat?
+            // Files keep their tiles in Posters; in Cards they are cards and in the list rows, like the folders.
+            let used = width < metrics.minStyled ? CardStyle.posters : style
+            if isPhotos && used == .cards {
+                gap = metrics.cardGap
+                columns = max(1, Int(((width - 2 * edge + gap) / (metrics.cardWidth + gap)).rounded(.down)))
+                slot = max(1, (width - 2 * edge - gap * CGFloat(columns - 1)) / CGFloat(columns))
+                slotHeight = metrics.cardHeight
+                cover = metrics.cardCover
+                coverWidth = (metrics.cardCover * fileAspect).rounded()
+                coverInset = CGPoint(x: metrics.cardPadding, y: metrics.cardPadding)
+            } else if isPhotos && used != .list {
                 cover = fileAspect == 1 ? slot : (slot / max(0.1, fileAspect)).rounded()
-                slotHeight = cover + (names == .below ? metrics.belowText : 0)
+                slotHeight = cover + (names == .below ? metrics.belowText + (factsLine ? metrics.belowFacts : 0) : 0)
             } else {
                 switch used {
                 case .posters:
@@ -206,7 +220,8 @@ public struct GridLayout: Equatable, Sendable {
                 y += metrics.headerHeight
             }
             let p = Placed(first: first, count: section.count, columns: columns, slot: slot, slotHeight: slotHeight,
-                           gap: gap, edge: edge, header: header, rowsTop: y, cover: cover, coverInset: coverInset)
+                           gap: gap, edge: edge, header: header, rowsTop: y, cover: cover, coverInset: coverInset,
+                           coverWidth: coverWidth)
             y += CGFloat(p.rows) * p.pitch
             first += section.count
             placed.append(p)
@@ -256,7 +271,7 @@ public struct GridLayout: Equatable, Sendable {
     /// inside its padding, a row's small one.
     public func pictureFrame(of index: Int) -> CGRect {
         let f = frame(of: index), p = placed[section(of: index)]
-        let width = p.coverInset == .zero ? f.width : p.cover
+        let width = p.coverInset == .zero ? f.width : p.coverWidth ?? p.cover
         return CGRect(x: f.minX + p.coverInset.x, y: f.minY + p.coverInset.y, width: width, height: p.cover)
     }
 

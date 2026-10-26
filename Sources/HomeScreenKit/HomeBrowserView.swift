@@ -210,6 +210,8 @@ public final class HomeBrowserView: NSView {
     }
     private var unreadableObservation: UnreadableFiles.Observation?
     /// Photos not viewed yet and pages of a pair (`setPhotoMarks`): forgotten with the place, like `unavailable`.
+    /// Files' facts sent after their listing (`setFacts`), for the place on screen.
+    private var facts: [String: FileFacts] = [:]
     private var unseen: Set<String> = []
     private var paired: Set<String> = []
 
@@ -285,6 +287,7 @@ public final class HomeBrowserView: NSView {
     private var collectionPool: [CollectionCard] = []
     private var posterPool: [PosterCard] = []
     private var compactPool: [CompactCard] = []
+    private var filePool: [FileCard] = []
     var rowPool: [ListRow] = []
     /// The column heads over the list's rows; made with the first list.
     var listHeader: ListHeader?
@@ -466,6 +469,7 @@ public final class HomeBrowserView: NSView {
         unavailable = []
         unseen = []
         paired = []
+        facts = [:]
         pendingSelection = selecting ?? history.selection(for: location)
         pendingScroll = selecting == nil && anchor == nil ? history.scroll(for: location) : nil
         pendingAnchor = anchor
@@ -1683,7 +1687,7 @@ public final class HomeBrowserView: NSView {
         let showsListHeader = shownStyle == .list && !entries.isEmpty && isShowingEntries
         if showsListHeader { metrics.top += ListHeader.height }
         grid = GridLayout(sections: sections, width: width, target: cardSize, names: names, style: shownStyle,
-                          fileAspect: files.aspect, metrics: metrics)
+                          fileAspect: files.aspect, factsLine: files.factsLine, metrics: metrics)
         // At least the view's height less the inset AppKit gives the scroll view under the toolbar: as tall as the
         // whole view, a grid that fits scrolled by that inset and kept a legacy scroller (a mouse plugged in).
         let insets = scroll.contentInsets
@@ -1725,6 +1729,7 @@ public final class HomeBrowserView: NSView {
                 case .row: card = rowPool.popLast() ?? makeRow()
                 case .collection: card = collectionPool.popLast() ?? makeCollection()
                 case .photo: card = photoPool.popLast() ?? makePhoto()
+                case .file: card = filePool.popLast() ?? makeFile()
                 }
                 configure(card, entry)
                 card.isHidden = false
@@ -1740,9 +1745,12 @@ public final class HomeBrowserView: NSView {
                 photo.names = names
                 photo.aspect = files.aspect
                 photo.showsFacts = files.facts
+                photo.showsFactsLine = files.factsLine
                 photo.showsNames = grid.showsNames(inSection: section)
             } else if let collection = card as? CollectionCard {
                 collection.names = names
+            } else if let file = card as? FileCard {
+                file.aspect = files.aspect
             }
             if let row = card as? ListRow { row.showsSeparator = i < entries.count - 1 }
             // Straight to the slot: a view's frame animates only in an animation group that allows it (the sidebar's).
@@ -1764,14 +1772,14 @@ public final class HomeBrowserView: NSView {
 
     private func isCollection(_ i: Int) -> Bool { !entries[i].isFile }
 
-    private enum CardKind { case poster, compact, row, collection, photo }
+    private enum CardKind { case poster, compact, row, collection, photo, file }
 
     /// A folder or archive in a folder is a poster, a compact card or a row; in the list the files are rows too. The
     /// rest of the containers (places, the app's collections) keep the collection card; files are photos.
     private func kind(of i: Int) -> CardKind {
         let entry = entries[i]
         let style = shownCardStyle(width: gridWidth)
-        guard !entry.isFile else { return style == .list ? .row : .photo }
+        guard !entry.isFile else { return style == .list ? .row : style == .cards ? .file : .photo }
         guard entry.kind == .folder || entry.kind == .archive else { return .collection }
         switch style {
         case .posters: return .poster
@@ -1786,6 +1794,7 @@ public final class HomeBrowserView: NSView {
         case is CompactCard: .compact
         case is ListRow: .row
         case is CollectionCard: .collection
+        case is FileCard: .file
         default: .photo
         }
     }
@@ -1798,6 +1807,7 @@ public final class HomeBrowserView: NSView {
         if let collection = card as? CollectionCard { collectionPool.append(collection) }
         if let poster = card as? PosterCard { posterPool.append(poster) }
         if let compact = card as? CompactCard { compactPool.append(compact) }
+        if let file = card as? FileCard { filePool.append(file) }
         if let row = card as? ListRow { rowPool.append(row) }
     }
 
@@ -1834,6 +1844,12 @@ public final class HomeBrowserView: NSView {
 
     private func makePoster() -> PosterCard {
         let card = PosterCard(item: HomeCardItem(id: "", title: "", tooltip: "", symbol: "folder"))
+        document.addSubview(card)
+        return card
+    }
+
+    private func makeFile() -> FileCard {
+        let card = FileCard(item: HomeCardItem(id: "", title: "", tooltip: "", symbol: "doc"))
         document.addSubview(card)
         return card
     }
@@ -1902,7 +1918,7 @@ public final class HomeBrowserView: NSView {
                             menu: source?.menu(for: entry, in: location) ?? [], glassSymbol: entry.kind == .place,
                             summary: summary, count: entry.count,
                             format: entry.isFile && !entry.url.pathExtension.isEmpty ? entry.url.pathExtension.uppercased() : nil,
-                            date: entry.date, bytes: entry.size,
+                            date: entry.date, bytes: entry.size, facts: entry.facts ?? facts[entry.id],
                             waiting: waits(entry, summary: summary))
     }
 
@@ -2037,6 +2053,17 @@ public final class HomeBrowserView: NSView {
             let id = photo.item.id
             photo.isUnseen = unseen.contains(id)
             photo.isPaired = paired.contains(id)
+        }
+    }
+
+    /// Files' facts learned after their listing (a poster made, a photo's EXIF read), for the place on screen: kept
+    /// until the place changes, and drawn at once on the cards in view (file-cards spec §2). O(live).
+    public func setFacts(_ new: [String: FileFacts]) {
+        guard !new.isEmpty else { return }
+        facts.merge(new) { _, latest in latest }
+        for (i, card) in live where new[card.item.id] != nil && entries.indices.contains(i) {
+            let item = item(for: entries[i])
+            if card.item != item { card.show(item) }
         }
     }
 

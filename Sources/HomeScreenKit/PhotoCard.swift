@@ -23,9 +23,13 @@ final class PhotoCard: GridCard {
     var isHovered = false { didSet { if isHovered != oldValue { marksChanged() } } }
     var aspect: CGFloat = 1 { didSet { if aspect != oldValue { needsLayout = true } } }
     var showsFacts = false { didSet { if showsFacts != oldValue { itemChanged() } } }
+    /// The facts line under the name in `.below` (`FileStyle.factsLine`, file-cards spec §2).
+    var showsFactsLine = false { didSet { if showsFactsLine != oldValue { needsLayout = true } } }
 
     let ring = CALayer()
     let nameLabel = NSTextField(labelWithString: "")
+    /// Under the name: `1080p · HEVC · 60 fps · 1.2 GB`, `1/250 · f/2.8 · ISO 400`.
+    let factsLabel = NSTextField(labelWithString: "")
     let hairline = CALayer()
     private let picture = CALayer()
     private let shade = GridCard.shade()
@@ -67,6 +71,10 @@ final class PhotoCard: GridCard {
         layer?.addSublayer(ring)
         nameLabel.lineBreakMode = .byTruncatingMiddle
         addSubview(nameLabel)
+        factsLabel.lineBreakMode = .byTruncatingTail
+        factsLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+        factsLabel.isHidden = true
+        addSubview(factsLabel)
         // Over the picture: dark whatever the window is, as the over-media chrome.
         track.backgroundColor = NSColor(white: 0, alpha: 0.55).cgColor
         track.addSublayer(fill)
@@ -104,7 +112,7 @@ final class PhotoCard: GridCard {
             track.frame = CGRect(x: rect.minX, y: rect.maxY - 3, width: rect.width, height: 3)
             fill.frame = CGRect(x: 0, y: 0, width: (rect.width * min(1, max(0, progress))).rounded(), height: 3)
         }
-        let line = showsFacts ? item.subtitle ?? "" : ""
+        let line = showsFacts ? lengthText : ""
         let size = factsChip.intrinsicContentSize
         let width = size.width + 8, height = size.height + 2
         factsChip.isHidden = line.isEmpty || width > rect.width - 12
@@ -130,9 +138,14 @@ final class PhotoCard: GridCard {
         }
     }
 
-    /// The strip's two texts: the format and the size as a file's ("" for what the item does not have).
+    /// The chip on a video's picture: the entry's own line (`12:30 / 1:02:10`), else the length from its facts.
+    var lengthText: String { item.subtitle ?? item.facts?.duration.map(FileFactsText.length) ?? "" }
+
+    /// The strip's two texts: the exposure (else the format) and the size as a file's ("" for what the item does not
+    /// have).
     var stripText: (format: String, size: String) {
-        (item.format ?? "", item.bytes.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? "")
+        (item.facts.flatMap(FileFactsText.exposureLine) ?? item.format ?? "",
+         item.bytes.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? "")
     }
 
     override func show(_ item: HomeCardItem) {
@@ -147,7 +160,8 @@ final class PhotoCard: GridCard {
             stripFormat.stringValue = text.format
             stripSize.stringValue = text.size
         }
-        factsChip.stringValue = item.subtitle ?? ""
+        factsChip.stringValue = lengthText
+        factsLabel.stringValue = FileFactsText.posterLine(item.facts, bytes: item.bytes) ?? ""
         marksChanged()
         needsLayout = true
     }
@@ -313,11 +327,15 @@ final class PhotoCard: GridCard {
             let band = min(rect.height, 32)
             shade.frame = CGRect(x: rect.minX, y: bottom - band, width: rect.width, height: band)
             nameLabel.frame = CGRect(x: rect.minX + 6, y: bottom - 20, width: max(0, rect.width - 12), height: 16)
+            factsLabel.isHidden = true
         } else {
             nameLabel.font = Chrome.Text.font(.label)
-            nameLabel.textColor = Chrome.Palette.window.secondaryLabel
+            nameLabel.textColor = showsFactsLine ? Chrome.Palette.window.label : Chrome.Palette.window.secondaryLabel
             nameLabel.shadow = nil
             nameLabel.frame = CGRect(x: 0, y: boxHeight + 3, width: bounds.width, height: 16)
+            factsLabel.isHidden = !(named && names == .below && showsFactsLine) || factsLabel.stringValue.isEmpty
+            factsLabel.textColor = Chrome.Palette.window.secondaryLabel
+            factsLabel.frame = CGRect(x: 0, y: boxHeight + 3 + 16, width: bounds.width, height: 14)
         }
         layoutFacts(in: rect)
         CATransaction.commit()
