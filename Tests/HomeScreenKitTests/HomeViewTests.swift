@@ -275,7 +275,7 @@ import Testing
         let (view, window) = await make(source())
         view.sidebarWidth = 300
         view.layoutSubtreeIfNeeded()
-        #expect(view.sidebarView.frame.width == 300)
+        #expect(view.sidebarPaneWidth == 300)
         window.setContentSize(CGSize(width: 250, height: 800))
         view.layoutSubtreeIfNeeded()
         window.setContentSize(CGSize(width: 1200, height: 800))
@@ -298,7 +298,7 @@ import Testing
         view.layoutSubtreeIfNeeded()
         window.setContentSize(CGSize(width: 1200, height: 800))
         view.layoutSubtreeIfNeeded()
-        #expect(view.sidebarView.frame.width == 236)
+        #expect(view.sidebarPaneWidth == 236)
         #expect(view.sidebarWidth == 236)
     }
 
