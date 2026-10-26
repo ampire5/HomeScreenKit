@@ -175,7 +175,7 @@ import Testing
         await settle { view.toolbar.siblingTitles == ["a", "b", "c"] }
         #expect(view.toolbar.siblingTitles == ["a", "b", "c"])
         #expect(view.toolbar.siblingChecked == [false, true, false])
-        #expect(source.foldersAsked.map(\.standardizedFileURL.path) == [x.path])
+        #expect(source.foldersAsked.first?.standardizedFileURL.path == x.path)   // the nearest crumb's first
         view.toolbar.chooseSibling(2)
         #expect(view.location == .folder(x.appendingPathComponent("c")))
     }
@@ -199,15 +199,32 @@ import Testing
         view.toolbar.clickSiblings(3)
         #expect(view.toolbar.siblingTitles == ["Loading…"])
         await settle { !source.foldersAsked.isEmpty }
+        #expect(source.foldersAsked.count == 1)   // the submenu waits on the path menu's listing, not a second one
         source.answerFolders(siblings)
         await settle { view.toolbar.siblingTitles == ["a", "b", "c"] }
         #expect(view.toolbar.siblingTitles == ["a", "b", "c"])
-        view.toolbar.clickSiblings(3)
-        await settle { source.foldersAsked.count == 2 }
+        view.toolbar.clickSiblings(3)   // the path menu again: listed again
+        await settle { source.foldersAsked.last?.standardizedFileURL.path == x.path && source.foldersAsked.count > 2 }
         view.toolbar.closeSiblings()
         source.answerFolders([BrowserFixtures.folder("z")])
         await settle()
         #expect(view.toolbar.siblingTitles != ["z"])
+    }
+
+    /// The folders asked for as the path menu opens: a submenu opened after they are in has them at once, so it is
+    /// measured with its names and none is cut.
+    @Test func siblingMenuListedWhenPathMenuOpens() async {
+        let source = FakeHomeSource()
+        source.folderReplies[x.path] = siblings
+        source.folderReplies[URL(fileURLWithPath: "/Volumes/T").path] = [BrowserFixtures.folder("x")]
+        let view = make(source, at: .folder(nested))
+        view.toolbar.openPathMenu()
+        await settle { source.foldersAsked.count == 2 }
+        #expect(source.foldersAsked.map(\.standardizedFileURL.path) == [x.path, "/Volumes/T"])   // nearest first
+        await settle()
+        view.toolbar.openSiblingMenu(atPathItem: 0)   // the › before "b", without opening the path menu again
+        #expect(view.toolbar.siblingTitles == ["a", "b", "c"])
+        #expect(source.foldersAsked.count == 2)
     }
 
     @Test func sortChangeCallsSetSort() async {

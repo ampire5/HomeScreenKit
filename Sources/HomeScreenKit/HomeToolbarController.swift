@@ -26,6 +26,8 @@ import HomeScreenModel
     var onFilterText: ((String) -> Void)?
     /// Esc in the name field: it is cleared and the keys go back to the grid.
     var onFilterEnd: (() -> Void)?
+    /// The path menu is opening: the view may start on the folders its submenus will list.
+    var onPathMenu: (() -> Void)?
     /// The sibling menu of path item `i` is opening: the view fills it with the folders beside that crumb.
     var onSiblings: ((Int) -> Void)?
     /// The sibling menu closed: a reply still on its way is not wanted.
@@ -579,6 +581,7 @@ import HomeScreenModel
     func menuNeedsUpdate(_ menu: NSMenu) {
         if menu === pathMenu {
             fillPathMenu()
+            onPathMenu?()
         } else if let sibling = menu as? SiblingMenu {
             siblingMenu = sibling
             onSiblings?(sibling.crumb)

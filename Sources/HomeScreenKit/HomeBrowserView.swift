@@ -334,6 +334,7 @@ public final class HomeBrowserView: NSView {
             self.source?.pageFilterChosen(i, in: id)
         }
         toolbar.onFilterText = { [weak self] text in self?.filterChanged { $0.text = text } }
+        toolbar.onPathMenu = { [weak self] in self?.listSiblings() }
         toolbar.onSiblings = { [weak self] i in self?.siblingsAsked(i) }
         toolbar.onSiblingsClosed = { [weak self] in self?.siblingTask?.cancel() }
         toolbar.progress.onPause = { [weak self] on in
@@ -541,6 +542,7 @@ public final class HomeBrowserView: NSView {
         listTask?.cancel()
         isListing = false
         siblingTask?.cancel()
+        dropSiblingLists()
         orderCount += 1
         orderPending = nil
         loadingTask?.cancel()
@@ -1263,25 +1265,70 @@ public final class HomeBrowserView: NSView {
 
 
     private var siblingTask: Task<Void, Never>?
+    /// The folders beside each crumb, asked for one crumb after another (nearest first) as the path menu opens, and the
+    /// ones that are in. A submenu shows its folders at once when they are in: an open menu does not widen for items
+    /// added late, so a reply filled in after `Loading…` came out with every name cut in the middle.
+    private var siblingLists: [Int: Task<[BrowserEntry], Never>] = [:]
+    private var siblingsIn: [Int: [BrowserEntry]] = [:]
+    private var siblingListsGeneration = -1
 
-    /// The › before crumb `i`: its menu opens at once, the folders beside that crumb (in their parent's sort) fill it
-    /// when the source answers; a reply after a move or after the menu closed is dropped.
-    private func siblingsAsked(_ i: Int) {
+    /// The path menu opens: the folders beside its crumbs are asked for again while the pointer travels to one.
+    private func listSiblings() {
+        dropSiblingLists()
+        for i in path().indices.reversed() { _ = siblingList(i) }
+    }
+
+    private func dropSiblingLists() {
+        siblingLists.values.forEach { $0.cancel() }
+        siblingLists = [:]
+        siblingsIn = [:]
+    }
+
+    /// The folders beside crumb `i` (in their parent's sort), asked for after the crumb below it; nil for the first.
+    private func siblingList(_ i: Int) -> Task<[BrowserEntry], Never>? {
+        if siblingListsGeneration != generation {
+            dropSiblingLists()
+            siblingListsGeneration = generation
+        }
+        if let list = siblingLists[i] { return list }
         let crumbs = path()
-        guard crumbs.indices.contains(i), i > 0 else { return }
-        let current = crumbs[i].location, parent = crumbs[i - 1].location
-        let generation = generation
-        siblingTask?.cancel()
-        siblingTask = Task { @MainActor [weak self] in
-            guard let source = self?.source else { return }
+        guard crumbs.indices.contains(i), i > 0 else { return nil }
+        let parent = crumbs[i - 1].location
+        let before = siblingLists[i + 1]   // one listing at a time
+        let list = Task { @MainActor [weak self] () -> [BrowserEntry] in
+            _ = await before?.value
+            guard !Task.isCancelled, let source = self?.source else { return [] }
             let entries: [BrowserEntry]
             switch parent {
             case .places, .source: entries = await source.places()
             case .folder(let url): entries = source.sort(for: parent).order((try? await source.folders(in: url)) ?? [])   // an error: none
             }
+            if !Task.isCancelled, self?.siblingLists[i] != nil { self?.siblingsIn[i] = entries }
+            return entries
+        }
+        siblingLists[i] = list
+        return list
+    }
+
+    /// The › before crumb `i`: its menu opens at once, with the folders beside that crumb when they are in, else with
+    /// `Loading…` until the source answers; a reply after a move or after the menu closed is dropped.
+    private func siblingsAsked(_ i: Int) {
+        let crumbs = path()
+        guard crumbs.indices.contains(i), let list = siblingList(i) else { return }
+        let current = crumbs[i].location
+        let shown = { (entries: [BrowserEntry]) in
+            entries.map { (title: $0.name, location: BrowserLocation.folder($0.url), current: BrowserLocation.folder($0.url) == current) }
+        }
+        siblingTask?.cancel()
+        if let entries = siblingsIn[i] {
+            toolbar.showSiblings(shown(entries), at: i)
+            return
+        }
+        let generation = generation
+        siblingTask = Task { @MainActor [weak self] in
+            let entries = await list.value
             guard let self, !Task.isCancelled, self.generation == generation else { return }
-            self.toolbar.updateSiblings(entries.map { (title: $0.name, location: .folder($0.url),
-                                                       current: BrowserLocation.folder($0.url) == current) })
+            self.toolbar.updateSiblings(shown(entries))
         }
         toolbar.showSiblings(nil, at: i)
     }
