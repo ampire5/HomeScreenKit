@@ -34,7 +34,22 @@ import Testing
         #expect(controller.windowTitle == "Library")
         #expect(controller.subtitleText == "16–19 Sep 2026")
         #expect(controller.nsToolbar.items[1].itemIdentifier == .toggleSidebar)
-        #expect(controller.nsToolbar.items[3].itemIdentifier == HomeToolbarItem.title.identifier)
+        #expect(controller.nsToolbar.items[7].itemIdentifier == HomeToolbarItem.title.identifier)   // after the buttons
+        #expect(controller.nsToolbar.centeredItemIdentifiers == [HomeToolbarItem.filter.identifier])
+        withExtendedLifetime(window) {}
+    }
+
+    /// The title takes the room up to its whole text and gives it back down to 150 pt before an item overflows.
+    @available(macOS, deprecated: 12.0)
+    @Test func titleItemIsFlexibleUpToItsText() {
+        let controller = HomeToolbarController()
+        let window = attach(controller)
+        let item = controller.nsToolbar.items.first { $0.itemIdentifier == HomeToolbarItem.title.identifier }!
+        controller.show(title: "a")
+        #expect(item.minSize.width == 150 && item.maxSize.width == 150)
+        controller.show(title: String(repeating: "A long folder name ", count: 8))
+        #expect(item.minSize.width == 150)
+        #expect(item.maxSize.width > 600)
         withExtendedLifetime(window) {}
     }
 

@@ -80,10 +80,16 @@ import HomeScreenModel
     }
 
     private(set) var windowTitle = "" {
-        didSet { titleView.title = windowTitle }
+        didSet {
+            titleView.title = windowTitle
+            fitTitleItem()
+        }
     }
     private(set) var subtitleText = "" {
-        didSet { titleView.subtitle = subtitleText }
+        didSet {
+            titleView.subtitle = subtitleText
+            fitTitleItem()
+        }
     }
 
     override init() {
@@ -93,6 +99,7 @@ import HomeScreenModel
         nsToolbar.displayMode = .iconOnly
         nsToolbar.allowsUserCustomization = false
         nsToolbar.autosavesConfiguration = false
+        nsToolbar.centeredItemIdentifiers = [HomeToolbarItem.filter.identifier]   // the title's length does not move it
         filterControl.segmentStyle = .automatic
         filterControl.controlSize = .regular
         filterControl.target = self
@@ -188,14 +195,14 @@ import HomeScreenModel
         }
     }
 
-    /// The location's name over its summary, as the title and subtitle of a Photos window: plain text on the toolbar, in
-    /// the system's label colours, between two widths so a short subtitle is never cut and a long path is.
+    /// The location's name over its summary, as the title and subtitle of a Finder window: plain text on the toolbar, in
+    /// the system's label colours, as wide as its text where the toolbar has the room; it gives way down to `minWidth`
+    /// (cut at the tail) before any item goes to the overflow.
     @MainActor private final class HomeToolbarTitleView: NSView {
         private let titleLabel = NSTextField(labelWithString: "")
         private let subtitleLabel = NSTextField(labelWithString: "")
         private let stack = NSStackView()
-        private static let minWidth: CGFloat = 150
-        private static let maxWidth: CGFloat = 300
+        static let minWidth: CGFloat = 150
 
         var title = "" {
             didSet {
@@ -234,19 +241,32 @@ import HomeScreenModel
                 stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
                 stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
                 stack.centerYAnchor.constraint(equalTo: centerYAnchor),
-                widthAnchor.constraint(greaterThanOrEqualToConstant: Self.minWidth),
-                widthAnchor.constraint(lessThanOrEqualToConstant: Self.maxWidth),
             ])
         }
 
         required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
+        /// The whole text's width, with the stack's margins.
+        var textWidth: CGFloat {
+            let subtitleWidth = subtitleLabel.isHidden ? 0 : subtitleLabel.intrinsicContentSize.width
+            return ceil(max(titleLabel.intrinsicContentSize.width, subtitleWidth)) + 8
+        }
+
         override var intrinsicContentSize: NSSize {
             let titleSize = titleLabel.fittingSize
             let subtitleSize = subtitleLabel.isHidden ? .zero : subtitleLabel.fittingSize
-            return NSSize(width: max(titleSize.width, subtitleSize.width) + 8,
-                          height: titleSize.height + subtitleSize.height)
+            return NSSize(width: NSView.noIntrinsicMetric, height: titleSize.height + subtitleSize.height)
         }
+    }
+
+    /// The title item is flexible, from `minWidth` up to its whole text: the toolbar gives it the room beside it and
+    /// takes it back before an item goes to the overflow. A view's constraints do not do this (the toolbar sizes a view
+    /// to its fitting size, measured 2026-10-26 on macOS 27), the item's own range does.
+    private func fitTitleItem() {
+        guard let item = items[.title] else { return }
+        let height = titleView.intrinsicContentSize.height
+        item.minSize = NSSize(width: HomeToolbarTitleView.minWidth, height: height)
+        item.maxSize = NSSize(width: max(HomeToolbarTitleView.minWidth, titleView.textWidth), height: height)
     }
 
     private func symbol(_ name: String, _ description: String) -> NSImage {
