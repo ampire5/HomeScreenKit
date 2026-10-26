@@ -3,7 +3,7 @@ import Testing
 @testable import HomeScreenKit
 
 @MainActor @Suite struct HomeToolbarItemTests {
-    /// A narrow window hides the item with the least priority first; location text remains beside the sidebar divider.
+    /// A narrow window hides the item with the least priority first; the location text goes last.
     @Test func hideOrderFollowsTheSpec() {
         let order = HomeToolbarItem.allCases.sorted { $0.priority < $1.priority }
         #expect(order == [.cards, .aspect, .sort, .history, .home, .path, .progress, .search, .zoom, .filter, .title])
@@ -21,11 +21,12 @@ import Testing
         #expect(items == HomeToolbarItem.allCases.map(\.identifier).sorted { rank($0) < rank($1) })
         #expect(Set(items).count == items.count)
         #expect(Array(order.prefix(3)) == [.flexibleSpace, .toggleSidebar, .sidebarTrackingSeparator])
+        #expect(order[center - 2] == HomeToolbarItem.title.identifier)   // the title runs up to the filter's room
     }
 
     /// The layout left to right, as the spec draws it.
     private func rank(_ id: NSToolbarItem.Identifier) -> Int {
-        let left: [HomeToolbarItem] = [.title, .home, .history, .path, .zoom, .filter, .sort, .aspect, .progress, .cards, .search]
+        let left: [HomeToolbarItem] = [.home, .history, .path, .title, .filter, .sort, .aspect, .progress, .zoom, .cards, .search]
         return left.firstIndex { $0.identifier == id } ?? -1
     }
 

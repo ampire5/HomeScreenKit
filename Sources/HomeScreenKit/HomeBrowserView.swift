@@ -12,7 +12,16 @@ public final class HomeBrowserView: NSView {
     // MARK: Set by the app
 
     /// The wanted photo slot width in points; the columns are the nearest count to it.
-    public var cardSize: CGFloat = 220 { didSet { if cardSize != oldValue { tile() } } }
+    public var cardSize: CGFloat = 220 {
+        didSet {
+            if cardSize != oldValue { tile() }
+            toolbar.show(cardSize: cardSize, range: cardSizeRange)
+        }
+    }
+    /// The sizes the slider spans (the app's limits of `cardSize`).
+    public var cardSizeRange: ClosedRange<CGFloat> = 60...480 {
+        didSet { toolbar.show(cardSize: cardSize, range: cardSizeRange) }
+    }
     /// Square or Aspect: a change re-tiles, the cards keep their pictures.
     public var style = GridStyle.aspect {
         didSet { if style != oldValue { toolbar.show(style: style); tile() } }
@@ -104,8 +113,9 @@ public final class HomeBrowserView: NSView {
     /// row's cover is four photos at 32 pt (`HomeMosaic.Layout.quad`).
     public var shownStyle: CardStyle { shownCardStyle(width: gridWidth) }
 
-    /// The wanted slot width for ⌘= / ⌘−: one photo column fewer (at one column, the range's top) or one more, at the
-    /// grid's width now, within `range`. Nil for `reset`: the app's default.
+    /// The wanted slot width for a step: for the wheel and a pinch one photo column fewer (at one column, the range's
+    /// top) or one more, at the grid's width now; for ⌘= / ⌘− the next of `HomeResize.sizes`; the slider's own size;
+    /// within `range`. Nil for `reset`: the app's default.
     public func cardSize(after step: HomeResize, range: ClosedRange<CGFloat>) -> CGFloat? {
         let m = GridMetrics(), columns = photoColumns
         let size: CGFloat
@@ -114,6 +124,8 @@ public final class HomeBrowserView: NSView {
             size = columns > 1 ? GridLayout.target(columns: columns - 1, width: gridWidth, gap: m.photoGap, edge: m.photoEdge)
                                : range.upperBound
         case .smaller: size = GridLayout.target(columns: columns + 1, width: gridWidth, gap: m.photoGap, edge: m.photoEdge)
+        case .largerSize, .smallerSize: size = HomeResize.nextSize(after: cardSize, larger: step == .largerSize)
+        case .to(let wanted): size = wanted
         case .reset: return nil
         }
         return min(range.upperBound, max(range.lowerBound, size))
@@ -221,8 +233,19 @@ public final class HomeBrowserView: NSView {
     var slowAfter: Duration = .seconds(3)
     private var slowTask: Task<Void, Never>?
     let scroll = GridScrollView()
+    /// Under the grid: the path bar over the status line, on one material; hidden when both rows are.
     private let statusBar = NSVisualEffectView()
+    private let statusRow = NSView()
     private let statusLabel = NSTextField(labelWithString: "")
+    /// Finder's path bar: the crumbs from the places down, a click goes to one. In the window's body, not its toolbar,
+    /// as the HIG has path controls.
+    private let pathRow = NSView()
+    private let pathControl = NSPathControl()
+    private var pathLocations: [BrowserLocation] = []
+    /// The path bar shown under a folder (the app's setting); a source's page has none.
+    public var showsPathBar = true {
+        didSet { if showsPathBar != oldValue { updatePathBar() } }
+    }
     private let message = HomeMessageView()
     /// A source's empty hint, in the middle.
     private let hint = NSTextField(labelWithString: "")
@@ -288,12 +311,32 @@ public final class HomeBrowserView: NSView {
         statusBar.blendingMode = .withinWindow
         statusBar.state = .followsWindowActiveState
         statusBar.translatesAutoresizingMaskIntoConstraints = false
-        statusLabel.font = .systemFont(ofSize: 12)
+        statusLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         statusLabel.textColor = .secondaryLabelColor
         statusLabel.lineBreakMode = .byTruncatingMiddle
         statusLabel.maximumNumberOfLines = 1
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
-        statusBar.addSubview(statusLabel)
+        pathControl.pathStyle = .standard
+        pathControl.controlSize = .small
+        pathControl.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        pathControl.backgroundColor = .clear
+        pathControl.focusRingType = .none
+        pathControl.refusesFirstResponder = true
+        pathControl.target = self
+        pathControl.action = #selector(pathItemClicked(_:))
+        pathControl.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        pathControl.translatesAutoresizingMaskIntoConstraints = false
+        pathRow.addSubview(pathControl)
+        statusRow.addSubview(statusLabel)
+        let line = NSBox()
+        line.boxType = .separator
+        line.translatesAutoresizingMaskIntoConstraints = false
+        statusBar.addSubview(line)
+        let rows = NSStackView(views: [pathRow, statusRow])
+        rows.orientation = .vertical
+        rows.spacing = 0
+        rows.translatesAutoresizingMaskIntoConstraints = false
+        statusBar.addSubview(rows)
         document.addSubview(footer)
         // The grid runs under the toolbar, as in Photos; the skeleton starts below it.
         loading.translatesAutoresizingMaskIntoConstraints = false
@@ -309,10 +352,23 @@ public final class HomeBrowserView: NSView {
             statusBar.leadingAnchor.constraint(equalTo: leadingAnchor),
             statusBar.trailingAnchor.constraint(equalTo: trailingAnchor),
             statusBar.bottomAnchor.constraint(equalTo: bottomAnchor),
-            statusBar.heightAnchor.constraint(equalToConstant: 28),
-            statusLabel.leadingAnchor.constraint(equalTo: statusBar.leadingAnchor, constant: 14),
-            statusLabel.trailingAnchor.constraint(lessThanOrEqualTo: statusBar.trailingAnchor, constant: -14),
-            statusLabel.centerYAnchor.constraint(equalTo: statusBar.centerYAnchor),
+            rows.leadingAnchor.constraint(equalTo: statusBar.leadingAnchor),
+            rows.trailingAnchor.constraint(equalTo: statusBar.trailingAnchor),
+            line.leadingAnchor.constraint(equalTo: statusBar.leadingAnchor),
+            line.trailingAnchor.constraint(equalTo: statusBar.trailingAnchor),
+            line.topAnchor.constraint(equalTo: statusBar.topAnchor),
+            rows.topAnchor.constraint(equalTo: statusBar.topAnchor),
+            rows.bottomAnchor.constraint(equalTo: statusBar.bottomAnchor),
+            pathRow.widthAnchor.constraint(equalTo: rows.widthAnchor),
+            pathRow.heightAnchor.constraint(equalToConstant: 24),
+            pathControl.leadingAnchor.constraint(equalTo: pathRow.leadingAnchor, constant: 10),
+            pathControl.trailingAnchor.constraint(lessThanOrEqualTo: pathRow.trailingAnchor, constant: -8),
+            pathControl.centerYAnchor.constraint(equalTo: pathRow.centerYAnchor),
+            statusRow.widthAnchor.constraint(equalTo: rows.widthAnchor),
+            statusRow.heightAnchor.constraint(equalToConstant: 24),
+            statusLabel.leadingAnchor.constraint(equalTo: statusRow.leadingAnchor, constant: 14),
+            statusLabel.trailingAnchor.constraint(lessThanOrEqualTo: statusRow.trailingAnchor, constant: -14),
+            statusLabel.centerYAnchor.constraint(equalTo: statusRow.centerYAnchor),
             message.centerXAnchor.constraint(equalTo: centerXAnchor), message.centerYAnchor.constraint(equalTo: centerYAnchor),
             hint.centerXAnchor.constraint(equalTo: centerXAnchor), hint.centerYAnchor.constraint(equalTo: centerYAnchor),
             message.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, constant: -32),
@@ -321,6 +377,7 @@ public final class HomeBrowserView: NSView {
             toast.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, constant: -64),
         ])
         toolbar.show(style: style)
+        toolbar.show(cardSize: cardSize, range: cardSizeRange)
         toolbar.onCrumb = { [weak self] location in self?.show(location, selecting: nil) }
         toolbar.onBack = { [weak self] in self?.goBack() }
         toolbar.onForward = { [weak self] in self?.goForward() }
@@ -334,6 +391,7 @@ public final class HomeBrowserView: NSView {
             self.source?.pageFilterChosen(i, in: id)
         }
         toolbar.onFilterText = { [weak self] text in self?.filterChanged { $0.text = text } }
+        toolbar.onPathMenu = { [weak self] in self?.listSiblings() }
         toolbar.onSiblings = { [weak self] i in self?.siblingsAsked(i) }
         toolbar.onSiblingsClosed = { [weak self] in self?.siblingTask?.cancel() }
         toolbar.progress.onPause = { [weak self] on in
@@ -541,6 +599,7 @@ public final class HomeBrowserView: NSView {
         listTask?.cancel()
         isListing = false
         siblingTask?.cancel()
+        dropSiblingLists()
         orderCount += 1
         orderPending = nil
         loadingTask?.cancel()
@@ -803,7 +862,54 @@ public final class HomeBrowserView: NSView {
         toolbar.show(subtitle: line)
         let selected = loading == nil ? BrowserSummary.selection(selectedEntry) : ""
         statusLabel.stringValue = selected.isEmpty ? line : selected
-        statusBar.isHidden = statusLabel.stringValue.isEmpty
+        statusRow.isHidden = statusLabel.stringValue.isEmpty
+        statusBar.isHidden = statusRow.isHidden && pathRow.isHidden
+    }
+
+    /// The path bar from the crumbs: under a folder and the places, not on a source's page.
+    private func updatePathBar() {
+        let crumbs = info == nil && showsPathBar ? path() : []
+        pathLocations = crumbs.map(\.location)
+        pathControl.pathItems = crumbs.indices.map { i in
+            let item = NSPathControlItem()
+            item.title = crumbs[i].title
+            item.image = Self.pathIcon(crumbs[i].location == .places ? .places : i == 1 ? .volume : .folder)
+            return item
+        }
+        pathRow.isHidden = crumbs.isEmpty
+        statusBar.isHidden = statusRow.isHidden && pathRow.isHidden
+    }
+
+    private enum PathIcon { case places, volume, folder }
+
+    /// Finder's icons by kind, not each folder's own: nothing is read from a share to draw the bar.
+    private static func pathIcon(_ kind: PathIcon) -> NSImage {
+        switch kind {
+        case .places: placesIcon
+        case .volume: volumeIcon
+        case .folder: folderIcon
+        }
+    }
+
+    private static let placesIcon = smallIcon(NSImage(named: NSImage.computerName) ?? NSWorkspace.shared.icon(for: .volume))
+    private static let volumeIcon = smallIcon(NSWorkspace.shared.icon(for: .volume))
+    private static let folderIcon = smallIcon(NSWorkspace.shared.icon(for: .folder))
+
+    private static func smallIcon(_ icon: NSImage) -> NSImage {
+        let image = icon.copy() as! NSImage
+        image.size = NSSize(width: 16, height: 16)
+        return image
+    }
+
+    @objc private func pathItemClicked(_ sender: NSPathControl) {
+        guard let item = sender.clickedPathItem, let i = sender.pathItems.firstIndex(of: item) else { return }
+        goToPathItem(i)
+    }
+
+    /// Path bar item `i`: its folder, unless it is the one shown.
+    func goToPathItem(_ i: Int) {
+        guard pathLocations.indices.contains(i), pathLocations[i] != location else { return }
+        show(pathLocations[i], selecting: nil)
     }
 
     var selectionInfoText: String { statusLabel.stringValue }
@@ -1254,6 +1360,7 @@ public final class HomeBrowserView: NSView {
             toolbar.show(path: path(), canBack: history.canGoBack, canForward: history.canGoForward,
                          canUp: location != .places)
         }
+        updatePathBar()
         toolbar.show(sort: sort, keys: sortKeys)
         toolbar.show(pageFilters: info?.pageFilters ?? [], selected: info?.pageFilters.isEmpty == false ? 0 : nil)
         toolbar.show(filter: filter.kind, visible: info == nil && location != .places)
@@ -1263,25 +1370,70 @@ public final class HomeBrowserView: NSView {
 
 
     private var siblingTask: Task<Void, Never>?
+    /// The folders beside each crumb, asked for one crumb after another (nearest first) as the path menu opens, and the
+    /// ones that are in. A submenu shows its folders at once when they are in: an open menu does not widen for items
+    /// added late, so a reply filled in after `Loading…` came out with every name cut in the middle.
+    private var siblingLists: [Int: Task<[BrowserEntry], Never>] = [:]
+    private var siblingsIn: [Int: [BrowserEntry]] = [:]
+    private var siblingListsGeneration = -1
 
-    /// The › before crumb `i`: its menu opens at once, the folders beside that crumb (in their parent's sort) fill it
-    /// when the source answers; a reply after a move or after the menu closed is dropped.
-    private func siblingsAsked(_ i: Int) {
+    /// The path menu opens: the folders beside its crumbs are asked for again while the pointer travels to one.
+    private func listSiblings() {
+        dropSiblingLists()
+        for i in path().indices.reversed() { _ = siblingList(i) }
+    }
+
+    private func dropSiblingLists() {
+        siblingLists.values.forEach { $0.cancel() }
+        siblingLists = [:]
+        siblingsIn = [:]
+    }
+
+    /// The folders beside crumb `i` (in their parent's sort), asked for after the crumb below it; nil for the first.
+    private func siblingList(_ i: Int) -> Task<[BrowserEntry], Never>? {
+        if siblingListsGeneration != generation {
+            dropSiblingLists()
+            siblingListsGeneration = generation
+        }
+        if let list = siblingLists[i] { return list }
         let crumbs = path()
-        guard crumbs.indices.contains(i), i > 0 else { return }
-        let current = crumbs[i].location, parent = crumbs[i - 1].location
-        let generation = generation
-        siblingTask?.cancel()
-        siblingTask = Task { @MainActor [weak self] in
-            guard let source = self?.source else { return }
+        guard crumbs.indices.contains(i), i > 0 else { return nil }
+        let parent = crumbs[i - 1].location
+        let before = siblingLists[i + 1]   // one listing at a time
+        let list = Task { @MainActor [weak self] () -> [BrowserEntry] in
+            _ = await before?.value
+            guard !Task.isCancelled, let source = self?.source else { return [] }
             let entries: [BrowserEntry]
             switch parent {
             case .places, .source: entries = await source.places()
             case .folder(let url): entries = source.sort(for: parent).order((try? await source.folders(in: url)) ?? [])   // an error: none
             }
+            if !Task.isCancelled, self?.siblingLists[i] != nil { self?.siblingsIn[i] = entries }
+            return entries
+        }
+        siblingLists[i] = list
+        return list
+    }
+
+    /// The › before crumb `i`: its menu opens at once, with the folders beside that crumb when they are in, else with
+    /// `Loading…` until the source answers; a reply after a move or after the menu closed is dropped.
+    private func siblingsAsked(_ i: Int) {
+        let crumbs = path()
+        guard crumbs.indices.contains(i), let list = siblingList(i) else { return }
+        let current = crumbs[i].location
+        let shown = { (entries: [BrowserEntry]) in
+            entries.map { (title: $0.name, location: BrowserLocation.folder($0.url), current: BrowserLocation.folder($0.url) == current) }
+        }
+        siblingTask?.cancel()
+        if let entries = siblingsIn[i] {
+            toolbar.showSiblings(shown(entries), at: i)
+            return
+        }
+        let generation = generation
+        siblingTask = Task { @MainActor [weak self] in
+            let entries = await list.value
             guard let self, !Task.isCancelled, self.generation == generation else { return }
-            self.toolbar.updateSiblings(entries.map { (title: $0.name, location: .folder($0.url),
-                                                       current: BrowserLocation.folder($0.url) == current) })
+            self.toolbar.updateSiblings(shown(entries))
         }
         toolbar.showSiblings(nil, at: i)
     }
@@ -1292,7 +1444,7 @@ public final class HomeBrowserView: NSView {
         var at = location
         for _ in 0..<64 {
             guard case .folder(let url) = at else { break }
-            crumbs.append((url.lastPathComponent, at))
+            crumbs.append((url.path == "/" ? FileManager.default.displayName(atPath: "/") : url.lastPathComponent, at))
             at = source?.parent(of: url) ?? .places
         }
         crumbs.append(("Places", .places))
@@ -1833,6 +1985,8 @@ public final class HomeBrowserView: NSView {
     var headerTitles: [String] { shownHeaders.map(\.title) }
     var shownHeaders: [GridHeader] { headers.filter { !$0.isHidden } }
     var footerLines: [String] { footer.lines }
+    /// The path bar's items, empty while it is hidden.
+    var pathBarTitles: [String] { pathRow.isHidden ? [] : pathControl.pathItems.map(\.title) }
     var scrollOffset: CGFloat { scroll.contentView.bounds.origin.y }
     var gridContentHeight: CGFloat { document.frame.height }
     var gridContentWidth: CGFloat { document.frame.width }

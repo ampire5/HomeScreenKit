@@ -162,6 +162,21 @@ import Testing
         #expect(view.location == .places)
     }
 
+    @Test func pathBarShowsTheCrumbsAndGoesToOne() async {
+        let source = FakeHomeSource()
+        let view = make(source, at: .folder(URL(fileURLWithPath: "/Volumes/T/x/y")))
+        #expect(view.pathBarTitles == ["Places", "T", "x", "y"])
+        view.goToPathItem(2)
+        #expect(view.location == .folder(x))
+        #expect(view.pathBarTitles == ["Places", "T", "x"])
+        view.showsPathBar = false
+        #expect(view.pathBarTitles.isEmpty)
+        view.showsPathBar = true
+        view.goToPathItem(0)
+        #expect(view.location == .places)
+        #expect(view.pathBarTitles == ["Places"])
+    }
+
     private var nested: URL { URL(fileURLWithPath: "/Volumes/T/x/b") }
     private var siblings: [BrowserEntry] {
         ["c", "a", "b"].map { BrowserFixtures.folder($0) }
@@ -175,7 +190,7 @@ import Testing
         await settle { view.toolbar.siblingTitles == ["a", "b", "c"] }
         #expect(view.toolbar.siblingTitles == ["a", "b", "c"])
         #expect(view.toolbar.siblingChecked == [false, true, false])
-        #expect(source.foldersAsked.map(\.standardizedFileURL.path) == [x.path])
+        #expect(source.foldersAsked.first?.standardizedFileURL.path == x.path)   // the nearest crumb's first
         view.toolbar.chooseSibling(2)
         #expect(view.location == .folder(x.appendingPathComponent("c")))
     }
@@ -199,15 +214,32 @@ import Testing
         view.toolbar.clickSiblings(3)
         #expect(view.toolbar.siblingTitles == ["Loading…"])
         await settle { !source.foldersAsked.isEmpty }
+        #expect(source.foldersAsked.count == 1)   // the submenu waits on the path menu's listing, not a second one
         source.answerFolders(siblings)
         await settle { view.toolbar.siblingTitles == ["a", "b", "c"] }
         #expect(view.toolbar.siblingTitles == ["a", "b", "c"])
-        view.toolbar.clickSiblings(3)
-        await settle { source.foldersAsked.count == 2 }
+        view.toolbar.clickSiblings(3)   // the path menu again: listed again
+        await settle { source.foldersAsked.last?.standardizedFileURL.path == x.path && source.foldersAsked.count > 2 }
         view.toolbar.closeSiblings()
         source.answerFolders([BrowserFixtures.folder("z")])
         await settle()
         #expect(view.toolbar.siblingTitles != ["z"])
+    }
+
+    /// The folders asked for as the path menu opens: a submenu opened after they are in has them at once, so it is
+    /// measured with its names and none is cut.
+    @Test func siblingMenuListedWhenPathMenuOpens() async {
+        let source = FakeHomeSource()
+        source.folderReplies[x.path] = siblings
+        source.folderReplies[URL(fileURLWithPath: "/Volumes/T").path] = [BrowserFixtures.folder("x")]
+        let view = make(source, at: .folder(nested))
+        view.toolbar.openPathMenu()
+        await settle { source.foldersAsked.count == 2 }
+        #expect(source.foldersAsked.map(\.standardizedFileURL.path) == [x.path, "/Volumes/T"])   // nearest first
+        await settle()
+        view.toolbar.openSiblingMenu(atPathItem: 0)   // the › before "b", without opening the path menu again
+        #expect(view.toolbar.siblingTitles == ["a", "b", "c"])
+        #expect(source.foldersAsked.count == 2)
     }
 
     @Test func sortChangeCallsSetSort() async {
@@ -399,18 +431,20 @@ import Testing
     @Test func partsShowWhileLaterOnesOrder() async {
         let source = FakeHomeSource()
         let view = make(source)
-        let all = BrowserFixtures.files(50_000)
+        // Both parts over `orderInlineLimit`, so both order off the main thread; 10 000 rather than 50 000: under
+        // Rosetta on CI, beside the other suites, ordering 50 000 took over 39 s (2026-10-26).
+        let all = BrowserFixtures.files(10_000)
         source.yield(x, Array(all.prefix(3_000)), complete: false)
         source.yield(x, all, complete: false)
         var seen: Set<Int> = []
-        // Up to 30 s, as `settle`: ordering 50 000 entries alongside the other suites on a CI machine took over 10.
+        // Up to 30 s, as `settle`.
         let deadline = Date().addingTimeInterval(30)
-        while view.entries.count != 50_000, Date() < deadline {
+        while view.entries.count != 10_000, Date() < deadline {
             seen.insert(view.entries.count)
             try? await Task.sleep(for: .milliseconds(1))
         }
         #expect(seen.contains(3_000))   // the first part shows, not dropped for the next one
-        #expect(view.entries.count == 50_000)
+        #expect(view.entries.count == 10_000)
     }
 }
 

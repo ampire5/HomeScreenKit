@@ -26,6 +26,8 @@ import HomeScreenModel
     var onFilterText: ((String) -> Void)?
     /// Esc in the name field: it is cleared and the keys go back to the grid.
     var onFilterEnd: (() -> Void)?
+    /// The path menu is opening: the view may start on the folders its submenus will list.
+    var onPathMenu: (() -> Void)?
     /// The sibling menu of path item `i` is opening: the view fills it with the folders beside that crumb.
     var onSiblings: ((Int) -> Void)?
     /// The sibling menu closed: a reply still on its way is not wanted.
@@ -78,10 +80,16 @@ import HomeScreenModel
     }
 
     private(set) var windowTitle = "" {
-        didSet { titleView.title = windowTitle }
+        didSet {
+            titleView.title = windowTitle
+            fitTitleItem()
+        }
     }
     private(set) var subtitleText = "" {
-        didSet { titleView.subtitle = subtitleText }
+        didSet {
+            titleView.subtitle = subtitleText
+            fitTitleItem()
+        }
     }
 
     override init() {
@@ -91,6 +99,7 @@ import HomeScreenModel
         nsToolbar.displayMode = .iconOnly
         nsToolbar.allowsUserCustomization = false
         nsToolbar.autosavesConfiguration = false
+        nsToolbar.centeredItemIdentifiers = [HomeToolbarItem.filter.identifier]   // the title's length does not move it
         filterControl.segmentStyle = .automatic
         filterControl.controlSize = .regular
         filterControl.target = self
@@ -156,8 +165,12 @@ import HomeScreenModel
             toolbarItem.view = sortControl
             return toolbarItem
         case .zoom:
-            return group(id, [("minus", "Smaller", "Smaller (⌘−)"), ("plus", "Larger", "Larger (⌘=)")], mode: .momentary,
-                         label: "Zoom", tip: "Smaller or Larger", action: #selector(zoomClicked(_:)))
+            let item = NSToolbarItem(itemIdentifier: id)
+            item.label = "Card Size"
+            item.toolTip = "Card size: − and + (⌘− ⌘=) go a size at a time, the slider a column"
+            item.view = zoomView
+            item.isBordered = true   // a capsule, as the items beside it
+            return item
         case .progress:
             let ring = NSToolbarItem(itemIdentifier: id)
             ring.label = "Thumbnails"
@@ -186,14 +199,14 @@ import HomeScreenModel
         }
     }
 
-    /// The location's name over its summary, as the title and subtitle of a Photos window: plain text on the toolbar, in
-    /// the system's label colours, between two widths so a short subtitle is never cut and a long path is.
+    /// The location's name over its summary, as the title and subtitle of a Finder window: plain text on the toolbar, in
+    /// the system's label colours, as wide as its text where the toolbar has the room; it gives way down to `minWidth`
+    /// (cut at the tail) before any item goes to the overflow.
     @MainActor private final class HomeToolbarTitleView: NSView {
         private let titleLabel = NSTextField(labelWithString: "")
         private let subtitleLabel = NSTextField(labelWithString: "")
         private let stack = NSStackView()
-        private static let minWidth: CGFloat = 150
-        private static let maxWidth: CGFloat = 300
+        static let minWidth: CGFloat = 150
 
         var title = "" {
             didSet {
@@ -232,19 +245,32 @@ import HomeScreenModel
                 stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
                 stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
                 stack.centerYAnchor.constraint(equalTo: centerYAnchor),
-                widthAnchor.constraint(greaterThanOrEqualToConstant: Self.minWidth),
-                widthAnchor.constraint(lessThanOrEqualToConstant: Self.maxWidth),
             ])
         }
 
         required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
+        /// The whole text's width, with the stack's margins.
+        var textWidth: CGFloat {
+            let subtitleWidth = subtitleLabel.isHidden ? 0 : subtitleLabel.intrinsicContentSize.width
+            return ceil(max(titleLabel.intrinsicContentSize.width, subtitleWidth)) + 8
+        }
+
         override var intrinsicContentSize: NSSize {
             let titleSize = titleLabel.fittingSize
             let subtitleSize = subtitleLabel.isHidden ? .zero : subtitleLabel.fittingSize
-            return NSSize(width: max(titleSize.width, subtitleSize.width) + 8,
-                          height: titleSize.height + subtitleSize.height)
+            return NSSize(width: NSView.noIntrinsicMetric, height: titleSize.height + subtitleSize.height)
         }
+    }
+
+    /// The title item is flexible, from `minWidth` up to its whole text: the toolbar gives it the room beside it and
+    /// takes it back before an item goes to the overflow. A view's constraints do not do this (the toolbar sizes a view
+    /// to its fitting size, measured 2026-10-26 on macOS 27), the item's own range does.
+    private func fitTitleItem() {
+        guard let item = items[.title] else { return }
+        let height = titleView.intrinsicContentSize.height
+        item.minSize = NSSize(width: HomeToolbarTitleView.minWidth, height: height)
+        item.maxSize = NSSize(width: max(HomeToolbarTitleView.minWidth, titleView.textWidth), height: height)
     }
 
     private func symbol(_ name: String, _ description: String) -> NSImage {
@@ -434,7 +460,7 @@ import HomeScreenModel
     }
 
     func clickZoom(_ i: Int) {
-        if i == 0 { onZoom?(.smaller) } else if i == 1 { onZoom?(.larger) }
+        if i == 0 { onZoom?(.smallerSize) } else if i == 1 { onZoom?(.largerSize) }
     }
 
     func clickCardStyle(_ i: Int) {
@@ -473,7 +499,61 @@ import HomeScreenModel
     @objc private func filterSegmentClicked(_ sender: NSSegmentedControl) { clickKind(sender.selectedSegment) }
     @objc private func sortSegmentClicked(_ sender: NSSegmentedControl) { clickSort(sender.selectedSegment) }
     @objc private func historyClicked(_ sender: NSToolbarItemGroup) { clickHistory(sender.selectedIndex) }
-    @objc private func zoomClicked(_ sender: NSToolbarItemGroup) { clickZoom(sender.selectedIndex) }
+    @objc private func zoomButtonClicked(_ sender: NSButton) { clickZoom(sender.tag) }
+
+    /// A drag re-tiles the grid at every whole point: 4.9 ms median, 12.8 ms at worst of main-thread CPU per step for
+    /// 5000 photos in a 2400 pt window (debug build, Apple Silicon, 2026-10-26), within the 50 ms of a setting.
+    @objc private func zoomSliderMoved(_ sender: NSSlider) {
+        let size = exp(sender.doubleValue).rounded()
+        guard size != shownCardSize else { return }
+        shownCardSize = size
+        onZoom?(.to(size))
+    }
+
+    /// − and + about a slider of the card size; the slider runs on a log scale, so each column is about as far as the
+    /// next.
+    private lazy var zoomView: NSView = {
+        let minus = zoomButton("minus", "Smaller (⌘−)", tag: 0)
+        let plus = zoomButton("plus", "Larger (⌘=)", tag: 1)
+        zoomSlider.controlSize = .small
+        zoomSlider.isContinuous = true
+        zoomSlider.target = self
+        zoomSlider.action = #selector(zoomSliderMoved(_:))
+        zoomSlider.setAccessibilityLabel("Card size")
+        let stack = NSStackView(views: [minus, zoomSlider, plus])
+        stack.spacing = 4
+        stack.edgeInsets = NSEdgeInsets(top: 0, left: 8, bottom: 0, right: 8)
+        zoomSlider.widthAnchor.constraint(equalToConstant: 96).isActive = true
+        return stack
+    }()
+
+    private let zoomSlider = NSSlider()
+    /// The size the slider last showed or sent: a drag sends a size only when it changes.
+    private var shownCardSize: CGFloat = 0
+
+    private func zoomButton(_ symbolName: String, _ tip: String, tag: Int) -> NSButton {
+        let button = NSButton(image: symbol(symbolName, tip), target: self, action: #selector(zoomButtonClicked(_:)))
+        button.isBordered = false
+        button.contentTintColor = .secondaryLabelColor
+        button.tag = tag
+        button.toolTip = tip
+        return button
+    }
+
+    /// The slider at `size` within `range`.
+    func show(cardSize size: CGFloat, range: ClosedRange<CGFloat>) {
+        zoomSlider.minValue = log(range.lowerBound)
+        zoomSlider.maxValue = log(range.upperBound)
+        zoomSlider.doubleValue = log(size)
+        shownCardSize = size.rounded()
+    }
+
+    var zoomSliderSize: CGFloat { exp(zoomSlider.doubleValue) }
+
+    func dragZoomSlider(to size: CGFloat) {
+        zoomSlider.doubleValue = log(size)
+        zoomSliderMoved(zoomSlider)
+    }
     @objc private func cardsClicked(_ sender: NSToolbarItemGroup) { clickCardStyle(sender.selectedIndex) }
     // MARK: Menus
 
@@ -579,6 +659,7 @@ import HomeScreenModel
     func menuNeedsUpdate(_ menu: NSMenu) {
         if menu === pathMenu {
             fillPathMenu()
+            onPathMenu?()
         } else if let sibling = menu as? SiblingMenu {
             siblingMenu = sibling
             onSiblings?(sibling.crumb)

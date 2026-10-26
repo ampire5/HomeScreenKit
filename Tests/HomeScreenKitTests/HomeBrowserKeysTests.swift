@@ -182,7 +182,7 @@ import Testing
         #expect(view.handleKey(key(24, "=", [.command])))
         #expect(view.handleKey(key(27, "-", [.command])))
         #expect(view.handleKey(key(29, "0", [.command])))
-        #expect(steps == [.larger, .smaller, .reset])
+        #expect(steps == [.largerSize, .smallerSize, .reset])
     }
 
     @Test func otherKeysAreNotTaken() async {

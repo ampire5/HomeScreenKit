@@ -116,12 +116,18 @@ public final class HomeView: NSView {
         split.setPosition(target, ofDividerAt: 0)
         // Put on a split not yet at its size (Home shown in a window still being laid out), the divider stops at the
         // sidebar's minimum: tried again when the split's width changes.
-        wantsSidebarWidth = abs(sidebarView.frame.width - target) >= 1
+        wantsSidebarWidth = abs(sidebarPaneWidth - target) >= 1
         triedAtWidth = wantsSidebarWidth ? split.bounds.width : nil
     }
 
     /// The divider moved: when it is the user's drag (`isUserDrag`, the width differs from the kept one) the new width
     /// is kept, and told to the app once the pointer has been still for a moment.
+    /// The sidebar's pane, up to the divider: the width the divider is set to and a drag leaves. Not the sidebar view's:
+    /// on macOS 26 its glass floats 8 pt inside the pane (228 in a 236 pane, CI 2026-10-26), on macOS 27 it fills it.
+    var sidebarPaneWidth: CGFloat {
+        splitController.splitView.arrangedSubviews.first?.frame.width ?? sidebarView.frame.width
+    }
+
     private func splitDidResize() {
         guard !sidebarItem.isCollapsed else { return }
         guard isUserDrag() else {
@@ -129,7 +135,7 @@ public final class HomeView: NSView {
             if wantsSidebarWidth { needsLayout = true }
             return
         }
-        let width = sidebarView.frame.width.rounded()
+        let width = sidebarPaneWidth.rounded()
         guard width > 0, abs(width - min(sidebarWidth, widestSidebar)) >= 1, window?.inLiveResize != true else { return }
         isAdoptingDrag = true
         sidebarWidth = width

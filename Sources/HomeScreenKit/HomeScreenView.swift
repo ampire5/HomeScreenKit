@@ -318,8 +318,8 @@ public final class HomeScreenView: NSView {
         return true
     }
 
-    /// ⌘= (and ⌘+, keypad +) larger, ⌘− smaller, ⌘0 the default size: a browser's zoom keys.
-    static let resizeKeys: [UInt16: HomeResize] = [24: .larger, 69: .larger, 27: .smaller, 78: .smaller,
+    /// ⌘= (and ⌘+, keypad +) the next larger size, ⌘− the next smaller, ⌘0 the default: a browser's zoom keys.
+    static let resizeKeys: [UInt16: HomeResize] = [24: .largerSize, 69: .largerSize, 27: .smallerSize, 78: .smallerSize,
                                                             29: .reset, 82: .reset]
 
     /// Size steps from a wheel or a mouse's side wheel: positive larger; a step for each whole notch.
