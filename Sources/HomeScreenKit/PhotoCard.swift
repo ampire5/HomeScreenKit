@@ -195,7 +195,8 @@ final class PhotoCard: GridCard {
     }
 
     private var showsStrip: Bool {
-        guard isHovered, showsNames else { return false }
+        // A video's picture carries its length chip and progress; its facts are the line under its name.
+        guard isHovered, showsNames, !showsFacts else { return false }
         let text = stripText
         return !text.format.isEmpty || !text.size.isEmpty
     }
@@ -332,10 +333,13 @@ final class PhotoCard: GridCard {
             nameLabel.font = Chrome.Text.font(.label)
             nameLabel.textColor = showsFactsLine ? Chrome.Palette.window.label : Chrome.Palette.window.secondaryLabel
             nameLabel.shadow = nil
-            nameLabel.frame = CGRect(x: 0, y: boxHeight + 3, width: bounds.width, height: 16)
+            // Under the picture as drawn: a picture fitted narrower than its slot (Aspect) has its text at its own edges.
+            let x = style == .aspect ? rect.minX : 0
+            let width = max(0, bounds.width - 2 * x)
+            nameLabel.frame = CGRect(x: x, y: boxHeight + 3, width: width, height: 16)
             factsLabel.isHidden = !(named && names == .below && showsFactsLine) || factsLabel.stringValue.isEmpty
             factsLabel.textColor = Chrome.Palette.window.secondaryLabel
-            factsLabel.frame = CGRect(x: 0, y: boxHeight + 3 + 16, width: bounds.width, height: 14)
+            factsLabel.frame = CGRect(x: x, y: boxHeight + 3 + 16, width: width, height: 14)
         }
         layoutFacts(in: rect)
         CATransaction.commit()
