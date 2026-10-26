@@ -163,6 +163,35 @@ import Testing
         #expect(card.strip?.isHidden == true)
     }
 
+    /// The viewer hides Home, and the pool hides cards put aside: neither sends `mouseExited` (review, 2).
+    @Test func stripHidesWhenHidden() {
+        let item = HomeCardItem(id: "a", title: "a.jxl", tooltip: "", symbol: "photo", format: "JXL", bytes: 1000)
+        let parent = NSView(frame: CGRect(x: 0, y: 0, width: 400, height: 400))
+        let card = photo(.square, item: item)
+        parent.addSubview(card)
+        card.isHovered = true
+        parent.isHidden = true
+        #expect(!card.isHovered)
+        #expect(card.strip?.isHidden == true)
+        parent.isHidden = false
+        card.isHovered = true
+        card.isHidden = true   // put aside, then popped for the same id
+        card.isHidden = false
+        card.show(item)
+        #expect(!card.isHovered)
+    }
+
+    /// The selection ring stays above the strip: a hovered card is the selected one (review, 3).
+    @Test func ringAboveStrip() {
+        let card = photo(.square, item: HomeCardItem(id: "a", title: "a.jxl", tooltip: "", symbol: "photo",
+                                                     format: "JXL", bytes: 1000))
+        card.isSelected = true
+        card.isHovered = true
+        card.layoutSubtreeIfNeeded()
+        let strip = try! #require(card.strip?.layer)
+        #expect(card.ring.zPosition > strip.zPosition)
+    }
+
     @Test func nameAboveStrip() {
         let card = photo(.square, item: HomeCardItem(id: "a", title: "a.jxl", tooltip: "", symbol: "photo",
                                                      format: "JXL", bytes: 1000))

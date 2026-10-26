@@ -50,6 +50,8 @@ final class PhotoCard: GridCard {
         layer?.addSublayer(shade)
         ring.isHidden = true
         ring.borderWidth = Self.ringWidth
+        // Above the strip, a subview whose layer comes later: a hovered card is the selected one.
+        ring.zPosition = 1
         // Inside the ring, on the photo's own pixels: dark whatever the window is.
         hairline.borderColor = NSColor(white: 0, alpha: 0.35).cgColor
         hairline.borderWidth = 1
@@ -127,6 +129,12 @@ final class PhotoCard: GridCard {
     override func mouseExited(with event: NSEvent) {
         isHovered = false
         super.mouseExited(with: event)
+    }
+
+    /// Hidden (Home behind the viewer, or the card put aside in the pool): no `mouseExited` comes, so the hover ends here.
+    override func viewDidHide() {
+        super.viewDidHide()
+        isHovered = false
     }
 
     private var showsStrip: Bool {
