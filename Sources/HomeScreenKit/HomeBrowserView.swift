@@ -299,14 +299,14 @@ public final class HomeBrowserView: NSView {
         statusBar.blendingMode = .withinWindow
         statusBar.state = .followsWindowActiveState
         statusBar.translatesAutoresizingMaskIntoConstraints = false
-        statusLabel.font = .systemFont(ofSize: 12)
+        statusLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         statusLabel.textColor = .secondaryLabelColor
         statusLabel.lineBreakMode = .byTruncatingMiddle
         statusLabel.maximumNumberOfLines = 1
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
         pathControl.pathStyle = .standard
         pathControl.controlSize = .small
-        pathControl.font = .systemFont(ofSize: 12)
+        pathControl.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         pathControl.backgroundColor = .clear
         pathControl.focusRingType = .none
         pathControl.refusesFirstResponder = true
@@ -316,6 +316,10 @@ public final class HomeBrowserView: NSView {
         pathControl.translatesAutoresizingMaskIntoConstraints = false
         pathRow.addSubview(pathControl)
         statusRow.addSubview(statusLabel)
+        let line = NSBox()
+        line.boxType = .separator
+        line.translatesAutoresizingMaskIntoConstraints = false
+        statusBar.addSubview(line)
         let rows = NSStackView(views: [pathRow, statusRow])
         rows.orientation = .vertical
         rows.spacing = 0
@@ -338,15 +342,18 @@ public final class HomeBrowserView: NSView {
             statusBar.bottomAnchor.constraint(equalTo: bottomAnchor),
             rows.leadingAnchor.constraint(equalTo: statusBar.leadingAnchor),
             rows.trailingAnchor.constraint(equalTo: statusBar.trailingAnchor),
+            line.leadingAnchor.constraint(equalTo: statusBar.leadingAnchor),
+            line.trailingAnchor.constraint(equalTo: statusBar.trailingAnchor),
+            line.topAnchor.constraint(equalTo: statusBar.topAnchor),
             rows.topAnchor.constraint(equalTo: statusBar.topAnchor),
             rows.bottomAnchor.constraint(equalTo: statusBar.bottomAnchor),
             pathRow.widthAnchor.constraint(equalTo: rows.widthAnchor),
-            pathRow.heightAnchor.constraint(equalToConstant: 26),
-            pathControl.leadingAnchor.constraint(equalTo: pathRow.leadingAnchor, constant: 8),
+            pathRow.heightAnchor.constraint(equalToConstant: 24),
+            pathControl.leadingAnchor.constraint(equalTo: pathRow.leadingAnchor, constant: 10),
             pathControl.trailingAnchor.constraint(lessThanOrEqualTo: pathRow.trailingAnchor, constant: -8),
             pathControl.centerYAnchor.constraint(equalTo: pathRow.centerYAnchor),
             statusRow.widthAnchor.constraint(equalTo: rows.widthAnchor),
-            statusRow.heightAnchor.constraint(equalToConstant: 28),
+            statusRow.heightAnchor.constraint(equalToConstant: 24),
             statusLabel.leadingAnchor.constraint(equalTo: statusRow.leadingAnchor, constant: 14),
             statusLabel.trailingAnchor.constraint(lessThanOrEqualTo: statusRow.trailingAnchor, constant: -14),
             statusLabel.centerYAnchor.constraint(equalTo: statusRow.centerYAnchor),
@@ -850,15 +857,35 @@ public final class HomeBrowserView: NSView {
     private func updatePathBar() {
         let crumbs = info == nil && showsPathBar ? path() : []
         pathLocations = crumbs.map(\.location)
-        pathControl.pathItems = crumbs.map { crumb in
+        pathControl.pathItems = crumbs.indices.map { i in
             let item = NSPathControlItem()
-            item.title = crumb.title
-            item.image = NSImage(systemSymbolName: crumb.location == .places ? "externaldrive" : "folder",
-                                 accessibilityDescription: nil)
+            item.title = crumbs[i].title
+            item.image = Self.pathIcon(crumbs[i].location == .places ? .places : i == 1 ? .volume : .folder)
             return item
         }
         pathRow.isHidden = crumbs.isEmpty
         statusBar.isHidden = statusRow.isHidden && pathRow.isHidden
+    }
+
+    private enum PathIcon { case places, volume, folder }
+
+    /// Finder's icons by kind, not each folder's own: nothing is read from a share to draw the bar.
+    private static func pathIcon(_ kind: PathIcon) -> NSImage {
+        switch kind {
+        case .places: placesIcon
+        case .volume: volumeIcon
+        case .folder: folderIcon
+        }
+    }
+
+    private static let placesIcon = smallIcon(NSImage(named: NSImage.computerName) ?? NSWorkspace.shared.icon(for: .volume))
+    private static let volumeIcon = smallIcon(NSWorkspace.shared.icon(for: .volume))
+    private static let folderIcon = smallIcon(NSWorkspace.shared.icon(for: .folder))
+
+    private static func smallIcon(_ icon: NSImage) -> NSImage {
+        let image = icon.copy() as! NSImage
+        image.size = NSSize(width: 16, height: 16)
+        return image
     }
 
     @objc private func pathItemClicked(_ sender: NSPathControl) {
@@ -1404,7 +1431,7 @@ public final class HomeBrowserView: NSView {
         var at = location
         for _ in 0..<64 {
             guard case .folder(let url) = at else { break }
-            crumbs.append((url.lastPathComponent, at))
+            crumbs.append((url.path == "/" ? FileManager.default.displayName(atPath: "/") : url.lastPathComponent, at))
             at = source?.parent(of: url) ?? .places
         }
         crumbs.append(("Places", .places))
