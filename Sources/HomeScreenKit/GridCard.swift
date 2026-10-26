@@ -9,6 +9,8 @@ class GridCard: NSView {
     var onHover: (() -> Void)?
     var onMenu: ((String) -> Void)?
     var isSelected = false { didSet { selectionChanged() } }
+    /// What the files are called in the card's facts (`FileStyle.noun`), set by the browser.
+    var fileNoun = "photo" { didSet { if fileNoun != oldValue { itemChanged() } } }
     private(set) var item: HomeCardItem
     var image: CGImage? { didSet { imageChanged() } }
 

@@ -42,13 +42,13 @@ public enum BrowserSummary {
     }
 
     /// Stable details for the selected card, shown in the browser's fixed bottom status area.
-    public static func selection(_ entry: BrowserEntry?) -> String {
+    public static func selection(_ entry: BrowserEntry?, fileNoun: String = "photo") -> String {
         guard let entry else { return "" }
         if entry.isFile { return subtitle(selected: entry, entries: [], loading: nil) }
 
         var parts = [entry.name]
         if let summary = entry.summary {
-            if let photos = summary.photos { parts.append(count(photos, "photo")) }
+            if let photos = summary.photos { parts.append(count(photos, fileNoun)) }
             if let folders = summary.folders { parts.append(count(folders, "folder")) }
             if let bytes = summary.bytes, bytes > 0 {
                 parts.append(ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file))
@@ -62,7 +62,7 @@ public enum BrowserSummary {
             parts.append(subtitle)
             if let date = entry.date { parts.append(dateFormat.string(from: date)) }
         } else {
-            if let photos = entry.count { parts.append(count(photos, "photo")) }
+            if let photos = entry.count { parts.append(count(photos, fileNoun)) }
             if let date = entry.date { parts.append(dateFormat.string(from: date)) }
         }
         return parts.joined(separator: " · ")

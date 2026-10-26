@@ -877,7 +877,7 @@ public final class HomeBrowserView: NSView {
         if loading == nil, !line.isEmpty, let room = VolumeSpace.line(free: freeSpace[location]) { line += " · " + room }
         if isChecking { line = line.isEmpty ? "Checking…" : "Checking… · " + line }
         toolbar.show(subtitle: line)
-        let selected = loading == nil ? BrowserSummary.selection(selectedEntry) : ""
+        let selected = loading == nil ? BrowserSummary.selection(selectedEntry, fileNoun: files.noun) : ""
         statusLabel.stringValue = selected.isEmpty ? line : selected
         statusRow.isHidden = statusLabel.stringValue.isEmpty
         statusBar.isHidden = statusRow.isHidden && pathRow.isHidden
@@ -1720,6 +1720,7 @@ public final class HomeBrowserView: NSView {
                 if wantedIDs.contains(entry.id) { newlyConfigured = true }
             }
             let card = live[i]!
+            card.fileNoun = files.noun
             let section = grid.section(of: i)
             if let photo = card as? PhotoCard {
                 photo.style = style
@@ -1865,7 +1866,7 @@ public final class HomeBrowserView: NSView {
         var subtitle: String?
         switch entry.kind {
         case .folder, .archive:
-            subtitle = entry.count.map { $0 == 1 ? "1 photo" : "\($0) photos" }
+            subtitle = entry.count.map { CardSummaryText.count($0, files.noun) }
         case .file:
             switch (shownSort ?? sort).key {
             case .name: subtitle = nil

@@ -74,7 +74,7 @@ final class PosterCard: FolderCard {
             progressWithRecency = nil
             return
         }
-        insideLabel.stringValue = CardSummaryText.facts(s, pages: holdsPages, withInside: withInside)
+        insideLabel.stringValue = CardSummaryText.facts(s, pages: holdsPages, withInside: withInside, noun: fileNoun)
         yearsLabel.stringValue = CardSummaryText.years(s) ?? ""
         let words = [CardSummaryText.span(s), CardSummaryText.viewed(s)].compactMap { $0 }
         progressWords = words.joined(separator: " · ")

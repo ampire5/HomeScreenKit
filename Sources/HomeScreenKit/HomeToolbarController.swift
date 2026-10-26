@@ -155,7 +155,7 @@ import HomeScreenModel
         case .filter:
             let toolbarItem = NSToolbarItem(itemIdentifier: id)
             toolbarItem.label = "Filter"
-            toolbarItem.toolTip = "Show all, folders or photos"
+            toolbarItem.toolTip = "Show all, folders or \(filesTitle.lowercased())"
             toolbarItem.view = filterControl
             return toolbarItem
         case .sort:

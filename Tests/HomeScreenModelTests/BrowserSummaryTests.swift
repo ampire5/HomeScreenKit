@@ -81,4 +81,12 @@ import Testing
         #expect(BrowserSummary.subtitle(selected: nil, entries: [file("a.mp4")], loading: nil, fileNoun: "video") == "1 video")
         #expect(FileStyle.videos.heading == "Videos" && FileStyle.photos.heading == "Photos")
     }
+
+    /// A folder's facts and the status line name a video app's files by their noun.
+    @Test func cardFactsUseTheFilesNoun() {
+        let s = CardSummary(photos: 12, folders: 2, bytes: 0)
+        #expect(CardSummaryText.facts(s, pages: false, noun: "video").hasPrefix("12 videos · 2 folders"))
+        let folder = BrowserEntry(url: URL(fileURLWithPath: "/f/x"), name: "x", kind: .folder, summary: CardSummary(photos: 1))
+        #expect(BrowserSummary.selection(folder, fileNoun: "video").contains("1 video"))
+    }
 }
