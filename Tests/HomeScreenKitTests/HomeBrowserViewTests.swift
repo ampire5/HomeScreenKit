@@ -162,6 +162,21 @@ import Testing
         #expect(view.location == .places)
     }
 
+    @Test func pathBarShowsTheCrumbsAndGoesToOne() async {
+        let source = FakeHomeSource()
+        let view = make(source, at: .folder(URL(fileURLWithPath: "/Volumes/T/x/y")))
+        #expect(view.pathBarTitles == ["Places", "T", "x", "y"])
+        view.goToPathItem(2)
+        #expect(view.location == .folder(x))
+        #expect(view.pathBarTitles == ["Places", "T", "x"])
+        view.showsPathBar = false
+        #expect(view.pathBarTitles.isEmpty)
+        view.showsPathBar = true
+        view.goToPathItem(0)
+        #expect(view.location == .places)
+        #expect(view.pathBarTitles == ["Places"])
+    }
+
     private var nested: URL { URL(fileURLWithPath: "/Volumes/T/x/b") }
     private var siblings: [BrowserEntry] {
         ["c", "a", "b"].map { BrowserFixtures.folder($0) }

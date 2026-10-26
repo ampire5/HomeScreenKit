@@ -221,8 +221,19 @@ public final class HomeBrowserView: NSView {
     var slowAfter: Duration = .seconds(3)
     private var slowTask: Task<Void, Never>?
     let scroll = GridScrollView()
+    /// Under the grid: the path bar over the status line, on one material; hidden when both rows are.
     private let statusBar = NSVisualEffectView()
+    private let statusRow = NSView()
     private let statusLabel = NSTextField(labelWithString: "")
+    /// Finder's path bar: the crumbs from the places down, a click goes to one. In the window's body, not its toolbar,
+    /// as the HIG has path controls.
+    private let pathRow = NSView()
+    private let pathControl = NSPathControl()
+    private var pathLocations: [BrowserLocation] = []
+    /// The path bar shown under a folder (the app's setting); a source's page has none.
+    public var showsPathBar = true {
+        didSet { if showsPathBar != oldValue { updatePathBar() } }
+    }
     private let message = HomeMessageView()
     /// A source's empty hint, in the middle.
     private let hint = NSTextField(labelWithString: "")
@@ -293,7 +304,23 @@ public final class HomeBrowserView: NSView {
         statusLabel.lineBreakMode = .byTruncatingMiddle
         statusLabel.maximumNumberOfLines = 1
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
-        statusBar.addSubview(statusLabel)
+        pathControl.pathStyle = .standard
+        pathControl.controlSize = .small
+        pathControl.font = .systemFont(ofSize: 12)
+        pathControl.backgroundColor = .clear
+        pathControl.focusRingType = .none
+        pathControl.refusesFirstResponder = true
+        pathControl.target = self
+        pathControl.action = #selector(pathItemClicked(_:))
+        pathControl.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        pathControl.translatesAutoresizingMaskIntoConstraints = false
+        pathRow.addSubview(pathControl)
+        statusRow.addSubview(statusLabel)
+        let rows = NSStackView(views: [pathRow, statusRow])
+        rows.orientation = .vertical
+        rows.spacing = 0
+        rows.translatesAutoresizingMaskIntoConstraints = false
+        statusBar.addSubview(rows)
         document.addSubview(footer)
         // The grid runs under the toolbar, as in Photos; the skeleton starts below it.
         loading.translatesAutoresizingMaskIntoConstraints = false
@@ -309,10 +336,20 @@ public final class HomeBrowserView: NSView {
             statusBar.leadingAnchor.constraint(equalTo: leadingAnchor),
             statusBar.trailingAnchor.constraint(equalTo: trailingAnchor),
             statusBar.bottomAnchor.constraint(equalTo: bottomAnchor),
-            statusBar.heightAnchor.constraint(equalToConstant: 28),
-            statusLabel.leadingAnchor.constraint(equalTo: statusBar.leadingAnchor, constant: 14),
-            statusLabel.trailingAnchor.constraint(lessThanOrEqualTo: statusBar.trailingAnchor, constant: -14),
-            statusLabel.centerYAnchor.constraint(equalTo: statusBar.centerYAnchor),
+            rows.leadingAnchor.constraint(equalTo: statusBar.leadingAnchor),
+            rows.trailingAnchor.constraint(equalTo: statusBar.trailingAnchor),
+            rows.topAnchor.constraint(equalTo: statusBar.topAnchor),
+            rows.bottomAnchor.constraint(equalTo: statusBar.bottomAnchor),
+            pathRow.widthAnchor.constraint(equalTo: rows.widthAnchor),
+            pathRow.heightAnchor.constraint(equalToConstant: 26),
+            pathControl.leadingAnchor.constraint(equalTo: pathRow.leadingAnchor, constant: 8),
+            pathControl.trailingAnchor.constraint(lessThanOrEqualTo: pathRow.trailingAnchor, constant: -8),
+            pathControl.centerYAnchor.constraint(equalTo: pathRow.centerYAnchor),
+            statusRow.widthAnchor.constraint(equalTo: rows.widthAnchor),
+            statusRow.heightAnchor.constraint(equalToConstant: 28),
+            statusLabel.leadingAnchor.constraint(equalTo: statusRow.leadingAnchor, constant: 14),
+            statusLabel.trailingAnchor.constraint(lessThanOrEqualTo: statusRow.trailingAnchor, constant: -14),
+            statusLabel.centerYAnchor.constraint(equalTo: statusRow.centerYAnchor),
             message.centerXAnchor.constraint(equalTo: centerXAnchor), message.centerYAnchor.constraint(equalTo: centerYAnchor),
             hint.centerXAnchor.constraint(equalTo: centerXAnchor), hint.centerYAnchor.constraint(equalTo: centerYAnchor),
             message.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, constant: -32),
@@ -805,7 +842,34 @@ public final class HomeBrowserView: NSView {
         toolbar.show(subtitle: line)
         let selected = loading == nil ? BrowserSummary.selection(selectedEntry) : ""
         statusLabel.stringValue = selected.isEmpty ? line : selected
-        statusBar.isHidden = statusLabel.stringValue.isEmpty
+        statusRow.isHidden = statusLabel.stringValue.isEmpty
+        statusBar.isHidden = statusRow.isHidden && pathRow.isHidden
+    }
+
+    /// The path bar from the crumbs: under a folder and the places, not on a source's page.
+    private func updatePathBar() {
+        let crumbs = info == nil && showsPathBar ? path() : []
+        pathLocations = crumbs.map(\.location)
+        pathControl.pathItems = crumbs.map { crumb in
+            let item = NSPathControlItem()
+            item.title = crumb.title
+            item.image = NSImage(systemSymbolName: crumb.location == .places ? "externaldrive" : "folder",
+                                 accessibilityDescription: nil)
+            return item
+        }
+        pathRow.isHidden = crumbs.isEmpty
+        statusBar.isHidden = statusRow.isHidden && pathRow.isHidden
+    }
+
+    @objc private func pathItemClicked(_ sender: NSPathControl) {
+        guard let item = sender.clickedPathItem, let i = sender.pathItems.firstIndex(of: item) else { return }
+        goToPathItem(i)
+    }
+
+    /// Path bar item `i`: its folder, unless it is the one shown.
+    func goToPathItem(_ i: Int) {
+        guard pathLocations.indices.contains(i), pathLocations[i] != location else { return }
+        show(pathLocations[i], selecting: nil)
     }
 
     var selectionInfoText: String { statusLabel.stringValue }
@@ -1256,6 +1320,7 @@ public final class HomeBrowserView: NSView {
             toolbar.show(path: path(), canBack: history.canGoBack, canForward: history.canGoForward,
                          canUp: location != .places)
         }
+        updatePathBar()
         toolbar.show(sort: sort, keys: sortKeys)
         toolbar.show(pageFilters: info?.pageFilters ?? [], selected: info?.pageFilters.isEmpty == false ? 0 : nil)
         toolbar.show(filter: filter.kind, visible: info == nil && location != .places)
@@ -1880,6 +1945,8 @@ public final class HomeBrowserView: NSView {
     var headerTitles: [String] { shownHeaders.map(\.title) }
     var shownHeaders: [GridHeader] { headers.filter { !$0.isHidden } }
     var footerLines: [String] { footer.lines }
+    /// The path bar's items, empty while it is hidden.
+    var pathBarTitles: [String] { pathRow.isHidden ? [] : pathControl.pathItems.map(\.title) }
     var scrollOffset: CGFloat { scroll.contentView.bounds.origin.y }
     var gridContentHeight: CGFloat { document.frame.height }
     var gridContentWidth: CGFloat { document.frame.width }
