@@ -106,6 +106,18 @@ final class HomeSidebar: NSView {
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
 
+    /// An arrow over the sidebar, as over the browser: its lines take no hits, so nothing under the pointer would put
+    /// back the arrow, and the divider's ↔ stayed over the list after the pointer crossed it.
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if !trackingAreas.contains(where: { $0.owner === self }) {
+            addTrackingArea(NSTrackingArea(rect: .zero, options: [.cursorUpdate, .activeInKeyWindow, .inVisibleRect],
+                                           owner: self))
+        }
+    }
+
+    override func cursorUpdate(with event: NSEvent) { NSCursor.arrow.set() }
+
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
     }
