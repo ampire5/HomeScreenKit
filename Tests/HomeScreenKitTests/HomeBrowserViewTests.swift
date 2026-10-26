@@ -431,18 +431,20 @@ import Testing
     @Test func partsShowWhileLaterOnesOrder() async {
         let source = FakeHomeSource()
         let view = make(source)
-        let all = BrowserFixtures.files(50_000)
+        // Both parts over `orderInlineLimit`, so both order off the main thread; 10 000 rather than 50 000: under
+        // Rosetta on CI, beside the other suites, ordering 50 000 took over 39 s (2026-10-26).
+        let all = BrowserFixtures.files(10_000)
         source.yield(x, Array(all.prefix(3_000)), complete: false)
         source.yield(x, all, complete: false)
         var seen: Set<Int> = []
-        // Up to 30 s, as `settle`: ordering 50 000 entries alongside the other suites on a CI machine took over 10.
+        // Up to 30 s, as `settle`.
         let deadline = Date().addingTimeInterval(30)
-        while view.entries.count != 50_000, Date() < deadline {
+        while view.entries.count != 10_000, Date() < deadline {
             seen.insert(view.entries.count)
             try? await Task.sleep(for: .milliseconds(1))
         }
         #expect(seen.contains(3_000))   // the first part shows, not dropped for the next one
-        #expect(view.entries.count == 50_000)
+        #expect(view.entries.count == 10_000)
     }
 }
 
