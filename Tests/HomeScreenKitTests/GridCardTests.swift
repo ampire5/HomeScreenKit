@@ -24,7 +24,7 @@ import Testing
     @Test func squareRingInsideSlot() {
         let card = photo(.square)
         #expect(card.ring.frame == card.bounds)
-        #expect(card.ring.borderWidth == 3)
+        #expect(card.ring.borderWidth == 2.5)
         #expect(card.pictureRect == card.bounds)
     }
 
@@ -39,7 +39,138 @@ import Testing
         #expect(abs(card.pictureRect.height - expected.height) < 0.01)
         #expect(card.pictureRect.minX == 8 && card.pictureRect.width == 184)
         #expect(card.ring.frame == card.pictureRect)
-        #expect(card.ring.borderWidth == 2)
+        #expect(card.ring.borderWidth == 2.5)
+    }
+
+    // MARK: The mockup (photo-cards spec §1)
+
+    private func photo(_ style: GridStyle, item: HomeCardItem, size: CGFloat = 200) -> PhotoCard {
+        let card = PhotoCard(item: item)
+        card.style = style
+        card.frame = CGRect(x: 0, y: 0, width: size, height: size)
+        card.layoutSubtreeIfNeeded()
+        return card
+    }
+
+    @Test func photoRadiusEight() {
+        for style in [GridStyle.square, .aspect] {
+            let card = photo(style)
+            #expect(card.pictureLayer.cornerRadius == 8)
+            #expect(card.ring.cornerRadius == 8)
+        }
+        let thin = photo(.aspect)
+        thin.image = image(300, 20)
+        thin.layoutSubtreeIfNeeded()
+        #expect(thin.pictureLayer.cornerRadius <= thin.pictureRect.height / 2)
+        #expect(thin.ring.cornerRadius == thin.pictureLayer.cornerRadius)
+    }
+
+    @Test func ringInsideBothStyles() {
+        for style in [GridStyle.square, .aspect] {
+            let card = photo(style)
+            #expect(card.ring.frame == card.pictureRect)
+            #expect(card.ring.borderWidth == 2.5)
+            #expect(card.hairline.frame == card.ring.bounds.insetBy(dx: 2.5, dy: 2.5))
+        }
+    }
+
+    @Test func marksOffAddNoLayers() {
+        let card = photo(.square)
+        #expect(card.dotLayer == nil)
+        #expect(card.chipLayer == nil)
+        #expect(card.strip == nil)
+        let sublayers = card.layer?.sublayers?.count
+        card.isUnseen = false
+        card.isPaired = false
+        card.isHovered = false
+        card.layoutSubtreeIfNeeded()
+        #expect(card.dotLayer == nil && card.chipLayer == nil && card.strip == nil)
+        #expect(card.layer?.sublayers?.count == sublayers)
+    }
+
+    @Test func dotTopRight() {
+        let card = photo(.square)
+        card.isUnseen = true
+        card.layoutSubtreeIfNeeded()
+        // The 8 pt dot 6 pt in from the corner, in its 1.5 pt white ring.
+        #expect(card.dotLayer?.frame == CGRect(x: 184.5, y: 4.5, width: 11, height: 11))
+        #expect(card.dotLayer?.isHidden == false)
+        let aspect = photo(.aspect)
+        aspect.image = image(300, 100)
+        aspect.isUnseen = true
+        aspect.layoutSubtreeIfNeeded()
+        let rect = aspect.pictureRect
+        #expect(aspect.dotLayer?.frame == CGRect(x: rect.maxX - 15.5, y: rect.minY + 4.5, width: 11, height: 11))
+        card.isUnseen = false
+        #expect(card.dotLayer?.isHidden == true)
+    }
+
+    @Test func chipTopLeft() {
+        let card = photo(.square)
+        card.isPaired = true
+        card.layoutSubtreeIfNeeded()
+        #expect(card.chipLayer?.frame == CGRect(x: 6, y: 6, width: 18, height: 16))
+        #expect(card.chipLayer?.cornerRadius == 5)
+        #expect(card.dotLayer == nil)
+    }
+
+    @Test func smallSlotOnlyDot() {
+        let card = photo(.square, item: HomeCardItem(id: "a", title: "a.jxl", tooltip: "", symbol: "photo",
+                                                     format: "JXL", bytes: 1000), size: 80)
+        card.showsNames = false   // the browser's flag for slots under `minNamed`
+        card.isUnseen = true
+        card.isPaired = true
+        card.isHovered = true
+        card.layoutSubtreeIfNeeded()
+        #expect(card.dotLayer?.isHidden == false)
+        #expect(card.chipLayer?.isHidden ?? true)
+        #expect(card.strip?.isHidden ?? true)
+    }
+
+    @Test func stripOnHover() {
+        let card = photo(.square, item: HomeCardItem(id: "a", title: "a.jxl", tooltip: "", symbol: "photo",
+                                                     format: "JXL", bytes: 24_000_000))
+        #expect(card.strip == nil)
+        card.isHovered = true
+        card.layoutSubtreeIfNeeded()
+        let strip = try! #require(card.strip)
+        #expect(!strip.isHidden)
+        #expect(strip.frame.maxY == card.pictureRect.maxY)
+        #expect(strip.frame.minX == card.pictureRect.minX && strip.frame.width == card.pictureRect.width)
+        #expect(card.stripText.format == "JXL")
+        #expect(card.stripText.size == ByteCountFormatter.string(fromByteCount: 24_000_000, countStyle: .file))
+        card.isHovered = false
+        #expect(strip.isHidden)
+    }
+
+    @Test func stripWithoutSize() {
+        let card = photo(.square, item: HomeCardItem(id: "a", title: "a", tooltip: "", symbol: "photo"))
+        card.isHovered = true
+        card.layoutSubtreeIfNeeded()
+        #expect(card.stripText.format == "")
+        #expect(card.stripText.size == "")
+        #expect(card.strip?.isHidden ?? true)   // nothing to say: no strip
+    }
+
+    @Test func stripHidesOnReuse() {
+        let card = photo(.square, item: HomeCardItem(id: "a", title: "a.jxl", tooltip: "", symbol: "photo",
+                                                     format: "JXL", bytes: 1000))
+        card.isHovered = true
+        card.layoutSubtreeIfNeeded()
+        card.show(HomeCardItem(id: "b", title: "b.jxl", tooltip: "", symbol: "photo", format: "JXL", bytes: 1000))
+        card.layoutSubtreeIfNeeded()
+        #expect(!card.isHovered)
+        #expect(card.strip?.isHidden == true)
+    }
+
+    @Test func nameAboveStrip() {
+        let card = photo(.square, item: HomeCardItem(id: "a", title: "a.jxl", tooltip: "", symbol: "photo",
+                                                     format: "JXL", bytes: 1000))
+        card.names = .photo
+        card.isHovered = true
+        card.layoutSubtreeIfNeeded()
+        let strip = try! #require(card.strip)
+        #expect(card.nameLabel.frame.maxY <= strip.frame.minY)
     }
 
     @Test func namesModes() {

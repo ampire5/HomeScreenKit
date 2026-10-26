@@ -7,6 +7,8 @@ public enum Chrome {
         public static let cell: CGFloat = 3
         public static let control: CGFloat = 6
         public static let card: CGFloat = 10
+        /// A photo in the browser's grid (photo-cards spec).
+        public static let photo: CGFloat = 8
         public static let panel: CGFloat = 14
         /// The radius of a capsule of the given height.
         public static func capsule(_ height: CGFloat) -> CGFloat { height / 2 }
