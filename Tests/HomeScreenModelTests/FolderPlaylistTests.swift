@@ -94,3 +94,27 @@ import Testing
         #expect(!unknown && list.index == 1)
     }
 }
+
+@Suite struct FolderPlaylistSkippingTests {
+    private let list = FolderPlaylist(
+        folder: URL(fileURLWithPath: "/f"),
+        entries: ["a", "b", "c", "d"].map { BrowserEntry(url: URL(fileURLWithPath: "/f/\($0)"), name: $0, kind: .file) },
+        sort: .standard, current: URL(fileURLWithPath: "/f/a"))
+
+    private func broken(_ names: Set<String>) -> (BrowserEntry) -> Bool { { names.contains($0.name) } }
+
+    @Test func indexFromSkipsForwardAndBack() {
+        #expect(list.index(from: 1, step: 1, skipping: broken(["b", "c"])) == 3)
+        #expect(list.index(from: 2, step: -1, skipping: broken(["b", "c"])) == 0)
+    }
+
+    @Test func nothingAheadGivesNil() {
+        #expect(list.index(from: 2, step: 1, skipping: broken(["c", "d"])) == nil)
+        #expect(list.index(from: 4, step: 1, skipping: broken([])) == nil)
+        #expect(list.index(from: -1, step: -1, skipping: broken([])) == nil)
+    }
+
+    @Test func fromItselfWhenGood() {
+        #expect(list.index(from: 2, step: 1, skipping: broken(["b"])) == 2)
+    }
+}

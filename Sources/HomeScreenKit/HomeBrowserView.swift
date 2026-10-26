@@ -200,6 +200,15 @@ public final class HomeBrowserView: NSView {
     /// Photos whose picture the source cannot make (`setUnavailable`): their cards are faint and the arrow keys go past
     /// them. A place of its own, so it is forgotten with the place.
     private var unavailable: Set<String> = []
+    /// The app's files the decoders could not read: their cards are faint and the arrow keys go past them, as
+    /// `unavailable`'s; a change touches only the cards on screen of the files it names.
+    public var unreadable: UnreadableFiles? {
+        didSet {
+            unreadableObservation = unreadable?.observe { [weak self] urls in self?.unreadableChanged(urls) }
+            reloadUnavailableCards()
+        }
+    }
+    private var unreadableObservation: UnreadableFiles.Observation?
     /// Photos not viewed yet and pages of a pair (`setPhotoMarks`): forgotten with the place, like `unavailable`.
     private var unseen: Set<String> = []
     private var paired: Set<String> = []
@@ -1615,7 +1624,7 @@ public final class HomeBrowserView: NSView {
         if let d = directions[event.keyCode] {
             // A photo whose picture cannot be made is gone past: its card stays, faint, for a click or Return.
             var next = grid.neighbour(of: current, d)
-            while let candidate = next, entries.indices.contains(candidate), unavailable.contains(entries[candidate].id) {
+            while let candidate = next, entries.indices.contains(candidate), isUnavailable(entries[candidate]) {
                 next = grid.neighbour(of: candidate, d)
             }
             if let next { select(index: next) }
@@ -1887,7 +1896,7 @@ public final class HomeBrowserView: NSView {
                             tooltip: entry.kind == .collection ? entry.name : entry.url.path,
                             symbol: source?.symbol(for: entry) ?? "doc", progress: entry.progress,
                             badge: entry.badge ?? (entry.kind == .archive ? "ZIP" : nil),
-                            isDimmed: entry.isDimmed || unavailable.contains(entry.id)
+                            isDimmed: entry.isDimmed || isUnavailable(entry)
                                 || (summary?.problem == .offline && entry.kind != .folder
                                                                         && entry.kind != .archive),
                             menu: source?.menu(for: entry, in: location) ?? [], glassSymbol: entry.kind == .place,
@@ -1997,6 +2006,24 @@ public final class HomeBrowserView: NSView {
         if on { unavailable.insert(id) } else { unavailable.remove(id) }
         guard let i = indexByID[id], let card = live[i], card.item.id == id else { return }
         card.show(item(for: entries[i]))
+    }
+
+    /// A file whose picture the source cannot make, or that the decoders could not read.
+    private func isUnavailable(_ entry: BrowserEntry) -> Bool {
+        unavailable.contains(entry.id) || unreadable?.contains(entry) == true
+    }
+
+    private func unreadableChanged(_ urls: Set<URL>) {
+        for (i, card) in live where entries.indices.contains(i) && card.item.id == entries[i].id
+            && urls.contains(entries[i].url.standardizedFileURL) {
+            card.show(item(for: entries[i]))
+        }
+    }
+
+    private func reloadUnavailableCards() {
+        for (i, card) in live where entries.indices.contains(i) && card.item.id == entries[i].id && entries[i].isFile {
+            card.show(item(for: entries[i]))
+        }
     }
 
     /// The photos of the place on screen not viewed yet (a dot) and in a two-page pair (a ⧉ chip), by id; forgotten

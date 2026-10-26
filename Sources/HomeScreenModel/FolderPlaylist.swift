@@ -44,6 +44,15 @@ public struct FolderPlaylist: Equatable, Sendable {
         return true
     }
 
+    /// `from`, or the first index beyond it in the direction of `step` whose file `skipping` does not refuse (a file
+    /// the decoders cannot read); nil past either end.
+    public func index(from: Int, step: Int, skipping: (BrowserEntry) -> Bool) -> Int? {
+        let direction = step < 0 ? -1 : 1
+        var i = from
+        while files.indices.contains(i), skipping(files[i]) { i += direction }
+        return files.indices.contains(i) ? i : nil
+    }
+
     /// The same files in `sort`'s order, on the same file.
     public mutating func resort(_ sort: BrowserSort) {
         let me = current.url
