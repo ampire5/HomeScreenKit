@@ -176,6 +176,9 @@ public final class HomeBrowserView: NSView {
     /// scrolling. Cleared by a move and by the user's own scroll or selection.
     private var restoredScroll = false
     private(set) var selectedID: String?
+    /// Photos whose picture the source cannot make (`setUnavailable`): their cards are faint and the arrow keys go past
+    /// them. A place of its own, so it is forgotten with the place.
+    private var unavailable: Set<String> = []
 
     // MARK: Parts
 
@@ -381,6 +384,7 @@ public final class HomeBrowserView: NSView {
             history = BrowserHistory(start: location)
             hasShown = true
         }
+        unavailable = []
         pendingSelection = selecting ?? history.selection(for: location)
         pendingScroll = selecting == nil && anchor == nil ? history.scroll(for: location) : nil
         pendingAnchor = anchor
@@ -1405,7 +1409,12 @@ public final class HomeBrowserView: NSView {
         let current = selectedIndex ?? 0
         let directions: [UInt16: GridLayout.Direction] = [123: .left, 124: .right, 125: .down, 126: .up]
         if let d = directions[event.keyCode] {
-            if let next = grid.neighbour(of: current, d) { select(index: next) }
+            // A photo whose picture cannot be made is gone past: its card stays, faint, for a click or Return.
+            var next = grid.neighbour(of: current, d)
+            while let candidate = next, entries.indices.contains(candidate), unavailable.contains(entries[candidate].id) {
+                next = grid.neighbour(of: candidate, d)
+            }
+            if let next { select(index: next) }
             return true
         }
         guard let text = event.charactersIgnoringModifiers, let scalar = text.unicodeScalars.first,
@@ -1654,7 +1663,8 @@ public final class HomeBrowserView: NSView {
                             tooltip: entry.kind == .collection ? entry.name : entry.url.path,
                             symbol: source?.symbol(for: entry) ?? "doc", progress: entry.progress,
                             badge: entry.badge ?? (entry.kind == .archive ? "ZIP" : nil),
-                            isDimmed: entry.isDimmed || (summary?.problem == .offline && entry.kind != .folder
+                            isDimmed: entry.isDimmed || unavailable.contains(entry.id)
+                                || (summary?.problem == .offline && entry.kind != .folder
                                                                         && entry.kind != .archive),
                             menu: source?.menu(for: entry, in: location) ?? [], glassSymbol: entry.kind == .place,
                             summary: summary, count: entry.count,
@@ -1754,6 +1764,15 @@ public final class HomeBrowserView: NSView {
             card.show(item)
             updateMotion()   // a card done waiting frees its slot
         }
+    }
+
+    /// The source cannot make the picture of `id` (a file that is not an image, or broken): its card is faint and the
+    /// arrow keys skip it; `false` when the picture came after all. Forgotten when the place changes.
+    public func setUnavailable(_ on: Bool, for id: String) {
+        guard unavailable.contains(id) != on else { return }
+        if on { unavailable.insert(id) } else { unavailable.remove(id) }
+        guard let i = indexByID[id], let card = live[i], card.item.id == id else { return }
+        card.show(item(for: entries[i]))
     }
 
     /// A card's picture; one not on screen now is ignored.

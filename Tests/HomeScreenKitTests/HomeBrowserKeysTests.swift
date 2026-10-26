@@ -38,6 +38,27 @@ import Testing
         #expect(view.selectedID == view.entries[0].id)
     }
 
+    /// A photo whose picture cannot be made keeps its card, faint, but the arrow keys go past it (and Return on it opens).
+    @Test func arrowsGoPastPhotosThatCannotBeShown() async {
+        let source = FakeHomeSource()
+        let view = await shown(source, BrowserFixtures.files(6))
+        view.setUnavailable(true, for: view.entries[1].id)
+        view.setUnavailable(true, for: view.entries[2].id)
+        #expect(view.card(for: view.entries[1].id)?.item.isDimmed == true)
+        #expect(view.handleKey(key(124)))
+        #expect(view.selectedID == view.entries[3].id)
+        #expect(view.handleKey(key(123)))
+        #expect(view.selectedID == view.entries[0].id)
+        view.setUnavailable(false, for: view.entries[1].id)
+        #expect(view.card(for: view.entries[1].id)?.item.isDimmed == false)
+        #expect(view.handleKey(key(124)))
+        #expect(view.selectedID == view.entries[1].id)
+        // Every one beyond is unavailable: the selection stays.
+        for entry in view.entries[2...] { view.setUnavailable(true, for: entry.id) }
+        #expect(view.handleKey(key(124)))
+        #expect(view.selectedID == view.entries[1].id)
+    }
+
     @Test func returnOnFolderEnters() async {
         let source = FakeHomeSource()
         let view = await shown(source, [BrowserFixtures.folder("sub"), BrowserFixtures.file("a.jpg")])
