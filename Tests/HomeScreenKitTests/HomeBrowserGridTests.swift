@@ -89,6 +89,49 @@ import Testing
         #expect(card?.image != nil)
     }
 
+    // MARK: Photo marks (photo-cards spec §2)
+
+    private func photo(_ view: HomeBrowserView, _ i: Int) -> PhotoCard? { view.card(for: view.entries[i].id) as? PhotoCard }
+
+    @Test func photoMarksReachLiveCards() async {
+        let view = await shown(FakeHomeSource(), BrowserFixtures.files(20))
+        view.setPhotoMarks(unseen: [view.entries[1].id, view.entries[2].id], paired: [view.entries[2].id])
+        #expect(photo(view, 0)?.isUnseen == false && photo(view, 0)?.isPaired == false)
+        #expect(photo(view, 1)?.isUnseen == true && photo(view, 1)?.isPaired == false)
+        #expect(photo(view, 2)?.isUnseen == true && photo(view, 2)?.isPaired == true)
+        view.setPhotoMarks(unseen: [], paired: [])
+        #expect(photo(view, 1)?.isUnseen == false && photo(view, 2)?.isPaired == false)
+    }
+
+    @Test func photoMarksBindOnScroll() async {
+        let view = await shown(FakeHomeSource(), BrowserFixtures.files(5_000))
+        let last = view.entries.count - 1
+        #expect(photo(view, last) == nil)
+        view.setPhotoMarks(unseen: [view.entries[last].id], paired: [view.entries[last].id])
+        view.scrollGrid(to: view.gridContentHeight)
+        #expect(photo(view, last)?.isUnseen == true)
+        #expect(photo(view, last)?.isPaired == true)
+        #expect(photo(view, last - 1)?.isUnseen == false)
+    }
+
+    @Test func photoMarksForgottenOnPlaceChange() async {
+        let source = FakeHomeSource()
+        let view = await shown(source, BrowserFixtures.files(20))
+        let id = view.entries[0].id
+        view.setPhotoMarks(unseen: [id], paired: [id])
+        // Away and back: the same ids, the marks of the earlier visit gone.
+        let y = URL(fileURLWithPath: "/Volumes/T/y")
+        view.show(.folder(y), selecting: nil)
+        source.yield(y, BrowserFixtures.files(20, in: y.path), complete: true)
+        await settle(seconds: 5) { view.location == .folder(y) && view.entries.first?.id != id }
+        view.show(.folder(x), selecting: nil)
+        source.yield(x, BrowserFixtures.files(20), complete: true)
+        await settle(seconds: 5) { view.entries.first?.id == id }
+        view.layoutSubtreeIfNeeded()
+        #expect(photo(view, 0)?.isUnseen == false)
+        #expect(photo(view, 0)?.isPaired == false)
+    }
+
     @Test func columnStepTargets() async {
         let view = await shown(FakeHomeSource(), BrowserFixtures.files(100))
         let m = GridMetrics()

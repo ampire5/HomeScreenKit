@@ -191,6 +191,9 @@ public final class HomeBrowserView: NSView {
     /// Photos whose picture the source cannot make (`setUnavailable`): their cards are faint and the arrow keys go past
     /// them. A place of its own, so it is forgotten with the place.
     private var unavailable: Set<String> = []
+    /// Photos not viewed yet and pages of a pair (`setPhotoMarks`): forgotten with the place, like `unavailable`.
+    private var unseen: Set<String> = []
+    private var paired: Set<String> = []
 
     // MARK: Parts
 
@@ -443,6 +446,8 @@ public final class HomeBrowserView: NSView {
             hasShown = true
         }
         unavailable = []
+        unseen = []
+        paired = []
         pendingSelection = selecting ?? history.selection(for: location)
         pendingScroll = selecting == nil && anchor == nil ? history.scroll(for: location) : nil
         pendingAnchor = anchor
@@ -1811,6 +1816,10 @@ public final class HomeBrowserView: NSView {
         card.show(item(for: entry))
         card.image = nil
         card.isSelected = entry.id == selectedID
+        if let photo = card as? PhotoCard {
+            photo.isUnseen = unseen.contains(entry.id)
+            photo.isPaired = paired.contains(entry.id)
+        }
         let id = entry.id
         card.onClick = { [weak self] middle, flags, clickCount in
             self?.clicked(id, middle: middle, flags: flags, clickCount: clickCount)
@@ -1963,6 +1972,20 @@ public final class HomeBrowserView: NSView {
         if on { unavailable.insert(id) } else { unavailable.remove(id) }
         guard let i = indexByID[id], let card = live[i], card.item.id == id else { return }
         card.show(item(for: entries[i]))
+    }
+
+    /// The photos of the place on screen not viewed yet (a dot) and in a two-page pair (a ⧉ chip), by id; forgotten
+    /// when the place changes. Only the cards on screen whose marks changed are touched; a card laid out later takes
+    /// its marks then.
+    public func setPhotoMarks(unseen: Set<String>, paired: Set<String>) {
+        self.unseen = unseen
+        self.paired = paired
+        for card in live.values {
+            guard let photo = card as? PhotoCard else { continue }
+            let id = photo.item.id
+            photo.isUnseen = unseen.contains(id)
+            photo.isPaired = paired.contains(id)
+        }
     }
 
     /// A card's picture; one not on screen now is ignored.
