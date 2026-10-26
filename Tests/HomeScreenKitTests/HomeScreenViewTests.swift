@@ -159,7 +159,7 @@ import Testing
         #expect(view.handleKey(key(27, "-")))
         #expect(view.handleKey(key(29, "0")))
         #expect(!view.handleKey(key(24, "=", [])))   // a plain = is not a resize
-        #expect(got == [.larger, .smaller, .reset])
+        #expect(got == [.largerSize, .smallerSize, .reset])
     }
 
     @Test func resizeKeysWorkWithNoCards() {
@@ -167,7 +167,7 @@ import Testing
         var got: [HomeResize] = []
         view.onResize = { got.append($0) }
         #expect(view.handleKey(key(24, "=")))
-        #expect(got == [.larger])
+        #expect(got == [.largerSize])
     }
 
     @Test func notchesAccumulate() {

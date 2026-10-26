@@ -12,7 +12,16 @@ public final class HomeBrowserView: NSView {
     // MARK: Set by the app
 
     /// The wanted photo slot width in points; the columns are the nearest count to it.
-    public var cardSize: CGFloat = 220 { didSet { if cardSize != oldValue { tile() } } }
+    public var cardSize: CGFloat = 220 {
+        didSet {
+            if cardSize != oldValue { tile() }
+            toolbar.show(cardSize: cardSize, range: cardSizeRange)
+        }
+    }
+    /// The sizes the slider spans (the app's limits of `cardSize`).
+    public var cardSizeRange: ClosedRange<CGFloat> = 60...480 {
+        didSet { toolbar.show(cardSize: cardSize, range: cardSizeRange) }
+    }
     /// Square or Aspect: a change re-tiles, the cards keep their pictures.
     public var style = GridStyle.aspect {
         didSet { if style != oldValue { toolbar.show(style: style); tile() } }
@@ -104,8 +113,9 @@ public final class HomeBrowserView: NSView {
     /// row's cover is four photos at 32 pt (`HomeMosaic.Layout.quad`).
     public var shownStyle: CardStyle { shownCardStyle(width: gridWidth) }
 
-    /// The wanted slot width for ⌘= / ⌘−: one photo column fewer (at one column, the range's top) or one more, at the
-    /// grid's width now, within `range`. Nil for `reset`: the app's default.
+    /// The wanted slot width for a step: for the wheel and a pinch one photo column fewer (at one column, the range's
+    /// top) or one more, at the grid's width now; for ⌘= / ⌘− the next of `HomeResize.sizes`; the slider's own size;
+    /// within `range`. Nil for `reset`: the app's default.
     public func cardSize(after step: HomeResize, range: ClosedRange<CGFloat>) -> CGFloat? {
         let m = GridMetrics(), columns = photoColumns
         let size: CGFloat
@@ -114,6 +124,8 @@ public final class HomeBrowserView: NSView {
             size = columns > 1 ? GridLayout.target(columns: columns - 1, width: gridWidth, gap: m.photoGap, edge: m.photoEdge)
                                : range.upperBound
         case .smaller: size = GridLayout.target(columns: columns + 1, width: gridWidth, gap: m.photoGap, edge: m.photoEdge)
+        case .largerSize, .smallerSize: size = HomeResize.nextSize(after: cardSize, larger: step == .largerSize)
+        case .to(let wanted): size = wanted
         case .reset: return nil
         }
         return min(range.upperBound, max(range.lowerBound, size))
@@ -365,6 +377,7 @@ public final class HomeBrowserView: NSView {
             toast.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, constant: -64),
         ])
         toolbar.show(style: style)
+        toolbar.show(cardSize: cardSize, range: cardSizeRange)
         toolbar.onCrumb = { [weak self] location in self?.show(location, selecting: nil) }
         toolbar.onBack = { [weak self] in self?.goBack() }
         toolbar.onForward = { [weak self] in self?.goForward() }

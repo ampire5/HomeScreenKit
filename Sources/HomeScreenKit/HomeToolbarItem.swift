@@ -37,9 +37,9 @@ enum HomeToolbarItem: CaseIterable {
     }
 
     /// As Finder's: the buttons first, then the title, so a long name takes the room up to the filter and moves none of
-    /// them.
+    /// them; the card size on the right, beside the card styles.
     static let browserOrder: [NSToolbarItem.Identifier] =
-        [.flexibleSpace, .toggleSidebar, .sidebarTrackingSeparator] + [HomeToolbarItem.home, .history, .path, .zoom, .title].map(\.identifier)
+        [.flexibleSpace, .toggleSidebar, .sidebarTrackingSeparator] + [HomeToolbarItem.home, .history, .path, .title].map(\.identifier)
         + [.flexibleSpace, HomeToolbarItem.filter.identifier, .flexibleSpace]
-        + [HomeToolbarItem.sort, .aspect, .progress, .cards, .search].map(\.identifier)
+        + [HomeToolbarItem.sort, .aspect, .progress, .zoom, .cards, .search].map(\.identifier)
 }

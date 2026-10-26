@@ -34,7 +34,7 @@ import Testing
         #expect(controller.windowTitle == "Library")
         #expect(controller.subtitleText == "16–19 Sep 2026")
         #expect(controller.nsToolbar.items[1].itemIdentifier == .toggleSidebar)
-        #expect(controller.nsToolbar.items[7].itemIdentifier == HomeToolbarItem.title.identifier)   // after the buttons
+        #expect(controller.nsToolbar.items[6].itemIdentifier == HomeToolbarItem.title.identifier)   // after the buttons
         #expect(controller.nsToolbar.centeredItemIdentifiers == [HomeToolbarItem.filter.identifier])
         withExtendedLifetime(window) {}
     }
@@ -157,7 +157,7 @@ import Testing
         var log: [String] = []
         controller.onBack = { log.append("back") }
         controller.onForward = { log.append("forward") }
-        controller.onZoom = { log.append($0 == .smaller ? "smaller" : "larger") }
+        controller.onZoom = { log.append($0 == .smallerSize ? "smaller" : $0 == .largerSize ? "larger" : "\($0)") }
         controller.onHome = { log.append("home") }
         controller.clickHistory(0)
         controller.clickHistory(1)
@@ -165,6 +165,18 @@ import Testing
         controller.clickZoom(1)
         controller.clickHome()
         #expect(log == ["back", "forward", "smaller", "larger", "home"])
+    }
+
+    /// The slider sends a size, and only a new one; showing a size moves it without sending.
+    @Test func zoomSliderSendsItsSize() {
+        let controller = HomeToolbarController()
+        var sent: [HomeResize] = []
+        controller.onZoom = { sent.append($0) }
+        controller.show(cardSize: 160, range: 60...480)
+        #expect(abs(controller.zoomSliderSize - 160) < 0.5)
+        controller.dragZoomSlider(to: 200)
+        controller.dragZoomSlider(to: 200.2)
+        #expect(sent == [.to(200)])
     }
 
     @Test func navigationFollowsThePath() {

@@ -26,7 +26,7 @@ import Testing
 
     /// The layout left to right, as the spec draws it.
     private func rank(_ id: NSToolbarItem.Identifier) -> Int {
-        let left: [HomeToolbarItem] = [.home, .history, .path, .zoom, .title, .filter, .sort, .aspect, .progress, .cards, .search]
+        let left: [HomeToolbarItem] = [.home, .history, .path, .title, .filter, .sort, .aspect, .progress, .zoom, .cards, .search]
         return left.firstIndex { $0.identifier == id } ?? -1
     }
 

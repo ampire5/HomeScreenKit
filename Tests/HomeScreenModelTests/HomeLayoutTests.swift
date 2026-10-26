@@ -86,6 +86,19 @@ import Testing
         #expect(HomeResize.smaller.size(from: 90, range: 140...480) == 140)
     }
 
+    /// ⌘= / ⌘− go to the next of the four sizes, from anywhere between them, and stay past the ends.
+    @Test func sizeStepsGoToTheNextSize() {
+        #expect(HomeResize.nextSize(after: 100, larger: true) == 160)
+        #expect(HomeResize.nextSize(after: 155, larger: true) == 240)   // 160 is within 5 %: not a step
+        #expect(HomeResize.nextSize(after: 200, larger: false) == 160)
+        #expect(HomeResize.nextSize(after: 360, larger: true) == 360)
+        #expect(HomeResize.nextSize(after: 420, larger: true) == 420)
+        #expect(HomeResize.nextSize(after: 420, larger: false) == 360)
+        #expect(HomeResize.nextSize(after: 60, larger: false) == 60)
+        #expect(HomeResize.largerSize.size(from: 240, range: 60...480) == 360)
+        #expect(HomeResize.to(77).size(from: 240, range: 60...480) == 77)
+    }
+
     @Test func resetIsNoSize() {
         #expect(HomeResize.reset.size(from: 300, range: 140...480) == nil)
     }
