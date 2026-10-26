@@ -61,18 +61,19 @@ public enum CardSummaryText {
     /// (the photos in them, as far as known); an archive of pages `96 pages · 1.2 GB`. `withInside` adds the
     /// subfolders' photos after their count, `3 folders (412)` (a `+` while some are unknown). Empty when nothing
     /// is known.
-    public static func facts(_ s: CardSummary, pages: Bool, withInside: Bool = false) -> String {
+    /// `noun` names the files (`FileStyle.noun`: photo, video).
+    public static func facts(_ s: CardSummary, pages: Bool, withInside: Bool = false, noun: String = "photo") -> String {
         var parts: [String] = []
         let photos = s.photos ?? 0, folders = s.folders ?? 0
         let inside = s.insidePhotos.map { grouped($0) + (s.insideIncomplete ? "+" : "") }
         if photos > 0 {
-            parts.append(count(photos, pages ? "page" : "photo"))
+            parts.append(count(photos, pages ? "page" : noun))
             if folders > 0 {
                 parts.append(count(folders, "folder") + (withInside ? inside.map { " (\($0))" } ?? "" : ""))
             }
         } else if folders > 0 {
             parts.append(count(folders, "folder"))
-            if let n = s.insidePhotos, let inside { parts.append(inside + (n == 1 && !s.insideIncomplete ? " photo" : " photos")) }
+            if let n = s.insidePhotos, let inside { parts.append(inside + (n == 1 && !s.insideIncomplete ? " \(noun)" : " \(noun)s")) }
         }
         if let size = size(s) { parts.append(size) }
         return parts.joined(separator: " · ")

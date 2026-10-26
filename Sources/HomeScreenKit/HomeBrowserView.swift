@@ -28,6 +28,15 @@ public final class HomeBrowserView: NSView {
     }
     /// Where the names go: a change re-tiles, the cards keep their pictures.
     public var names = GridNames.off { didSet { if names != oldValue { tile() } } }
+    /// What the files are (`FileStyle`: photos, or a video app's videos): their noun in the counts, their slot's shape
+    /// and the length and progress on their pictures. Set before the first `show`; a change re-tiles.
+    public var files = FileStyle.photos {
+        didSet {
+            guard files != oldValue else { return }
+            toolbar.filesTitle = files.heading
+            tile()
+        }
+    }
     /// The name filter, as the field shows it; setting it filters as typing does.
     public var filterText: String {
         get { filter.text }
@@ -791,10 +800,12 @@ public final class HomeBrowserView: NSView {
     struct ArrangeInfo: Sendable {
         var noun: String?
         var groupsByDate: Bool
+        var fileNoun = "photo"
     }
 
     private var arrangeInfo: ArrangeInfo {
-        ArrangeInfo(noun: info?.noun, groupsByDate: info?.groupsByDate == true && shownSort?.key == .date)
+        ArrangeInfo(noun: info?.noun, groupsByDate: info?.groupsByDate == true && shownSort?.key == .date,
+                    fileNoun: files.noun)
     }
 
     /// Off the main actor for a big listing: nothing here touches the view.
@@ -803,7 +814,8 @@ public final class HomeBrowserView: NSView {
         let ordered = filter.apply(sort.order(listing.entries))
         let containers = ordered.firstIndex { $0.isFile } ?? ordered.count
         let summary = BrowserSummary.footer(entries: listing.entries, filtered: filter.isActive ? ordered.count : nil,
-                                            complete: listing.complete, more: listing.more, noun: info.noun)
+                                            complete: listing.complete, more: listing.more, noun: info.noun,
+                                            fileNoun: info.fileNoun)
         let groups = info.groupsByDate ? DateGroups.sections(ordered.map(\.date), now: Date(), calendar: .current) : nil
         return Arranged(entries: ordered, containers: containers, footer: summary.line, state: summary.state,
                         dateSections: groups, sort: sort)
@@ -865,7 +877,7 @@ public final class HomeBrowserView: NSView {
         if loading == nil, !line.isEmpty, let room = VolumeSpace.line(free: freeSpace[location]) { line += " · " + room }
         if isChecking { line = line.isEmpty ? "Checking…" : "Checking… · " + line }
         toolbar.show(subtitle: line)
-        let selected = loading == nil ? BrowserSummary.selection(selectedEntry) : ""
+        let selected = loading == nil ? BrowserSummary.selection(selectedEntry, fileNoun: files.noun) : ""
         statusLabel.stringValue = selected.isEmpty ? line : selected
         statusRow.isHidden = statusLabel.stringValue.isEmpty
         statusBar.isHidden = statusRow.isHidden && pathRow.isHidden
@@ -1635,7 +1647,9 @@ public final class HomeBrowserView: NSView {
     /// files, titled only when both are there.
     private func makeSections() -> [GridSection] {
         if let dateSections {
-            return dateSections.map { GridSection(kind: .collections, count: $0.count, title: $0.title) }
+            // A source of files (a video app's Recent) is laid out as files; of collections, as collections.
+            let kind: GridSection.Kind = !entries.isEmpty && entries.allSatisfy(\.isFile) ? .photos : .collections
+            return dateSections.map { GridSection(kind: kind, count: $0.count, title: $0.title) }
         }
         guard case .folder = location else { return [GridSection(kind: .collections, count: entries.count)] }
         let files = entries.count - containerCount
@@ -1643,7 +1657,8 @@ public final class HomeBrowserView: NSView {
         // 2026-10-23).
         let both = containerCount > 0 && files > 0
         return [GridSection(kind: .collections, count: containerCount, title: both ? "Folders" : nil),
-                GridSection(kind: .photos, count: files, title: both ? "Photos · \(BrowserSummary.number(files))" : nil)]
+                GridSection(kind: .photos, count: files,
+                            title: both ? "\(self.files.heading) · \(BrowserSummary.number(files))" : nil)]
     }
 
     /// Cards for the rows in view and a screen either side; the others go back to their pool.
@@ -1657,7 +1672,8 @@ public final class HomeBrowserView: NSView {
         let shownStyle = shownCardStyle(width: width)
         let showsListHeader = shownStyle == .list && !entries.isEmpty && isShowingEntries
         if showsListHeader { metrics.top += ListHeader.height }
-        grid = GridLayout(sections: sections, width: width, target: cardSize, names: names, style: shownStyle, metrics: metrics)
+        grid = GridLayout(sections: sections, width: width, target: cardSize, names: names, style: shownStyle,
+                          fileAspect: files.aspect, metrics: metrics)
         let height = max(grid.contentHeight, scroll.contentSize.height)
         if document.frame.size != CGSize(width: width, height: height) {
             document.frame = CGRect(x: 0, y: 0, width: width, height: height)
@@ -1704,10 +1720,13 @@ public final class HomeBrowserView: NSView {
                 if wantedIDs.contains(entry.id) { newlyConfigured = true }
             }
             let card = live[i]!
+            card.fileNoun = files.noun
             let section = grid.section(of: i)
             if let photo = card as? PhotoCard {
                 photo.style = style
                 photo.names = names
+                photo.aspect = files.aspect
+                photo.showsFacts = files.facts
                 photo.showsNames = grid.showsNames(inSection: section)
             } else if let collection = card as? CollectionCard {
                 collection.names = names
@@ -1847,7 +1866,7 @@ public final class HomeBrowserView: NSView {
         var subtitle: String?
         switch entry.kind {
         case .folder, .archive:
-            subtitle = entry.count.map { $0 == 1 ? "1 photo" : "\($0) photos" }
+            subtitle = entry.count.map { CardSummaryText.count($0, files.noun) }
         case .file:
             switch (shownSort ?? sort).key {
             case .name: subtitle = nil
@@ -1858,7 +1877,9 @@ public final class HomeBrowserView: NSView {
             subtitle = nil
         }
         let summary = entry.summary ?? summaries[entry.id]
-        return HomeCardItem(id: entry.id, title: entry.name, subtitle: entry.subtitle ?? subtitle,
+        // With the files' facts on their pictures, a file's line is only its own (a video's length), never the sort's.
+        let line = files.facts && entry.isFile ? entry.subtitle : entry.subtitle ?? subtitle
+        return HomeCardItem(id: entry.id, title: entry.name, subtitle: line,
                             tooltip: entry.kind == .collection ? entry.name : entry.url.path,
                             symbol: source?.symbol(for: entry) ?? "doc", progress: entry.progress,
                             badge: entry.badge ?? (entry.kind == .archive ? "ZIP" : nil),

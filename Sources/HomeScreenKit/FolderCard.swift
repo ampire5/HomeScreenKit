@@ -184,16 +184,16 @@ class FolderCard: GridCard {
         warningLabel.stringValue = ""
         warningLabel.isHidden = true
         progressBar.isHidden = shownProgress == nil
-        toolTip = Self.tooltip(item, summary: s, pages: holdsPages)
+        toolTip = Self.tooltip(item, summary: s, pages: holdsPages, noun: fileNoun)
         waitingChanged()
     }
 
     /// The tooltip has what the card may cut: every fact with the subfolders' photos, the dates' span and the
     /// progress, when the folder was viewed (`Viewed 3 d ago`), then the item's own tooltip (the path).
-    static func tooltip(_ item: HomeCardItem, summary s: CardSummary?, pages: Bool) -> String {
+    static func tooltip(_ item: HomeCardItem, summary s: CardSummary?, pages: Bool, noun: String = "photo") -> String {
         var lines: [String] = []
         if let s {
-            lines.append(CardSummaryText.facts(s, pages: pages, withInside: true))
+            lines.append(CardSummaryText.facts(s, pages: pages, withInside: true, noun: noun))
             lines.append([CardSummaryText.span(s), CardSummaryText.viewed(s)].compactMap { $0 }.joined(separator: " · "))
             if let visited = s.visited { lines.append("Viewed " + CardSummaryText.ago(visited, now: now())) }
         }

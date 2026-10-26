@@ -161,8 +161,9 @@ public struct GridLayout: Equatable, Sendable {
     private let metrics: GridMetrics
 
     /// `style` is for the collection sections (a narrow column falls back to posters); the photo sections do not use it.
+    /// `fileAspect` is a photo slot's width over its picture's height (`FileStyle.aspect`: 1 for photos, 16:9 for video).
     public init(sections: [GridSection], width: CGFloat, target: CGFloat, names: GridNames, style: CardStyle = .posters,
-                metrics: GridMetrics = .init()) {
+                fileAspect: CGFloat = 1, metrics: GridMetrics = .init()) {
         self.metrics = metrics
         var y = metrics.top, first = 0, placed: [Placed] = []
         for section in sections {
@@ -176,7 +177,8 @@ public struct GridLayout: Equatable, Sendable {
             // Photos keep their tiles, except in the list, where files are rows like the folders.
             let used = (isPhotos && style != .list) || width < metrics.minStyled ? CardStyle.posters : style
             if isPhotos && used != .list {
-                slotHeight = slot + (names == .below ? metrics.belowText : 0)
+                cover = fileAspect == 1 ? slot : (slot / max(0.1, fileAspect)).rounded()
+                slotHeight = cover + (names == .below ? metrics.belowText : 0)
             } else {
                 switch used {
                 case .posters:
@@ -250,11 +252,12 @@ public struct GridLayout: Equatable, Sendable {
                       width: p.slot, height: p.slotHeight)
     }
 
-    /// The square cover: the slot's width at its top for a poster, a compact card's square inside its padding, a
-    /// row's small one.
+    /// The cover: the slot's width at its top for a poster (a photo's at its `fileAspect`), a compact card's square
+    /// inside its padding, a row's small one.
     public func pictureFrame(of index: Int) -> CGRect {
         let f = frame(of: index), p = placed[section(of: index)]
-        return CGRect(x: f.minX + p.coverInset.x, y: f.minY + p.coverInset.y, width: p.cover, height: p.cover)
+        let width = p.coverInset == .zero ? f.width : p.cover
+        return CGRect(x: f.minX + p.coverInset.x, y: f.minY + p.coverInset.y, width: width, height: p.cover)
     }
 
     /// The cards whose rows meet `rect` grown by `margin` above and below, whole rows.

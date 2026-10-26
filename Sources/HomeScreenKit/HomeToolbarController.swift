@@ -155,7 +155,7 @@ import HomeScreenModel
         case .filter:
             let toolbarItem = NSToolbarItem(itemIdentifier: id)
             toolbarItem.label = "Filter"
-            toolbarItem.toolTip = "Show all, folders or photos"
+            toolbarItem.toolTip = "Show all, folders or \(filesTitle.lowercased())"
             toolbarItem.view = filterControl
             return toolbarItem
         case .sort:
@@ -319,7 +319,14 @@ import HomeScreenModel
 
     // MARK: Shown
 
-    var kindTitles: [String] { pageFilterTitles.isEmpty ? BrowserKindFilter.allCases.map(\.title) : pageFilterTitles }
+    /// The files' segment (`FileStyle.heading`: Photos, Videos).
+    var filesTitle = BrowserKindFilter.photos.title {
+        didSet { if filesTitle != oldValue { updateFilterGroup() } }
+    }
+
+    var kindTitles: [String] {
+        pageFilterTitles.isEmpty ? BrowserKindFilter.allCases.map { $0 == .photos ? filesTitle : $0.title } : pageFilterTitles
+    }
     var kindSelection: Int? {
         if !pageFilterTitles.isEmpty { return selectedPageFilter }
         return BrowserKindFilter.allCases.firstIndex(of: selectedKindFilter)

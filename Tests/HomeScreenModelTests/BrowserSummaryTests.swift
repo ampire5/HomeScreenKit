@@ -72,4 +72,21 @@ import Testing
         #expect(BrowserSummary.footer(entries: [folder("a"), folder("b")], filtered: nil, complete: false, more: false).line
                 == "2 folders")
     }
+
+    /// A video app names its files (`FileStyle.noun`) in the footer and in the subtitle with nothing selected.
+    @Test func filesAreCountedByTheirNoun() {
+        let entries = [file("a.mp4"), file("b.mkv"), folder("x")]
+        #expect(BrowserSummary.footer(entries: entries, filtered: nil, complete: false, more: false, fileNoun: "video").line
+                == "2 videos · 1 folder")
+        #expect(BrowserSummary.subtitle(selected: nil, entries: [file("a.mp4")], loading: nil, fileNoun: "video") == "1 video")
+        #expect(FileStyle.videos.heading == "Videos" && FileStyle.photos.heading == "Photos")
+    }
+
+    /// A folder's facts and the status line name a video app's files by their noun.
+    @Test func cardFactsUseTheFilesNoun() {
+        let s = CardSummary(photos: 12, folders: 2, bytes: 0)
+        #expect(CardSummaryText.facts(s, pages: false, noun: "video").hasPrefix("12 videos · 2 folders"))
+        let folder = BrowserEntry(url: URL(fileURLWithPath: "/f/x"), name: "x", kind: .folder, summary: CardSummary(photos: 1))
+        #expect(BrowserSummary.selection(folder, fileNoun: "video").contains("1 video"))
+    }
 }
