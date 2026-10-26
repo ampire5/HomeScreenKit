@@ -6,15 +6,19 @@ public enum GridStyle: String, CaseIterable, Codable, Sendable {
 }
 
 /// Where a card's name goes: nowhere, over the photo, or on a line under it.
+/// File names on the grid: none, on the picture, under it, or `auto` (the owner's choice of 2026-10-27, board
+/// «Эскизы файлов» D): under the picture with the facts line on tiles at least `GridMetrics.namesBelowFrom` wide, on
+/// smaller tiles a band over the picture while the pointer is on it.
 public enum GridNames: String, CaseIterable, Sendable {
-    case off, photo, below
+    case off, photo, below, auto
 
-    /// ⌥N: off → photo → below → off.
+    /// ⌥N: auto → off → photo → below → auto.
     public var next: GridNames {
         switch self {
+        case .auto: .off
         case .off: .photo
         case .photo: .below
-        case .below: .off
+        case .below: .auto
         }
     }
 }
@@ -45,7 +49,8 @@ public struct GridSection: Equatable, Sendable {
 /// The grid's spacing (Photos measurements).
 public struct GridMetrics: Equatable, Sendable {
     public var photoGap: CGFloat = 2
-    public var photoEdge: CGFloat = 0
+    /// On the line of the headings and the folders (board «Эскизы файлов» B, 2026-10-27), not edge to edge.
+    public var photoEdge: CGFloat = 20
     public var collectionGap: CGFloat = 16
     public var collectionEdge: CGFloat = 20
     /// A collection slot wants this much of the photo target.
@@ -60,6 +65,8 @@ public struct GridMetrics: Equatable, Sendable {
     public var belowFacts: CGFloat = 15
     /// Names and badges only on slots at least this wide.
     public var minNamed: CGFloat = 90
+    /// `GridNames.auto`: the names go under the pictures from this slot width.
+    public var namesBelowFrom: CGFloat = 160
     /// A poster is one card: the square cover, a 3 pt seam (the progress track) under it, then the band of facts
     /// (`PosterBand`, by width). The band's lines change at these widths: under `bandTwoLinesFrom` the name line
     /// only; from `bandProgressFrom` a third line with the dates' span and the progress as text.
@@ -155,6 +162,8 @@ public struct GridLayout: Equatable, Sendable {
         var coverInset: CGPoint
         /// A file card's picture is wider than tall by the files' aspect (a video's 135 × 76); nil: `cover` square.
         var coverWidth: CGFloat? = nil
+        /// The files' names (and facts) under their pictures: `.below`, or `.auto` on slots wide enough.
+        var namesBelow = false
         var rows: Int { (count + columns - 1) / columns }
         var pitch: CGFloat { slotHeight + gap }
     }
@@ -179,7 +188,7 @@ public struct GridLayout: Equatable, Sendable {
             let wanted = isPhotos ? target : target * metrics.collectionScale
             var columns = Self.columns(width: width, target: wanted, gap: gap, edge: edge)
             var slot = max(1, (width - 2 * edge - gap * CGFloat(columns - 1)) / CGFloat(columns))
-            var slotHeight: CGFloat, cover = slot, coverInset = CGPoint.zero, coverWidth: CGFloat?
+            var slotHeight: CGFloat, cover = slot, coverInset = CGPoint.zero, coverWidth: CGFloat?, namesBelow = false
             // Files keep their tiles in Posters; in Cards they are cards and in the list rows, like the folders.
             let used = width < metrics.minStyled ? CardStyle.posters : style
             if isPhotos && used == .cards {
@@ -192,7 +201,8 @@ public struct GridLayout: Equatable, Sendable {
                 coverInset = CGPoint(x: metrics.cardPadding, y: metrics.cardPadding)
             } else if isPhotos && used != .list {
                 cover = fileAspect == 1 ? slot : (slot / max(0.1, fileAspect)).rounded()
-                slotHeight = cover + (names == .below ? metrics.belowText + (factsLine ? metrics.belowFacts : 0) : 0)
+                namesBelow = names == .below || (names == .auto && slot >= metrics.namesBelowFrom)
+                slotHeight = cover + (namesBelow ? metrics.belowText + (factsLine ? metrics.belowFacts : 0) : 0)
             } else {
                 switch used {
                 case .posters:
@@ -221,7 +231,7 @@ public struct GridLayout: Equatable, Sendable {
             }
             let p = Placed(first: first, count: section.count, columns: columns, slot: slot, slotHeight: slotHeight,
                            gap: gap, edge: edge, header: header, rowsTop: y, cover: cover, coverInset: coverInset,
-                           coverWidth: coverWidth)
+                           coverWidth: coverWidth, namesBelow: namesBelow)
             y += CGFloat(p.rows) * p.pitch
             first += section.count
             placed.append(p)
@@ -250,6 +260,8 @@ public struct GridLayout: Equatable, Sendable {
     public func columns(inSection s: Int) -> Int { placed[s].columns }
     public func slotWidth(inSection s: Int) -> CGFloat { placed[s].slot }
     public func showsNames(inSection s: Int) -> Bool { placed[s].slot >= metrics.minNamed }
+    /// The files' names under their pictures in section `s` (`.below`, or `.auto` on wide enough slots).
+    public func namesBelow(inSection s: Int) -> Bool { placed[s].namesBelow }
 
     public func section(of index: Int) -> Int {
         placed.lastIndex { $0.first <= index && $0.count > 0 } ?? 0

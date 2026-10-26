@@ -128,6 +128,48 @@ public enum FileFactsText {
         return main == nil ? nil : parts.joined(separator: " · ")
     }
 
+    /// `24 MP`, `8.3 MP`: a photo's megapixels (one decimal under ten); nil without its size.
+    public static func megapixels(_ f: FileFacts) -> String? {
+        guard let w = f.width, let h = f.height, w > 0, h > 0 else { return nil }
+        let mp = Double(w) * Double(h) / 1_000_000
+        return (mp >= 10 ? String(Int(mp.rounded())) : number((mp * 10).rounded() / 10)) + " MP"
+    }
+
+    /// The badges on a picture (file-cards spec, board «Эскизы файлов» B and video B): a photo's megapixels and RAW;
+    /// a video's resolution, HDR and rate (rounded: `60`, `30`, `24`). `format` is the file's extension in capitals.
+    public static func badges(_ f: FileFacts?, format: String?) -> [Badge] {
+        guard let f else { return [] }
+        if f.isVideo {
+            var out: [Badge] = []
+            if let r = resolution(f) { out.append(Badge(text: r)) }
+            if f.hdr == true { out.append(Badge(text: "HDR", isHighlight: true)) }
+            if let fps = f.fps, fps > 0 { out.append(Badge(text: String(Int(fps.rounded())))) }
+            return out
+        }
+        var out: [Badge] = []
+        if let mp = megapixels(f) { out.append(Badge(text: mp)) }
+        if let format, rawFormats.contains(format.uppercased()) { out.append(Badge(text: "RAW")) }
+        return out
+    }
+
+    public struct Badge: Equatable, Sendable {
+        public var text: String
+        /// Drawn in the HDR yellow.
+        public var isHighlight = false
+        public init(text: String, isHighlight: Bool = false) {
+            self.text = text
+            self.isHighlight = isHighlight
+        }
+    }
+
+    static let rawFormats: Set<String> = ["ARW", "CR2", "CR3", "NEF", "NRW", "DNG", "RAF", "ORF", "RW2", "PEF", "SRW", "3FR", "IIQ"]
+
+    /// The line under a video poster that has its badges: the codec and the size (the rest is on the picture).
+    public static func videoLineWithBadges(_ f: FileFacts, bytes: Int64?) -> String? {
+        let parts = [f.codec, bytes.map(size)].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
     /// `1/250` under a second (the nearest whole denominator), else `0.5 s`, `2 s`.
     public static func shutter(_ seconds: Double) -> String {
         if seconds < 0.4 { return "1/\(Int((1 / seconds).rounded()))" }
@@ -141,7 +183,7 @@ public enum FileFactsText {
     }
 
     /// A number without trailing zeros, at most two decimals: `2.8`, `24`, `0.5`.
-    static func number(_ x: Double) -> String {
+    public static func number(_ x: Double) -> String {
         let r = (x * 100).rounded() / 100
         if r == r.rounded() { return String(Int(r)) }
         var s = String(format: "%.2f", r)

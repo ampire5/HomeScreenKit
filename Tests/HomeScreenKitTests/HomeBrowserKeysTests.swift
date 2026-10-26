@@ -271,8 +271,8 @@ import Testing
         let view = await shown(FakeHomeSource(), BrowserFixtures.files(3))
         var asked: [GridNames] = []
         view.onNames = { asked.append($0); view.names = $0 }
-        for _ in 0..<3 { #expect(view.handleKey(key(45, "n", [.option]))) }
-        #expect(asked == [.photo, .below, .off])
+        for _ in 0..<4 { #expect(view.handleKey(key(45, "n", [.option]))) }
+        #expect(asked == [.photo, .below, .auto, .off])
     }
 
     @Test func commandFFocusesField() async {

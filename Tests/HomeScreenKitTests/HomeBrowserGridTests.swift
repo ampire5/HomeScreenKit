@@ -26,7 +26,8 @@ import Testing
         let lastOfRow = view.card(for: view.entries[view.columns - 1].id)!
         // The clip view's width: 1203 with overlay scrollers, less a legacy scroller's width otherwise.
         #expect(view.gridContentWidth > 1180)
-        #expect(abs(lastOfRow.frame.maxX - view.gridContentWidth) <= 0.5)
+        // the photos on the headings' line: 20 pt in from either side
+        #expect(abs(lastOfRow.frame.maxX - (view.gridContentWidth - 20)) <= 0.5)
     }
 
     @Test func mixedFolderHasTwoSections() async {

@@ -109,7 +109,7 @@ final class CollectionCard: GridCard {
         placeholder.frame = CGRect(x: (w - size.width) / 2, y: (w - size.height) / 2, width: size.width, height: size.height)
         let pill = badgePill.fittingSize
         badgePill.frame = CGRect(x: 8, y: 8, width: pill.width, height: pill.height)
-        let below = names == .below
+        let below = names == .below || names == .auto
         titleLabel.font = Chrome.Text.font(.body, weight: .semibold)
         subtitleLabel.font = Chrome.Text.font(.small)
         titleLabel.textColor = below ? Chrome.Palette.window.label : Chrome.Palette.overMedia.text

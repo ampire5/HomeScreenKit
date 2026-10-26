@@ -116,7 +116,18 @@ import Testing
     @Test func namesCycle() {
         #expect(GridNames.off.next == .photo)
         #expect(GridNames.photo.next == .below)
-        #expect(GridNames.below.next == .off)
+        #expect(GridNames.below.next == .auto)
+        #expect(GridNames.auto.next == .off)
+    }
+
+    /// `auto`: names and facts under the pictures from 160 pt slots; smaller ones reserve nothing (a band on hover).
+    @Test func autoNamesGoBelowOnWideSlots() {
+        let wide = GridLayout(sections: [photos(10)], width: 1000, target: 220, names: .auto, factsLine: true)
+        #expect(wide.namesBelow(inSection: 0))
+        #expect(wide.frame(of: 0).height == wide.pictureFrame(of: 0).height + 22 + 15)
+        let small = GridLayout(sections: [photos(10)], width: 1000, target: 100, names: .auto, factsLine: true)
+        #expect(!small.namesBelow(inSection: 0))
+        #expect(small.frame(of: 0).height == small.pictureFrame(of: 0).height)
     }
 
     // MARK: Folder card styles

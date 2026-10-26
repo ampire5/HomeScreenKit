@@ -59,4 +59,16 @@ import Testing
         #expect(FileFactsText.posterLine(nil, bytes: 5) == nil)
         #expect(FileFactsText.posterLine(FileFacts(), bytes: 5) == nil)
     }
+
+    @Test func badgesAndMegapixels() {
+        #expect(FileFactsText.megapixels(FileFacts(width: 6000, height: 4000)) == "24 MP")
+        #expect(FileFactsText.megapixels(FileFacts(width: 3264, height: 2448)) == "8 MP")
+        #expect(FileFactsText.megapixels(FileFacts(width: 2560, height: 1440)) == "3.7 MP")
+        let photo = FileFactsText.badges(FileFacts(width: 6000, height: 4000), format: "arw")
+        #expect(photo.map(\.text) == ["24 MP", "RAW"])
+        let video = FileFactsText.badges(FileFacts(width: 1280, height: 720, codec: "HEVC", fps: 59.94, hdr: true), format: "MP4")
+        #expect(video.map(\.text) == ["720p", "HDR", "60"] && video[1].isHighlight)
+        #expect(FileFactsText.badges(nil, format: "JPG").isEmpty)
+        #expect(FileFactsText.videoLineWithBadges(FileFacts(codec: "H.264"), bytes: 1_150_000_000) == "H.264 · 1.15 GB")
+    }
 }

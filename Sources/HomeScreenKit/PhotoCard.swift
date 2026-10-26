@@ -20,7 +20,13 @@ final class PhotoCard: GridCard {
     /// The photo is a page of a two-page pair.
     var isPaired = false { didSet { if isPaired != oldValue { marksChanged() } } }
     /// The pointer is over the card; another photo shown in it takes it back.
-    var isHovered = false { didSet { if isHovered != oldValue { marksChanged() } } }
+    var isHovered = false {
+        didSet {
+            guard isHovered != oldValue else { return }
+            marksChanged()
+            if names == .auto { needsLayout = true }   // the band with the name comes and goes
+        }
+    }
     var aspect: CGFloat = 1 { didSet { if aspect != oldValue { needsLayout = true } } }
     var showsFacts = false { didSet { if showsFacts != oldValue { itemChanged() } } }
     /// The facts line under the name in `.below` (`FileStyle.factsLine`, file-cards spec §2).
@@ -42,6 +48,10 @@ final class PhotoCard: GridCard {
     private let track = CALayer()
     private let fill = CALayer()
     private let factsChip = NSTextField(labelWithString: "")
+    /// The badges at the picture's top left (`FileFactsText.badges`: `24 MP`, `RAW`; `720p`, `HDR`, `60`), made the
+    /// first time they show; on slots from `badgesFrom`.
+    private var badgeLabels: [NSTextField] = []
+    private static let badgesFrom: CGFloat = 120
 
     private static let aspectInset: CGFloat = 8
     private static let ringWidth: CGFloat = 2.5
@@ -103,6 +113,36 @@ final class PhotoCard: GridCard {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
+    /// The badges in a row from the picture's top left (after the ⧉ chip of a pair), each on the dark chip fill.
+    private func layoutBadges(in rect: CGRect) {
+        let badges = showsBadges ? FileFactsText.badges(item.facts, format: item.format) : []
+        while badgeLabels.count < badges.count {
+            let label = NSTextField(labelWithString: "")
+            label.font = .monospacedDigitSystemFont(ofSize: 9.5, weight: .bold)
+            label.alignment = .center
+            label.drawsBackground = false
+            label.wantsLayer = true
+            label.layer?.backgroundColor = Self.markFill.withAlphaComponent(0.58).cgColor
+            label.layer?.cornerRadius = 4
+            addSubview(label)
+            badgeLabels.append(label)
+        }
+        var x = rect.minX + Self.markInset + (isPaired && showsNames ? Self.chipSize.width + 4 : 0)
+        for (i, label) in badgeLabels.enumerated() {
+            guard i < badges.count else { label.isHidden = true; continue }
+            let badge = badges[i]
+            if label.stringValue != badge.text { label.stringValue = badge.text }
+            label.textColor = badge.isHighlight ? Self.hdrYellow : .white
+            let size = label.intrinsicContentSize
+            let frame = CGRect(x: x, y: rect.minY + Self.markInset, width: size.width + 10, height: Self.chipSize.height)
+            label.isHidden = frame.maxX > rect.maxX - Self.markInset - 14   // the dot's corner stays clear
+            label.frame = frame
+            x = frame.maxX + 4
+        }
+    }
+
+    private static let hdrYellow = NSColor(srgbRed: 1, green: 0.84, blue: 0.04, alpha: 1)
+
     /// The track along the picture's bottom edge (3 pt, only with a progress) and the chip 6 pt in from its bottom
     /// right corner, above the track (only with a line, and on a picture wide enough for it).
     private func layoutFacts(in rect: CGRect) {
@@ -134,7 +174,10 @@ final class PhotoCard: GridCard {
             guard let image, image.width > 0, image.height > 0, box.width > 0 else { return box }
             let scale = min(box.width / CGFloat(image.width), box.height / CGFloat(image.height))
             let w = CGFloat(image.width) * scale, h = CGFloat(image.height) * scale
-            return CGRect(x: box.minX + (box.width - w) / 2, y: box.minY + (box.height - h) / 2, width: w, height: h)
+            // With the name under it the picture sits on the box's bottom, as Finder's icons do: the names of a row
+            // stay on one line, right under their pictures.
+            let y = names == .below ? box.maxY - h : box.minY + (box.height - h) / 2
+            return CGRect(x: box.minX + (box.width - w) / 2, y: y, width: w, height: h)
         }
     }
 
@@ -142,10 +185,30 @@ final class PhotoCard: GridCard {
     var lengthText: String { item.subtitle ?? item.facts?.duration.map(FileFactsText.length) ?? "" }
 
     /// The strip's two texts: the exposure (else the format) and the size as a file's ("" for what the item does not
-    /// have).
+    /// have). Drawn with glyphs for the exposure (`stripExposure`).
     var stripText: (format: String, size: String) {
         (item.facts.flatMap(FileFactsText.exposureLine) ?? item.format ?? "",
          item.bytes.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? "")
+    }
+
+    /// The exposure as ProCam draws it (glyphs and values), nil without EXIF.
+    private var stripExposure: NSAttributedString? {
+        item.facts.flatMap { FactsGlyphs.exposure($0, font: Self.stripFont, color: .white) }
+    }
+
+    /// The line under the name: a video with its badges on the picture says only its codec and size.
+    private var factsLine: String {
+        if let f = item.facts, f.isVideo, showsBadges { return FileFactsText.videoLineWithBadges(f, bytes: item.bytes) ?? "" }
+        return FileFactsText.posterLine(item.facts, bytes: item.bytes) ?? ""
+    }
+
+    private var showsBadges: Bool { showsNames && bounds.width >= Self.badgesFrom }
+
+    private func fillStrip() {
+        guard let stripFormat, let stripSize else { return }
+        let text = stripText
+        if let exposure = stripExposure { stripFormat.attributedStringValue = exposure } else { stripFormat.stringValue = text.format }
+        stripSize.stringValue = text.size
     }
 
     override func show(_ item: HomeCardItem) {
@@ -155,13 +218,9 @@ final class PhotoCard: GridCard {
 
     override func itemChanged() {
         nameLabel.stringValue = item.title
-        if let stripFormat, let stripSize {
-            let text = stripText
-            stripFormat.stringValue = text.format
-            stripSize.stringValue = text.size
-        }
+        fillStrip()
         factsChip.stringValue = lengthText
-        factsLabel.stringValue = FileFactsText.posterLine(item.facts, bytes: item.bytes) ?? ""
+        factsLabel.stringValue = factsLine
         marksChanged()
         needsLayout = true
     }
@@ -195,8 +254,9 @@ final class PhotoCard: GridCard {
     }
 
     private var showsStrip: Bool {
-        // A video's picture carries its length chip and progress; its facts are the line under its name.
-        guard isHovered, showsNames, !showsFacts else { return false }
+        // A video's picture carries its length chip and progress; its facts are the line under its name. With
+        // `auto` names on a small tile the band with the name takes the strip's place.
+        guard isHovered, showsNames, !showsFacts, names != .auto else { return false }
         let text = stripText
         return !text.format.isEmpty || !text.size.isEmpty
     }
@@ -271,9 +331,7 @@ final class PhotoCard: GridCard {
         size.alignment = .right
         stripFormat = format
         stripSize = size
-        let text = stripText
-        format.stringValue = text.format
-        size.stringValue = text.size
+        fillStrip()
         addSubview(strip)
         self.strip = strip
     }
@@ -313,10 +371,26 @@ final class PhotoCard: GridCard {
             stripFormat.frame = CGRect(x: line.minX, y: line.minY, width: max(0, line.width - sizeWidth - 4),
                                        height: line.height)
         }
-        let named = showsNames && names != .off
+        let line = factsLine   // it depends on the width (the badges take a video's stream)
+        if factsLabel.stringValue != line { factsLabel.stringValue = line }
+        layoutBadges(in: rect)
+        // `auto` on a small tile: the name and its facts as a band over the picture while the pointer is on it.
+        let band = names == .auto
+        let named = showsNames && names != .off && (!band || isHovered)
         nameLabel.isHidden = !named
-        shade.isHidden = !(named && names == .photo)
-        if names == .photo {
+        shade.isHidden = !(named && (names == .photo || band))
+        if band {
+            nameLabel.font = Chrome.Text.font(.label, weight: .semibold)
+            nameLabel.textColor = Chrome.Palette.overMedia.text
+            nameLabel.shadow = nil
+            let hasFacts = !factsLabel.stringValue.isEmpty
+            let height = min(rect.height, hasFacts ? 44 : 32)
+            shade.frame = CGRect(x: rect.minX, y: rect.maxY - height, width: rect.width, height: height)
+            nameLabel.frame = CGRect(x: rect.minX + 6, y: rect.maxY - (hasFacts ? 36 : 20), width: max(0, rect.width - 12), height: 16)
+            factsLabel.isHidden = !named || !hasFacts
+            factsLabel.textColor = Chrome.Palette.overMedia.secondaryText
+            factsLabel.frame = CGRect(x: rect.minX + 6, y: rect.maxY - 19, width: max(0, rect.width - 12), height: 14)
+        } else if names == .photo {
             nameLabel.font = Chrome.Text.font(.label, weight: .medium)
             nameLabel.textColor = Chrome.Palette.overMedia.text
             let shadow = NSShadow()

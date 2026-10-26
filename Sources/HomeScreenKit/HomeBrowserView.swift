@@ -1675,8 +1675,9 @@ public final class HomeBrowserView: NSView {
                             title: both ? "\(self.files.heading) · \(BrowserSummary.number(files))" : nil)]
     }
 
-    /// Cards for the rows in view and a screen either side; the others go back to their pool.
-    func tile() {
+    /// Cards for the rows in view and a screen either side; the others go back to their pool. `atLeast`: the second
+    /// pass after a legacy scroller came keeps the first pass's height, so the scroller stays (below).
+    func tile(atLeast: CGFloat = 0) {
         let width = scroll.contentSize.width > 0 ? scroll.contentSize.width : bounds.width
         gridWidth = width
         sections = makeSections()
@@ -1691,14 +1692,16 @@ public final class HomeBrowserView: NSView {
         // At least the view's height less the inset AppKit gives the scroll view under the toolbar: as tall as the
         // whole view, a grid that fits scrolled by that inset and kept a legacy scroller (a mouse plugged in).
         let insets = scroll.contentInsets
-        let height = max(grid.contentHeight, scroll.contentSize.height - insets.top - insets.bottom)
+        let height = max(grid.contentHeight, scroll.contentSize.height - insets.top - insets.bottom, atLeast)
         if document.frame.size != CGSize(width: width, height: height) {
             document.frame = CGRect(x: 0, y: 0, width: width, height: height)
             // A legacy scroller shows or hides for the new height and takes its width now, not at the next layout:
             // laid out at the old width, the cards would move under a scroll just set from their frames (a session's
-            // anchor). A narrower grid is only taller, so the second pass keeps the scroller as it is.
+            // anchor). The second pass keeps at least this height: a narrower grid is usually taller, but not always
+            // (`auto` names leave the slots under 160 pt: shorter), and without it the scroller would go, the grid
+            // widen and the passes never end.
             scroll.tile()
-            if scroll.contentSize.width != width { return tile() }
+            if atLeast == 0, scroll.contentSize.width != width { return tile(atLeast: height) }
         }
         let visible = scroll.contentView.documentVisibleRect
         let range = grid.indices(in: visible, margin: max(visible.height, 1))
@@ -1742,7 +1745,8 @@ public final class HomeBrowserView: NSView {
             let section = grid.section(of: i)
             if let photo = card as? PhotoCard {
                 photo.style = style
-                photo.names = names
+                // `auto`: under the picture where the slots are wide enough, else the band on hover.
+                photo.names = names == .auto && grid.namesBelow(inSection: section) ? .below : names
                 photo.aspect = files.aspect
                 photo.showsFacts = files.facts
                 photo.showsFactsLine = files.factsLine
