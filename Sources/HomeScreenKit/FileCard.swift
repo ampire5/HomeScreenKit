@@ -31,6 +31,8 @@ final class FileCard: GridCard {
     private let lines = [CardText(), CardText(), CardText()]
     private let track = CALayer()
     private let bar = CALayer()
+    /// The chip's size for its text, measured when the text changes, not at every layout.
+    private var chipSize = CGSize.zero
 
     override init(item: HomeCardItem) {
         super.init(item: item)
@@ -74,6 +76,8 @@ final class FileCard: GridCard {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
+    private var placeholderSymbol = ""
+
     var pictureFrame: CGRect {
         let p = metrics.cardPadding, h = metrics.cardCover
         return CGRect(x: p, y: p, width: (h * aspect).rounded(), height: h)
@@ -111,8 +115,15 @@ final class FileCard: GridCard {
         nameLabel.stringValue = item.title
         for (line, text) in zip(lines, rowTexts) { line.stringValue = text }
         let length = item.facts?.duration.map(FileFactsText.length) ?? ""
-        lengthChip.stringValue = length
-        placeholder.image = NSImage(systemSymbolName: item.symbol, accessibilityDescription: nil)
+        if lengthChip.stringValue != length {
+            lengthChip.stringValue = length
+            let text = lengthChip.intrinsicContentSize
+            chipSize = length.isEmpty ? .zero : CGSize(width: text.width + 8, height: text.height + 2)
+        }
+        if placeholderSymbol != item.symbol {
+            placeholderSymbol = item.symbol
+            placeholder.image = NSImage(systemSymbolName: item.symbol, accessibilityDescription: nil)
+        }
         needsLayout = true
     }
 
@@ -167,10 +178,8 @@ final class FileCard: GridCard {
         let p = pictureFrame
         picture.frame = p
         picture.cornerRadius = Self.pictureRadius
-        let ps = placeholder.fittingSize
-        placeholder.frame = CGRect(x: p.midX - ps.width / 2, y: p.midY - ps.height / 2, width: ps.width, height: ps.height)
-        let chip = lengthChip.intrinsicContentSize
-        let chipWidth = chip.width + 8, chipHeight = chip.height + 2
+        placeholder.frame = CGRect(x: p.midX - 16, y: p.midY - 16, width: 32, height: 32)
+        let chipWidth = chipSize.width, chipHeight = chipSize.height
         lengthChip.isHidden = lengthChip.stringValue.isEmpty || chipWidth > p.width - 8
         lengthChip.frame = CGRect(x: p.maxX - 4 - chipWidth, y: p.maxY - 4 - chipHeight, width: chipWidth, height: chipHeight)
         let x = p.maxX + Self.columnGap, width = max(0, bounds.width - x - metrics.cardPadding)
