@@ -26,6 +26,14 @@ side for video; `4032 × 3024` for a photo), `stream` (`1080p · HEVC · 60 fps`
 
 `BrowserEntry.facts` and `HomeCardItem.facts` carry them; nil draws the cards as before.
 
+**Since the style guide (2026-10-27, «Media UI Iconography» v1.0, taken by the owner):** the words follow its sections
+D and E. `hdr` became `transfer` (`SDR`, `HLG`, `HDR10`) and `exposureBias` (EV) was added. Classes by the long side
+(`FHD`, `UHD` for 3840, `4K` for 4096, `6K`, `8K`); rates unrounded with `p` (`23.976p`); `stream` in the guide's order
+`UHD · 25p · HEVC · HLG`; `exposureLine` `1/250 · f/2.8 · ISO 800 · 35 mm · −0.3 EV`; a non-breaking space between a
+number and its unit; decimal sizes, one decimal under 100 (`24.6 MB`, `148 MB`). Badges are the guide's `MediaBadge`
+(text on the HUD scrim, no colour per kind; the metal plates are gone), at most two: `UHD HLG`, `FHD 59.94p`,
+`RAW 24 MP`. The hover strip's exposure is monospaced text, no glyphs (`FactsGlyphs` is gone).
+
 ## 2. The cards (HomeScreenKit)
 
 - **Posters (`PhotoCard`), names below:** a second line under the name, secondary colour, 11 pt: video

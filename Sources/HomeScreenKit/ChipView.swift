@@ -1,12 +1,12 @@
 import AppKit
 import HomeChrome
 
-/// A small chip on a picture, as a camera's screen marks its modes (`1080p`, `HDR`, `30 fps`, `24 MP`, a length):
-/// dark fill, radius 4, the text's baseline set by `CardText` so it sits in the middle of the chip whatever the font,
-/// a text field's cell would sit it low. Takes no clicks.
+/// A small chip on a picture (a video's length, style guide F1): the HUD scrim, radius 3, padding 4, the text's
+/// baseline set by `CardText` so it sits in the middle of the chip whatever the font, a text field's cell would sit
+/// it low. Takes no clicks.
 final class ChipView: NSView {
     static let height: CGFloat = 16
-    private static let padding: CGFloat = 5
+    private static let padding: CGFloat = 4
     private let label = CardText()
 
     var text: String {
@@ -26,10 +26,10 @@ final class ChipView: NSView {
         super.init(frame: .zero)
         wantsLayer = true
         layer?.backgroundColor = fill.cgColor
-        layer?.cornerRadius = 4
+        layer?.cornerRadius = 3
         layer?.cornerCurve = .continuous
         label.font = font
-        label.textColor = .white
+        label.textColor = NSColor(srgbRed: 0xE6 / 255, green: 0xE8 / 255, blue: 0xEB / 255, alpha: 1)
         addSubview(label)
     }
 

@@ -34,7 +34,7 @@ final class PhotoCard: GridCard {
 
     let ring = CALayer()
     let nameLabel = NSTextField(labelWithString: "")
-    /// Under the name: `1080p · HEVC · 60 fps · 1.2 GB`, `1/250 · f/2.8 · ISO 400`.
+    /// Under the name: `FHD · 60p · HEVC · 1.2 GB`, `1/250 · f/2.8 · ISO 400`.
     let factsLabel = NSTextField(labelWithString: "")
     let hairline = CALayer()
     private let picture = CALayer()
@@ -47,11 +47,11 @@ final class PhotoCard: GridCard {
     /// The facts (`showsFacts`): the progress track and its fill along the picture's bottom, the line's chip.
     private let track = CALayer()
     private let fill = CALayer()
-    /// A video's length (or `0:04 / 23:03`) at the picture's bottom right.
-    let lengthChip = ChipView(font: CardFont.text(10, .semibold), fill: NSColor(white: 0, alpha: 0.6))
-    /// The badges at the picture's top left (`FileFactsText.badges`: `24 MP`, `RAW`; `720p`, `HDR`, `60`), made the
-    /// first time they show; on slots from `badgesFrom`.
-    private var badgeLabels: [BadgePlate] = []
+    /// A video's length (or `0:04 / 23:03`) at the picture's bottom right: mono 11 on the scrim (style guide F1).
+    let lengthChip = ChipView(font: .monospacedDigitSystemFont(ofSize: 11, weight: .medium), fill: NSColor(white: 0, alpha: 0.55))
+    /// The badges at the picture's top left (`FileFactsText.badges`: `RAW`, `24 MP`; `UHD`, `HLG`), made the first
+    /// time they show; on slots from `badgesFrom`.
+    private var badgeLabels: [MediaBadge] = []
     private static let badgesFrom: CGFloat = 120
 
     private static let aspectInset: CGFloat = 8
@@ -60,7 +60,8 @@ final class PhotoCard: GridCard {
     private static let dot: CGFloat = 8, dotRing: CGFloat = 1.5, markInset: CGFloat = 6
     /// The chip: a 12 pt glyph, padding 2 × 3, radius 5.
     private static let chipSize = CGSize(width: 18, height: 16)
-    private static let stripFont = NSFont.monospacedDigitSystemFont(ofSize: 10.5, weight: .regular)
+    /// The exposure as a camera's screen writes it (style guide F5): monospaced, values apart by two spaces.
+    private static let stripFont = NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
     private static let stripPadding = CGSize(width: 7, height: 5)
     private static let markFill = NSColor(srgbRed: 18 / 255, green: 18 / 255, blue: 20 / 255, alpha: 1)
 
@@ -112,9 +113,9 @@ final class PhotoCard: GridCard {
     private func layoutBadges(in rect: CGRect) {
         let badges = showsBadges ? FileFactsText.badges(item.facts, format: item.format) : []
         while badgeLabels.count < badges.count {
-            let plate = BadgePlate()
-            addSubview(plate)
-            badgeLabels.append(plate)
+            let badge = MediaBadge()
+            addSubview(badge)
+            badgeLabels.append(badge)
         }
         var x = rect.minX + Self.markInset + (isPaired && showsNames ? Self.chipSize.width + 4 : 0)
         for (i, label) in badgeLabels.enumerated() {
@@ -172,10 +173,9 @@ final class PhotoCard: GridCard {
     var lengthText: String { item.subtitle ?? item.facts?.duration.map(FileFactsText.length) ?? "" }
 
     /// The strip's two texts: the exposure (else the format) and the size as a file's ("" for what the item does not
-    /// have). Drawn with glyphs for the exposure (`stripExposure`).
+    /// have). The exposure is fitted by whole values (`layoutStrip`).
     var stripText: (format: String, size: String) {
-        (item.facts.flatMap(FileFactsText.exposureLine) ?? item.format ?? "",
-         item.bytes.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? "")
+        (item.facts.flatMap(FileFactsText.exposureLine) ?? item.format ?? "", item.bytes.map(FileFactsText.size) ?? "")
     }
 
     /// The facts line under the name shows already: the strip then says what it does not (the camera), not the
@@ -196,7 +196,7 @@ final class PhotoCard: GridCard {
         needsLayout = true   // the left text is fitted to the room the size leaves (`layoutStrip`)
     }
 
-    /// The strip's left text in the room the size leaves: the exposure in glyphs (whole values, as many as fit), or
+    /// The strip's left text in the room the size leaves: the exposure in mono (whole values, as many as fit), or
     /// with the facts line under the name the camera and the lens; the format without either. The size gives way
     /// when the exposure would keep fewer than two values beside it.
     private func layoutStrip(_ line: CGRect) {
@@ -208,13 +208,15 @@ final class PhotoCard: GridCard {
             stripSize.isHidden = !sizeShown
             stripSize.frame = line
             stripFormat.frame = CGRect(x: line.minX, y: line.minY, width: room, height: line.height)
-            if !factsLineShown, let f = item.facts, FileFactsText.exposureLine(f) != nil {
-                let full = FactsGlyphs.exposure(f, font: Self.stripFont, color: .white)
-                let fitted = FactsGlyphs.exposure(f, font: Self.stripFont, color: .white, maxWidth: room - 2)
-                if fitted == nil || (sizeShown && fitted != full && fitted!.string.components(separatedBy: "   ").count < 2) {
-                    return false
+            if !factsLineShown, let f = item.facts, case let parts = FileFactsText.exposureParts(f), !parts.isEmpty {
+                let attributes: [NSAttributedString.Key: Any] = [.font: Self.stripFont, .foregroundColor: NSColor.white]
+                var count = parts.count
+                func line(_ n: Int) -> NSAttributedString {
+                    NSAttributedString(string: parts.prefix(n).joined(separator: "  "), attributes: attributes)
                 }
-                stripFormat.attributedStringValue = fitted!
+                while count > 0, line(count).size().width > room - 2 { count -= 1 }
+                if count == 0 || (sizeShown && count < parts.count && count < 2) { return false }
+                stripFormat.attributedStringValue = line(count)
                 return true
             }
             let words = factsLineShown ? item.facts.flatMap(FileFactsText.cameraLine) ?? item.format : item.format
