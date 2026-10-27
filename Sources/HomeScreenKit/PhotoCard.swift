@@ -51,7 +51,7 @@ final class PhotoCard: GridCard {
     let lengthChip = ChipView(font: CardFont.text(10, .semibold), fill: NSColor(white: 0, alpha: 0.6))
     /// The badges at the picture's top left (`FileFactsText.badges`: `24 MP`, `RAW`; `720p`, `HDR`, `60`), made the
     /// first time they show; on slots from `badgesFrom`.
-    private var badgeLabels: [ChipView] = []
+    private var badgeLabels: [BadgePlate] = []
     private static let badgesFrom: CGFloat = 120
 
     private static let aspectInset: CGFloat = 8
@@ -112,16 +112,15 @@ final class PhotoCard: GridCard {
     private func layoutBadges(in rect: CGRect) {
         let badges = showsBadges ? FileFactsText.badges(item.facts, format: item.format) : []
         while badgeLabels.count < badges.count {
-            let chip = ChipView(font: CardFont.text(9.5, .bold), fill: Self.markFill.withAlphaComponent(0.58))
-            addSubview(chip)
-            badgeLabels.append(chip)
+            let plate = BadgePlate()
+            addSubview(plate)
+            badgeLabels.append(plate)
         }
         var x = rect.minX + Self.markInset + (isPaired && showsNames ? Self.chipSize.width + 4 : 0)
         for (i, label) in badgeLabels.enumerated() {
             guard i < badges.count else { label.isHidden = true; continue }
             let badge = badges[i]
-            label.text = badge.text
-            label.textColor = badge.isHighlight ? Self.hdrYellow : .white
+            label.show(badge)
             let size = label.intrinsicContentSize
             let frame = CGRect(x: x, y: rect.minY + Self.markInset, width: size.width, height: size.height)
             label.isHidden = frame.maxX > rect.maxX - Self.markInset - 14   // the dot's corner stays clear
@@ -130,7 +129,6 @@ final class PhotoCard: GridCard {
         }
     }
 
-    private static let hdrYellow = NSColor(srgbRed: 1, green: 0.84, blue: 0.04, alpha: 1)
 
     /// The track along the picture's bottom edge (3 pt, only with a progress) and the chip 6 pt in from its bottom
     /// right corner, above the track (only with a line, and on a picture wide enough for it).

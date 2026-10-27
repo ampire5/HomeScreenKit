@@ -141,25 +141,35 @@ public enum FileFactsText {
         guard let f else { return [] }
         if f.isVideo {
             var out: [Badge] = []
-            if let r = resolution(f) { out.append(Badge(text: r)) }
-            if f.hdr == true { out.append(Badge(text: "HDR", isHighlight: true)) }
-            if let fps = f.fps, fps > 0 { out.append(Badge(text: String(Int(fps.rounded())) + " fps")) }
+            if let r = resolution(f) { out.append(Badge(text: r, kind: .resolution)) }
+            if f.hdr == true { out.append(Badge(text: "HDR", kind: .hdr)) }
+            if let fps = f.fps, fps > 0 { out.append(Badge(text: String(Int(fps.rounded())), unit: "FPS", kind: .rate)) }
             return out
         }
         var out: [Badge] = []
-        if let mp = megapixels(f) { out.append(Badge(text: mp)) }
-        if let format, rawFormats.contains(format.uppercased()) { out.append(Badge(text: "RAW")) }
+        if let mp = megapixels(f) {
+            out.append(Badge(text: String(mp.dropLast(3)), unit: "MP", kind: .megapixels))
+        }
+        if let format, rawFormats.contains(format.uppercased()) { out.append(Badge(text: "RAW", kind: .raw)) }
         return out
     }
 
+    /// One badge: a value, its unit (drawn smaller after it, as a camera's body marks `30 FPS`), and what it is (its
+    /// plate's colour: silver for the size and the rate, gold for HDR, graphite for RAW).
     public struct Badge: Equatable, Sendable {
+        public enum Kind: Sendable { case resolution, hdr, rate, megapixels, raw }
         public var text: String
-        /// Drawn in the HDR yellow.
-        public var isHighlight = false
-        public init(text: String, isHighlight: Bool = false) {
+        public var unit: String?
+        public var kind: Kind
+        public init(text: String, unit: String? = nil, kind: Kind) {
             self.text = text
-            self.isHighlight = isHighlight
+            self.unit = unit
+            self.kind = kind
         }
+
+        /// `30 FPS`, `24 MP`: the badge read as one string (tooltips, tests).
+        public var label: String { unit.map { text + " " + $0 } ?? text }
+        public var isHighlight: Bool { kind == .hdr }
     }
 
     static let rawFormats: Set<String> = ["ARW", "CR2", "CR3", "NEF", "NRW", "DNG", "RAF", "ORF", "RW2", "PEF", "SRW", "3FR", "IIQ"]
