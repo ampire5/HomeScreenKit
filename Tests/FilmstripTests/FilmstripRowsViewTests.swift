@@ -62,3 +62,11 @@ private final class CountingView: NSView {
     #expect(card.superview === view)
     #expect(abs(card.frame.minY - (row.start + row.picture.height + FilmstripRowsView.cardGap)) < 0.01)
 }
+
+/// Two old rows that map to one new row (the same file twice in a list): what is known of them merges, no trap.
+@MainActor @Test func remapMergesDuplicateTargets() {
+    let view = strip(20, current: 5)
+    for item in 0..<20 { view.setRow(item, title: "\(item)", detail: "", progress: nil) }
+    view.remap([3: 3, 4: 3, 5: 4])
+    #expect(!view.visibleItems.isEmpty)
+}

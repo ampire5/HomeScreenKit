@@ -277,8 +277,9 @@ import QuartzCore
 
     /// The list changed: what is known moves to the items' new indices (`FilmstripItems.indexMap`); the rest is dropped.
     public func remap(_ map: [Int: Int]) {
-        pictures = Dictionary(uniqueKeysWithValues: pictures.compactMap { key, value in map[key].map { ($0, value) } })
-        texts = Dictionary(uniqueKeysWithValues: texts.compactMap { key, value in map[key].map { ($0, value) } })
+        // Two old items may land on one new one (the same file twice in a list): either's is as good.
+        pictures = Dictionary(pictures.compactMap { key, value in map[key].map { ($0, value) } }, uniquingKeysWith: { a, _ in a })
+        texts = Dictionary(texts.compactMap { key, value in map[key].map { ($0, value) } }, uniquingKeysWith: { a, _ in a })
         for item in Array(rows.keys) { recycle(item) }
         placeRows(animated: false)
     }
