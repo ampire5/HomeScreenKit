@@ -2,17 +2,20 @@ import CoreGraphics
 import Foundation
 
 /// One row of the vertical strip: `start` is its top in points from the strip view's top, `length` its height;
-/// `picture` is where the picture goes inside the row (x across from the row's leading edge, y down from its top).
+/// `picture` is where the picture goes inside the row and `caption` where its text goes, under the picture and as wide
+/// (x across from the row's leading edge, y down from its top).
 public struct FilmstripRow: Equatable, Sendable {
     public let item: Int
     public let start: Double
     public let length: Double
     public let picture: CGRect
+    public let caption: CGRect
 }
 
 /// The strip as a column of rows (FrameScrub's playlist, Loupe's folders): each item a whole picture in its own
-/// proportions, `rowPicture` wide, on a line that moves under the strip's fixed centre; the browsed item there larger,
-/// `currentPicture` wide, with the owner's card (`cardHeight`) under it. Pure arithmetic in points, no AppKit.
+/// proportions, `rowPicture` wide with its caption under it, on a line that moves under the strip's fixed centre; the
+/// browsed item there larger, `currentPicture` wide with a larger caption, and the owner's card (`cardHeight`) under
+/// that. Pure arithmetic in points, no AppKit.
 ///
 /// A portrait picture fits a square (`portraitCap`), so one tall file does not take the screen. The base line lays
 /// the plain rows out from 0 with a `gapRatio` gap (prefix sums made once here, searched by bisection); an offset is
@@ -35,13 +38,16 @@ public struct FilmstripRows: FilmstripTrack, Equatable, Sendable {
     public let rowPicture: Double
     public let currentPicture: Double
     public let cardHeight: Double
+    /// The text under a plain row's picture, and under the browsed one's (larger).
+    public let captionHeight: Double
+    public let currentCaptionHeight: Double
     public let gap: Double
     private let aspects: [Double?]
     /// The top of each plain row on the base line, plus the end (`itemCount + 1` values).
     private let starts: [Double]
 
     public init(itemCount: Int, aspects: [Double?], length: Double, width: Double, rowPicture: Double,
-                currentPicture: Double, cardHeight: Double) {
+                currentPicture: Double, cardHeight: Double, captionHeight: Double = 0, currentCaptionHeight: Double = 0) {
         self.itemCount = max(0, itemCount)
         self.aspects = aspects
         self.length = length
@@ -49,12 +55,15 @@ public struct FilmstripRows: FilmstripTrack, Equatable, Sendable {
         self.rowPicture = rowPicture
         self.currentPicture = currentPicture
         self.cardHeight = cardHeight
+        self.captionHeight = captionHeight
+        self.currentCaptionHeight = currentCaptionHeight
         gap = Self.gapRatio * rowPicture
         var starts = [Double](repeating: 0, count: self.itemCount + 1)
         var position = 0.0
         for item in 0..<self.itemCount {
             starts[item] = position
-            position += Self.pictureSize(aspect: aspects.indices.contains(item) ? aspects[item] : nil, width: rowPicture).height + gap
+            position += Self.pictureSize(aspect: aspects.indices.contains(item) ? aspects[item] : nil, width: rowPicture).height
+                + captionHeight + gap
         }
         starts[self.itemCount] = position
         self.starts = starts
@@ -69,9 +78,9 @@ public struct FilmstripRows: FilmstripTrack, Equatable, Sendable {
 
     private func aspect(of item: Int) -> Double? { aspects.indices.contains(item) ? aspects[item] : nil }
 
-    /// A plain row's height: its picture's.
+    /// A plain row's height: its picture's and its caption's.
     public func plainLength(of item: Int) -> Double {
-        Self.pictureSize(aspect: aspect(of: item), width: rowPicture).height
+        Self.pictureSize(aspect: aspect(of: item), width: rowPicture).height + captionHeight
     }
 
     public func centre(of item: Int) -> Double {
@@ -106,19 +115,24 @@ public struct FilmstripRows: FilmstripTrack, Equatable, Sendable {
         let hasCurrent = (0..<itemCount).contains(current)
         let plainCurrent = hasCurrent ? Self.pictureSize(aspect: aspect(of: current), width: rowPicture) : .zero
         let fullCurrent = hasCurrent ? Self.pictureSize(aspect: aspect(of: current), width: currentPicture) : .zero
-        let grown = hasCurrent ? (fullCurrent.height + cardHeight - plainCurrent.height) * e : 0
+        let grown = hasCurrent
+            ? (fullCurrent.height + currentCaptionHeight + cardHeight - plainCurrent.height - captionHeight) * e : 0
         let origin = length / 2 - offset
         func row(_ item: Int) -> FilmstripRow {
             if hasCurrent, item == current {
                 let picture = CGSize(width: plainCurrent.width + (fullCurrent.width - plainCurrent.width) * e,
                                      height: plainCurrent.height + (fullCurrent.height - plainCurrent.height) * e)
+                let caption = captionHeight + (currentCaptionHeight - captionHeight) * e
                 return FilmstripRow(item: item, start: origin + starts[item] - grown / 2,
-                                    length: plainCurrent.height + grown, picture: CGRect(origin: .zero, size: picture))
+                                    length: plainCurrent.height + captionHeight + grown,
+                                    picture: CGRect(origin: .zero, size: picture),
+                                    caption: CGRect(x: 0, y: picture.height, width: picture.width, height: caption))
             }
             let picture = Self.pictureSize(aspect: aspect(of: item), width: rowPicture)
             let shift = !hasCurrent ? 0 : item < current ? -grown / 2 : grown / 2
-            return FilmstripRow(item: item, start: origin + starts[item] + shift, length: picture.height,
-                                picture: CGRect(origin: .zero, size: picture))
+            return FilmstripRow(item: item, start: origin + starts[item] + shift, length: picture.height + captionHeight,
+                                picture: CGRect(origin: .zero, size: picture),
+                                caption: CGRect(x: 0, y: picture.height, width: picture.width, height: captionHeight))
         }
         var before: [FilmstripRow] = [], after: [FilmstripRow] = []
         var item = middle - 1

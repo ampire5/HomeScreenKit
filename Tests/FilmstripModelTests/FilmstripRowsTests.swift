@@ -77,3 +77,17 @@ private func rows(_ count: Int, aspects: [Double?] = [], length: Double = 600) -
     let one = rows(1)
     #expect(one.rows(offset: one.centre(of: 0), current: 0, expansion: 1).map(\.item) == [0])
 }
+
+/// Every row has its caption under its picture; the browsed one a larger caption, and the card under that.
+@Test func captionUnderPicture() {
+    let strip = FilmstripRows(itemCount: 5, aspects: [], length: 600, width: 300, rowPicture: 160, currentPicture: 284,
+                              cardHeight: 40, captionHeight: 32, currentCaptionHeight: 38)
+    let shown = strip.rows(offset: strip.centre(of: 2), current: 2, expansion: 1)
+    let plain = shown.first { $0.item == 1 }!
+    #expect(abs(plain.length - (90 + 32)) < 0.01)
+    #expect(abs(plain.caption.minY - 90) < 0.01 && abs(plain.caption.height - 32) < 0.01 && abs(plain.caption.width - 160) < 0.01)
+    let current = shown.first { $0.item == 2 }!
+    #expect(abs(current.length - (159.75 + 38 + 40)) < 0.01)
+    #expect(abs(current.caption.minY - 159.75) < 0.01 && abs(current.caption.height - 38) < 0.01)
+    #expect(abs(strip.plainLength(of: 1) - 122) < 0.01)
+}

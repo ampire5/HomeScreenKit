@@ -52,8 +52,9 @@ import FilmstripModel
         let aspects = (0..<Self.count).map { Self.aspectCycle[$0 % Self.aspectCycle.count] }
         let width = Double(strip.bounds.width)
         let layout = FilmstripRows(itemCount: Self.count, aspects: aspects, length: Double(strip.bounds.height), width: width,
-                                   rowPicture: 96, currentPicture: width - 2 * Double(FilmstripRowsView.padding),
-                                   cardHeight: 70)
+                                   rowPicture: (width * 0.55).rounded(), currentPicture: width - 2 * Double(FilmstripRowsView.padding),
+                                   cardHeight: 40, captionHeight: FilmstripRowsView.captionHeight,
+                                   currentCaptionHeight: FilmstripRowsView.currentCaptionHeight)
         scroll.layoutChanged(keeping: current, layout: layout)
         strip.layout = layout
         place(animated: false)
@@ -62,7 +63,7 @@ import FilmstripModel
     func place(animated: Bool) {
         let layout = strip.layout
         guard layout.itemCount > 0 else { return }
-        card.stringValue = "Item \(current + 1) of \(Self.count)\nA card the owner supplies."
+        card.stringValue = "Item \(current + 1) of \(Self.count) · a card the owner supplies"
         strip.show(offset: scroll.offset ?? layout.centre(of: current), current: current,
                    expansion: scroll.isMoving ? 0 : 1, animated: animated)
     }

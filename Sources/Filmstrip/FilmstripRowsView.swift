@@ -4,8 +4,8 @@ import FilmstripModel
 import QuartzCore
 
 /// The vertical strip's surface (FrameScrub's playlist strip, spec 2026-10-27): rows of whole pictures under the
-/// strip's fixed centre, each with a title and a detail line beside it, the browsed row larger with the owner's card
-/// under its picture, the edges fading out where the strip goes on. Pure Core Animation for the rows: a layer per
+/// strip's fixed centre, each with a title and a detail line under it, the browsed row's picture and title larger
+/// with the owner's card under them, the edges fading out where the strip goes on. Pure Core Animation for the rows: a layer per
 /// visible row from a pool, pictures as `layer.contents`, text in `CATextLayer`s, so nothing is drawn on the main
 /// thread and the layer count follows the window, not the list. The card is the owner's view.
 ///
@@ -15,14 +15,24 @@ import QuartzCore
 @MainActor public final class FilmstripRowsView: NSView {
     /// Between the strip's sides and the rows.
     public static let padding: CGFloat = 8
-    /// Between a row's picture and its text.
-    public static let textGap: CGFloat = 10
-    /// Between the browsed picture and the card under it.
+    /// Under the card, before the next row.
     public static let cardGap: CGFloat = 6
     /// A press that moves less than this is a click.
     private static let clickSlop: CGFloat = 3
     /// The settling, a click's move and a step to a neighbour.
-    private static let moveDuration: CFTimeInterval = 0.2
+    /// The settling, a click's move and a step: the slots' own motion (the panels guide: 0.26 s, ease-out with a long
+    /// tail).
+    private static let moveDuration: CFTimeInterval = 0.26
+    private static var moveTiming: CAMediaTimingFunction { CAMediaTimingFunction(controlPoints: 0.2, 0.8, 0.2, 1) }
+    /// A plain row's title, the browsed row's, and the detail line under them (points).
+    public static let titleSize: CGFloat = 12
+    public static let currentTitleSize: CGFloat = 15
+    public static let detailSize: CGFloat = 10
+    /// Between a picture and its title.
+    public static let captionGap: CGFloat = 4
+    /// The caption's height for the layout: a plain row's, and the browsed row's.
+    public static let captionHeight = Double(captionGap + titleSize + 4 + detailSize + 4)
+    public static let currentCaptionHeight = Double(captionGap + currentTitleSize + 4 + detailSize + 4)
     private static let placeholderBorder = CGColor(gray: 1, alpha: 0.38)
     private static let barHeight: CGFloat = 3
 
@@ -139,7 +149,7 @@ import QuartzCore
         CATransaction.begin()
         if animated {
             CATransaction.setAnimationDuration(Self.moveDuration)
-            CATransaction.setAnimationTimingFunction(CAMediaTimingFunction(name: .easeOut))
+            CATransaction.setAnimationTimingFunction(Self.moveTiming)
         } else {
             CATransaction.setDisableActions(true)
         }
@@ -173,14 +183,15 @@ import QuartzCore
                                      height: Self.barHeight)
             let progress = self.texts[shown.item]?.progress ?? 0
             row.bar.frame = CGRect(x: 0, y: 0, width: shown.picture.width * progress, height: Self.barHeight)
-            // Beside a plain picture, centred on it; the browsed row's text is in its card.
-            let x = shown.picture.maxX + Self.textGap, width = max(0, frame.width - x)
-            let middle = shown.picture.midY
-            row.title.frame = CGRect(x: x, y: middle - 16, width: width, height: 16)
-            row.detail.frame = CGRect(x: x, y: middle + 1, width: width, height: 14)
-            let textOpacity: Float = shown.item == self.current ? Float(1 - self.expansion) : 1
-            row.title.opacity = textOpacity
-            row.detail.opacity = textOpacity
+            // Under the picture, as wide; the browsed row's title grows with its picture, so the two move as one.
+            let caption = shown.caption
+            let size = shown.item == self.current
+                ? Self.titleSize + (Self.currentTitleSize - Self.titleSize) * CGFloat(self.expansion) : Self.titleSize
+            row.title.fontSize = size
+            row.title.frame = CGRect(x: caption.minX, y: caption.minY + Self.captionGap, width: caption.width,
+                                     height: size + 4)
+            row.detail.frame = CGRect(x: caption.minX, y: row.title.frame.maxY, width: caption.width,
+                                      height: Self.detailSize + 4)
         }
         // A row that comes on screen starts where it belongs; only rows already there move.
         if isNew { withoutAnimation(place) } else { place() }
@@ -196,7 +207,7 @@ import QuartzCore
             cardItem = nil
             return
         }
-        let y = row.start + row.picture.height + Self.cardGap
+        let y = row.start + row.caption.maxY
         let frame = NSRect(x: Self.padding, y: y, width: row.picture.width, height: max(0, row.start + row.length - y))
         let alpha = CGFloat(expansion)
         let moved = cardItem != current
@@ -211,7 +222,7 @@ import QuartzCore
             let animation = CABasicAnimation(keyPath: key)
             animation.fromValue = value
             animation.duration = Self.moveDuration
-            animation.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            animation.timingFunction = Self.moveTiming
             layer.add(animation, forKey: key)
         }
         if moved {
@@ -251,7 +262,7 @@ import QuartzCore
                                      (row.detail, .small, Chrome.Palette.overMedia.secondaryText)] {
             let font = Chrome.Text.font(style)
             text.font = font
-            text.fontSize = style == .label ? 12 : 10
+            text.fontSize = style == .label ? Self.titleSize : Self.detailSize
             text.foregroundColor = color.cgColor
             text.truncationMode = text === row.title ? .middle : .end
             text.isWrapped = false
@@ -358,4 +369,9 @@ import QuartzCore
         body()
         CATransaction.commit()
     }
+}
+
+extension FilmstripRowsView {
+    /// The title layer of an item on screen (tests).
+    func titleLayer(of item: Int) -> CATextLayer? { rows[item]?.title }
 }

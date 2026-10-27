@@ -5,8 +5,8 @@ import FilmstripModel
 
 @MainActor private func strip(_ count: Int, current: Int) -> FilmstripRowsView {
     let view = FilmstripRowsView(frame: NSRect(x: 0, y: 0, width: 300, height: 600))
-    view.layout = FilmstripRows(itemCount: count, aspects: [], length: 600, width: 300, rowPicture: 96,
-                                currentPicture: 280, cardHeight: 120)
+    view.layout = FilmstripRows(itemCount: count, aspects: [], length: 600, width: 300, rowPicture: 160,
+                                currentPicture: 284, cardHeight: 60, captionHeight: 32, currentCaptionHeight: 38)
     view.show(offset: view.layout.centre(of: current), current: current, expansion: 1, animated: false)
     return view
 }
@@ -53,14 +53,14 @@ private final class CountingView: NSView {
     #expect(strips == 1 && parent.scrolls == 0)
 }
 
-/// The owner's card sits under the browsed row's picture.
+/// The owner's card sits under the browsed row's caption.
 @MainActor @Test func cardSitsUnderPicture() {
     let view = strip(20, current: 5)
     let card = NSView()
     view.card = card
     let row = view.layout.rows(offset: view.layout.centre(of: 5), current: 5, expansion: 1).first { $0.item == 5 }!
     #expect(card.superview === view)
-    #expect(abs(card.frame.minY - (row.start + row.picture.height + FilmstripRowsView.cardGap)) < 0.01)
+    #expect(abs(card.frame.minY - (row.start + row.caption.maxY)) < 0.01)
 }
 
 /// Two old rows that map to one new row (the same file twice in a list): what is known of them merges, no trap.
@@ -95,4 +95,18 @@ private final class CountingView: NSView {
     view.mouseDown(with: mouse(.leftMouseDown, at: NSPoint(x: 50, y: 300)))
     let count = began
     #expect(count == 1)
+}
+
+/// Every row's title and detail sit under its picture; the browsed row's title is larger.
+@MainActor @Test func captionsUnderPictures() {
+    let view = strip(20, current: 5)
+    for item in 0..<20 { view.setRow(item, title: "Video \(item)", detail: "1:00", progress: nil) }
+    let shown = view.layout.rows(offset: view.layout.centre(of: 5), current: 5, expansion: 1)
+    for row in shown where row.item == 4 || row.item == 5 {
+        let title = view.titleLayer(of: row.item)!
+        #expect(title.frame.minY >= row.picture.maxY - 0.01)
+        #expect(abs(title.frame.minX - row.caption.minX) < 0.01)
+    }
+    let plain = view.titleLayer(of: 4)!.fontSize, big = view.titleLayer(of: 5)!.fontSize
+    #expect(big > plain)
 }
