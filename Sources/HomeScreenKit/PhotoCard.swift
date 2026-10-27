@@ -47,10 +47,11 @@ final class PhotoCard: GridCard {
     /// The facts (`showsFacts`): the progress track and its fill along the picture's bottom, the line's chip.
     private let track = CALayer()
     private let fill = CALayer()
-    private let factsChip = NSTextField(labelWithString: "")
+    /// A video's length (or `0:04 / 23:03`) at the picture's bottom right.
+    let lengthChip = ChipView(font: CardFont.text(10, .semibold), fill: NSColor(white: 0, alpha: 0.6))
     /// The badges at the picture's top left (`FileFactsText.badges`: `24 MP`, `RAW`; `720p`, `HDR`, `60`), made the
     /// first time they show; on slots from `badgesFrom`.
-    private var badgeLabels: [NSTextField] = []
+    private var badgeLabels: [ChipView] = []
     private static let badgesFrom: CGFloat = 120
 
     private static let aspectInset: CGFloat = 8
@@ -89,14 +90,8 @@ final class PhotoCard: GridCard {
         track.backgroundColor = NSColor(white: 0, alpha: 0.55).cgColor
         track.addSublayer(fill)
         layer?.addSublayer(track)
-        factsChip.font = .monospacedDigitSystemFont(ofSize: 10, weight: .medium)
-        factsChip.textColor = Chrome.Palette.overMedia.text
-        factsChip.drawsBackground = false
-        factsChip.wantsLayer = true
-        factsChip.layer?.backgroundColor = NSColor(white: 0, alpha: 0.6).cgColor
-        factsChip.layer?.cornerRadius = 3
-        factsChip.alignment = .center
-        addSubview(factsChip)
+        lengthChip.textColor = Chrome.Palette.overMedia.text
+        addSubview(lengthChip)
         show(item)
         appearanceChanged()
     }
@@ -117,24 +112,18 @@ final class PhotoCard: GridCard {
     private func layoutBadges(in rect: CGRect) {
         let badges = showsBadges ? FileFactsText.badges(item.facts, format: item.format) : []
         while badgeLabels.count < badges.count {
-            let label = NSTextField(labelWithString: "")
-            label.font = .monospacedDigitSystemFont(ofSize: 9.5, weight: .bold)
-            label.alignment = .center
-            label.drawsBackground = false
-            label.wantsLayer = true
-            label.layer?.backgroundColor = Self.markFill.withAlphaComponent(0.58).cgColor
-            label.layer?.cornerRadius = 4
-            addSubview(label)
-            badgeLabels.append(label)
+            let chip = ChipView(font: CardFont.text(9.5, .bold), fill: Self.markFill.withAlphaComponent(0.58))
+            addSubview(chip)
+            badgeLabels.append(chip)
         }
         var x = rect.minX + Self.markInset + (isPaired && showsNames ? Self.chipSize.width + 4 : 0)
         for (i, label) in badgeLabels.enumerated() {
             guard i < badges.count else { label.isHidden = true; continue }
             let badge = badges[i]
-            if label.stringValue != badge.text { label.stringValue = badge.text }
+            label.text = badge.text
             label.textColor = badge.isHighlight ? Self.hdrYellow : .white
             let size = label.intrinsicContentSize
-            let frame = CGRect(x: x, y: rect.minY + Self.markInset, width: size.width + 10, height: Self.chipSize.height)
+            let frame = CGRect(x: x, y: rect.minY + Self.markInset, width: size.width, height: size.height)
             label.isHidden = frame.maxX > rect.maxX - Self.markInset - 14   // the dot's corner stays clear
             label.frame = frame
             x = frame.maxX + 4
@@ -153,11 +142,11 @@ final class PhotoCard: GridCard {
             fill.frame = CGRect(x: 0, y: 0, width: (rect.width * min(1, max(0, progress))).rounded(), height: 3)
         }
         let line = showsFacts ? lengthText : ""
-        let size = factsChip.intrinsicContentSize
-        let width = size.width + 8, height = size.height + 2
-        factsChip.isHidden = line.isEmpty || width > rect.width - 12
-        factsChip.frame = CGRect(x: rect.maxX - 6 - width, y: rect.maxY - (progress == nil ? 6 : 9) - height,
-                            width: width, height: height)
+        let size = lengthChip.intrinsicContentSize
+        lengthChip.isHidden = line.isEmpty || size.width > rect.width - 12
+        lengthChip.frame = CGRect(x: rect.maxX - Self.markInset - size.width,
+                                  y: rect.maxY - (progress == nil ? Self.markInset : 9) - size.height,
+                                  width: size.width, height: size.height)
     }
 
     /// The slot's picture box: its width, `aspect` wide over tall.
@@ -245,7 +234,7 @@ final class PhotoCard: GridCard {
     override func itemChanged() {
         nameLabel.stringValue = item.title
         fillStrip()
-        factsChip.stringValue = lengthText
+        lengthChip.text = lengthText
         factsLabel.stringValue = factsLine
         marksChanged()
         needsLayout = true

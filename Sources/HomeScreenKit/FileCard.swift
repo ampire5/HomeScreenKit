@@ -26,7 +26,7 @@ final class FileCard: GridCard {
     private let ring = CALayer()
     private let picture = CALayer()
     private let placeholder = NSImageView()
-    private let lengthChip = NSTextField(labelWithString: "")
+    private let lengthChip = ChipView(font: CardFont.text(10, .semibold), fill: Chrome.Palette.card.coverChip)
     private let nameLabel = CardText()
     private let lines = [CardText(), CardText(), CardText()]
     private let track = CALayer()
@@ -49,13 +49,7 @@ final class FileCard: GridCard {
         placeholder.contentTintColor = Chrome.Palette.window.tertiaryLabel
         placeholder.symbolConfiguration = .init(pointSize: 24, weight: .light)
         addSubview(placeholder)
-        lengthChip.font = CardFont.text(10, .medium)
         lengthChip.textColor = Chrome.Palette.card.coverChipText
-        lengthChip.alignment = .center
-        lengthChip.drawsBackground = false
-        lengthChip.wantsLayer = true
-        lengthChip.layer?.backgroundColor = Chrome.Palette.card.coverChip.cgColor
-        lengthChip.layer?.cornerRadius = 4
         addSubview(lengthChip)
         nameLabel.font = CardFont.text(13.5, .semibold)
         nameLabel.textColor = Chrome.Palette.card.label
@@ -115,10 +109,9 @@ final class FileCard: GridCard {
         nameLabel.stringValue = item.title
         for (line, text) in zip(lines, rowTexts) { line.stringValue = text }
         let length = item.facts?.duration.map(FileFactsText.length) ?? ""
-        if lengthChip.stringValue != length {
-            lengthChip.stringValue = length
-            let text = lengthChip.intrinsicContentSize
-            chipSize = length.isEmpty ? .zero : CGSize(width: text.width + 8, height: text.height + 2)
+        if lengthChip.text != length {
+            lengthChip.text = length
+            chipSize = length.isEmpty ? .zero : lengthChip.intrinsicContentSize
         }
         if placeholderSymbol != item.symbol {
             placeholderSymbol = item.symbol
@@ -180,7 +173,7 @@ final class FileCard: GridCard {
         picture.cornerRadius = Self.pictureRadius
         placeholder.frame = CGRect(x: p.midX - 16, y: p.midY - 16, width: 32, height: 32)
         let chipWidth = chipSize.width, chipHeight = chipSize.height
-        lengthChip.isHidden = lengthChip.stringValue.isEmpty || chipWidth > p.width - 8
+        lengthChip.isHidden = lengthChip.text.isEmpty || chipWidth > p.width - 8
         lengthChip.frame = CGRect(x: p.maxX - 4 - chipWidth, y: p.maxY - 4 - chipHeight, width: chipWidth, height: chipHeight)
         let x = p.maxX + Self.columnGap, width = max(0, bounds.width - x - metrics.cardPadding)
         let tops = rowTops

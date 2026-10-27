@@ -143,7 +143,7 @@ public enum FileFactsText {
             var out: [Badge] = []
             if let r = resolution(f) { out.append(Badge(text: r)) }
             if f.hdr == true { out.append(Badge(text: "HDR", isHighlight: true)) }
-            if let fps = f.fps, fps > 0 { out.append(Badge(text: String(Int(fps.rounded())))) }
+            if let fps = f.fps, fps > 0 { out.append(Badge(text: String(Int(fps.rounded())) + " fps")) }
             return out
         }
         var out: [Badge] = []
