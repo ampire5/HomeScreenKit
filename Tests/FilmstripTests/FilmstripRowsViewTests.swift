@@ -70,3 +70,19 @@ private final class CountingView: NSView {
     view.remap([3: 3, 4: 3, 5: 4])
     #expect(!view.visibleItems.isEmpty)
 }
+
+/// The browsed row changes with the strip's move: the card moves and fades with it, not at once under still rows.
+@MainActor @Test func cardAnimatesWithTheRows() {
+    let view = strip(20, current: 5)
+    let card = NSView()
+    card.wantsLayer = true
+    view.card = card
+    card.layer?.removeAllAnimations()
+    view.show(offset: view.layout.centre(of: 6), current: 6, expansion: 1, animated: true)
+    let moving = card.layer?.animationKeys() ?? []
+    #expect(!moving.isEmpty)
+    card.layer?.removeAllAnimations()
+    view.show(offset: view.layout.centre(of: 7), current: 7, expansion: 1, animated: false)
+    let still = card.layer?.animationKeys() ?? []
+    #expect(still.isEmpty)
+}

@@ -57,7 +57,11 @@ import QuartzCore
         didSet {
             guard card !== oldValue else { return }
             oldValue?.removeFromSuperview()
-            if let card { addSubview(card) }
+            if let card {
+                card.wantsLayer = true
+                addSubview(card)
+            }
+            cardItem = nil
             placeCard()
         }
     }
@@ -80,6 +84,8 @@ import QuartzCore
     private var pool: [Row] = []
     private var offset = 0.0, current = 0, expansion = 1.0
     private var shownRows: [FilmstripRow] = []
+    /// The item the card was last placed under.
+    private var cardItem: Int?
     /// A press on the rows: the y of the last event (view coordinates), the item under it, whether it became a drag.
     private var press: (startY: CGFloat, lastY: CGFloat, item: Int?, dragging: Bool)?
 
@@ -145,7 +151,7 @@ import QuartzCore
         let fades = layout.fades(rows: shown, current: current)
         fade.place(bounds: bounds, start: fades.start, end: fades.end)
         CATransaction.commit()
-        placeCard()
+        placeCard(animated: animated)
         let order = shown.map(\.item).sorted { abs($0 - current) < abs($1 - current) }
         if order != visibleItems {
             visibleItems = order
@@ -178,17 +184,40 @@ import QuartzCore
         if isNew { withoutAnimation(place) } else { place() }
     }
 
-    private func placeCard() {
+    /// The card follows the browsed row with the rows' own motion: moved with it while it stays the same row; when
+    /// another row becomes the browsed one, shown at its new place from clear, fading in over the move, so its text
+    /// never sits still while the pictures move under it.
+    private func placeCard(animated: Bool = false) {
         guard let card else { return }
         guard let row = shownRows.first(where: { $0.item == current }) else {
             card.isHidden = true
+            cardItem = nil
             return
         }
-        card.isHidden = expansion <= 0
-        card.alphaValue = expansion
         let y = row.start + row.picture.height + Self.cardGap
-        card.frame = NSRect(x: Self.padding, y: y, width: row.picture.width,
-                            height: max(0, row.start + row.length - y))
+        let frame = NSRect(x: Self.padding, y: y, width: row.picture.width, height: max(0, row.start + row.length - y))
+        let alpha = CGFloat(expansion)
+        let moved = cardItem != current
+        cardItem = current
+        card.isHidden = expansion <= 0
+        let from = card.layer?.presentation() ?? card.layer
+        let oldPosition = from?.position, oldOpacity = from?.opacity ?? 0
+        card.frame = frame
+        card.alphaValue = alpha
+        guard animated, let layer = card.layer else { return }
+        func animate(_ key: String, from value: Any?) {
+            let animation = CABasicAnimation(keyPath: key)
+            animation.fromValue = value
+            animation.duration = Self.moveDuration
+            animation.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            layer.add(animation, forKey: key)
+        }
+        if moved {
+            animate("opacity", from: 0)
+        } else {
+            if let oldPosition, oldPosition != layer.position { animate("position", from: NSValue(point: oldPosition)) }
+            if oldOpacity != layer.opacity { animate("opacity", from: oldOpacity) }
+        }
     }
 
     private func takeRow(for item: Int) -> Row {
