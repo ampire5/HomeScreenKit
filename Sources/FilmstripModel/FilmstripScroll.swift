@@ -83,7 +83,7 @@ public struct FilmstripScroll: Sendable {
     /// left); `crossDelta`: the vertical delta (only its size matters). `current`: the session's current item; `now`: the
     /// event's time; `anchor`: where the motion starts when it (re)starts on `current` (nil: `current`'s centre).
     public mutating func event(fingerDelta: Double, crossDelta: Double, phase: ScrollPhase, momentum: ScrollPhase,
-                               layout: FilmstripLayout, current: Int, now: Double, anchor: Double? = nil) -> Outcome {
+                               layout: some FilmstripTrack, current: Int, now: Double, anchor: Double? = nil) -> Outcome {
         let ends = momentum.contains(.ended) || momentum.contains(.cancelled) || phase.contains(.cancelled)
         if momentum.isEmpty, phase.contains(.began) || phase.contains(.mayBegin) { ignoresMomentum = false }
         if ignoresMomentum, !momentum.isEmpty { return Outcome(item: nil, commit: false) }
@@ -104,13 +104,13 @@ public struct FilmstripScroll: Sendable {
 
     /// A mouse drag over the strip moved by `dx` points: the strip follows the cursor, up to its ends. `anchor` as for
     /// `event`.
-    public mutating func drag(by dx: Double, layout: FilmstripLayout, current: Int, anchor: Double? = nil) -> Outcome {
+    public mutating func drag(by dx: Double, layout: some FilmstripTrack, current: Int, anchor: Double? = nil) -> Outcome {
         Outcome(item: move(by: -dx, rubber: false, layout: layout, current: current, anchor: anchor), commit: false)
     }
 
     /// Where the strip comes to rest: the item nearest the centre and the offset that centres it; nil while it
     /// follows the current item.
-    public func settled(layout: FilmstripLayout) -> (item: Int, offset: Double)? {
+    public func settled(layout: some FilmstripTrack) -> (item: Int, offset: Double)? {
         guard let offset, let item = layout.item(atBase: offset) else { return nil }
         return (item, layout.centre(of: item))
     }
@@ -126,7 +126,7 @@ public struct FilmstripScroll: Sendable {
 
     /// The layout changed (the folder grew, aspects arrived, a resize) while the strip moves or settles: it stays on
     /// `item`, at that item's centre in the new layout.
-    public mutating func layoutChanged(keeping item: Int, layout: FilmstripLayout) {
+    public mutating func layoutChanged(keeping item: Int, layout: some FilmstripTrack) {
         guard raw != nil, layout.itemCount > 0 else { return }
         let item = min(max(item, 0), layout.itemCount - 1)
         range = layout.offsetRange
@@ -183,7 +183,7 @@ public struct FilmstripScroll: Sendable {
     }
 
     /// Moves the strip's offset by `dx` points; the new item at the centre, if it is one.
-    private mutating func move(by dx: Double, rubber: Bool, layout: FilmstripLayout, current: Int, anchor: Double?) -> Int? {
+    private mutating func move(by dx: Double, rubber: Bool, layout: some FilmstripTrack, current: Int, anchor: Double?) -> Int? {
         guard layout.itemCount > 1, (0..<layout.itemCount).contains(current) else { return nil }
         range = layout.offsetRange
         // Anchored on the current item, again whenever it is not the one reached last (a key or the wheel moved it).

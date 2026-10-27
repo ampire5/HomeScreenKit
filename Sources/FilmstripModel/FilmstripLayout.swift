@@ -25,7 +25,7 @@ public struct FilmstripCell: Equatable, Sendable {
 ///
 /// While no known item is narrower than `cellLength` the base line is a formula; otherwise its cell starts are
 /// prefix sums made once here (O(n)) and searched by bisection. A window of cells costs O(visible cells) either way.
-public struct FilmstripLayout: Equatable, Sendable {
+public struct FilmstripLayout: FilmstripTrack, Equatable, Sendable {
     /// The narrow cell's aspect (length : thickness) in a big list: 9:16, as Photos.
     public static let narrowAspect = 0.5625
     /// The gap between cells, as a share of the thickness.

@@ -260,3 +260,19 @@ private func near(_ a: Double?, _ b: Double, _ tolerance: Double = 0.5) -> Bool 
     _ = plain.drag(by: 0, layout: strip, current: 10)
     #expect(plain.offset == strip.centre(of: 10))
 }
+
+/// Ten items 50 pt apart: a layout that is not `FilmstripLayout`.
+private struct EvenTrack: FilmstripTrack {
+    var itemCount: Int { 10 }
+    var offsetRange: ClosedRange<Double> { 0...450 }
+    func centre(of item: Int) -> Double { 50 * Double(item) }
+    func item(atBase position: Double) -> Int? { min(max(Int((position / 50).rounded()), 0), 9) }
+}
+
+/// The scroll works on any track, not only the filmstrip's own layout (the vertical rows use it too).
+@Test func scrollOnAnyTrack() {
+    var scroll = FilmstripScroll()
+    let outcome = scroll.event(fingerDelta: -60, crossDelta: 0, phase: .changed, momentum: [], layout: EvenTrack(),
+                               current: 0, now: 0)
+    #expect(outcome.item == 1)
+}
