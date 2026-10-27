@@ -13,10 +13,14 @@ import HomeScreenKit
     lazy var browser = HomeBrowserView(source: source)
     lazy var homeView = HomeView(source: source)
     var filmstrip: FilmstripDemo?
+    var rowsDemo: FilmstripRowsDemo?
     var chromeDemo: ChromeDemo?
     static let tabs = ["Recent", "Folders", "Stash"]
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if ProcessInfo.processInfo.environment["HOMESCREEN_DEMO"] == "rows" {   // the rows strip at once
+            DispatchQueue.main.async { self.showRows() }
+        }
         window.title = "HomeScreenKit demo"
         if ProcessInfo.processInfo.environment["HOMESCREEN_SCREEN"] != "start" {
             showHomeView()
@@ -214,6 +218,7 @@ import HomeScreenKit
         let windowItem = NSMenuItem()
         let windowMenu = NSMenu(title: "Window")
         windowMenu.addItem(withTitle: "Filmstrip Demo", action: #selector(showFilmstrip), keyEquivalent: "f").target = self
+        windowMenu.addItem(withTitle: "Rows Demo", action: #selector(showRows), keyEquivalent: "r").target = self
         windowMenu.addItem(withTitle: "Chrome Demo", action: #selector(showChrome), keyEquivalent: "").target = self
         windowItem.submenu = windowMenu
         main.addItem(windowItem)
@@ -229,6 +234,11 @@ import HomeScreenKit
     @objc func showFilmstrip() {
         let demo = filmstrip ?? FilmstripDemo()
         filmstrip = demo
+        demo.show()
+    }
+    @objc func showRows() {
+        let demo = rowsDemo ?? FilmstripRowsDemo()
+        rowsDemo = demo
         demo.show()
     }
     @objc func showChrome() {
