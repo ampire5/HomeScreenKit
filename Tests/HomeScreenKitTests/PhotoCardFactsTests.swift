@@ -46,6 +46,10 @@ import Testing
         #expect(MediaPalette.color(.aperture) == MediaPalette.color(.shutter))
     }
 
+    @Test func aPhotoHasNoPathTooltip() {
+        #expect(card(FileFacts(width: 6000, height: 4000), format: "JPG", width: 220, names: .below).toolTip == nil)
+    }
+
     @Test func autoNamesShowABandOnHover() {
         let c = card(FileFacts(width: 6000, height: 4000, exposure: 1.0 / 250), format: "JPG", width: 140, names: .auto)
         #expect(c.nameLabel.isHidden)

@@ -229,6 +229,9 @@ final class PhotoCard: GridCard {
     override func show(_ item: HomeCardItem) {
         if item.id != self.item.id { isHovered = false }
         super.show(item)
+        // No tooltip with the file's path: it covered the strip, and the path bar and the name already say it (the
+        // owner, 2026-10-27).
+        toolTip = nil
     }
 
     override func itemChanged() {
