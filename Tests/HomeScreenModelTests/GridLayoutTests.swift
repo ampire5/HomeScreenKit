@@ -179,6 +179,30 @@ import Testing
         #expect(narrow == GridLayout(sections: [photos(10)], width: 300, target: 200, names: .below))
     }
 
+    @Test func cardsAndRowsFollowTheCardSizeInThreeSteps() {
+        #expect(GridMetrics.SizeStep(cardSize: 160) == .small)
+        #expect(GridMetrics.SizeStep(cardSize: 220) == .regular)
+        #expect(GridMetrics.SizeStep(cardSize: 300) == .large)
+        // ⌘= / ⌘− go through all three.
+        #expect(Set(HomeResize.sizes.map(GridMetrics.SizeStep.init)) == Set(GridMetrics.SizeStep.allCases))
+        let steps: [(GridMetrics.SizeStep, CGSize, CGFloat, CGFloat)] = [
+            (.small, CGSize(width: 260, height: 80), 34, 24), (.regular, CGSize(width: 300, height: 92), 44, 32),
+            (.large, CGSize(width: 360, height: 110), 56, 44),
+        ]
+        for (step, card, row, cover) in steps {
+            let metrics = GridMetrics().sized(step)
+            let cards = GridLayout(sections: [folders(10)], width: 1200, target: 220, names: .off, style: .cards,
+                                   metrics: metrics)
+            #expect(cards.frame(of: 0).height == card.height)
+            #expect(cards.slotWidth(inSection: 0) >= card.width)
+            #expect(cards.pictureFrame(of: 0).height == card.height - 16)
+            let list = GridLayout(sections: [folders(10)], width: 1000, target: 220, names: .off, style: .list,
+                                  metrics: metrics)
+            #expect(list.frame(of: 0).height == row)
+            #expect(list.pictureFrame(of: 0).height == cover)
+        }
+    }
+
     @Test func cardsAreThreeHundredWide() {
         let grid = GridLayout(sections: [folders(10)], width: 960, target: 220, names: .off, style: .cards)
         #expect(grid.columns(inSection: 0) == 3)

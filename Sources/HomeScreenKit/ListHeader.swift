@@ -28,6 +28,8 @@ final class ListHeader: NSView {
     private let separator = CALayer()
     /// The columns now laid out.
     private(set) var columns = ListColumns(width: 0)
+    /// The rows' metrics: the name column starts after their cover, whose size follows the size step.
+    var metrics = GridMetrics() { didSet { if metrics != oldValue { needsLayout = true } } }
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -102,7 +104,7 @@ final class ListHeader: NSView {
         rim.path = Self.top(bounds.insetBy(dx: -0.25, dy: -0.25), radius: Self.radius + 0.25, closed: false)
         separator.frame = CGRect(x: 0, y: bounds.height - 1, width: bounds.width, height: 1)
         CATransaction.commit()
-        columns = ListColumns(width: bounds.width)
+        columns = ListColumns(width: bounds.width, metrics: metrics)
         let h = ceil(CardFont.lineHeight(CardFont.text(11)))
         for column in ListColumns.Column.allCases {
             let label = labels[column]!

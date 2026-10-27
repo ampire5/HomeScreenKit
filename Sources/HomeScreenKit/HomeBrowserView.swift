@@ -11,7 +11,8 @@ import HomeScreenModel
 public final class HomeBrowserView: NSView {
     // MARK: Set by the app
 
-    /// The wanted photo slot width in points; the columns are the nearest count to it.
+    /// The wanted photo slot width in points; the columns are the nearest count to it. The Cards and List styles take
+    /// their size step from it (`GridMetrics.SizeStep`).
     public var cardSize: CGFloat = 220 {
         didSet {
             if cardSize != oldValue { tile() }
@@ -112,9 +113,9 @@ public final class HomeBrowserView: NSView {
     /// and a compact card's its square (`cardCover`), not the row or the card; a section with no cards counts not.
     public var slotWidth: CGFloat {
         let style = shownCardStyle(width: gridWidth)
-        if style == .list { return GridMetrics().listCover }
+        if style == .list { return metrics.listCover }
         let widths = sections.indices.filter { sections[$0].count > 0 }.map { s -> CGFloat in
-            style == .cards && sections[s].kind == .collections ? GridMetrics().cardCover : grid.slotWidth(inSection: s)
+            style == .cards && sections[s].kind == .collections ? metrics.cardCover : grid.slotWidth(inSection: s)
         }
         return widths.max() ?? cardSize
     }
@@ -124,8 +125,8 @@ public final class HomeBrowserView: NSView {
     /// makes its folder covers at this one.
     public var coverWidth: CGFloat {
         switch shownCardStyle(width: gridWidth) {
-        case .list: return GridMetrics().listCover
-        case .cards: return GridMetrics().cardCover
+        case .list: return metrics.listCover
+        case .cards: return metrics.cardCover
         case .posters:
             let containers = sections.indices.first { sections[$0].kind == .collections && sections[$0].count > 0 }
             return containers.map { grid.slotWidth(inSection: $0) } ?? slotWidth
@@ -153,6 +154,9 @@ public final class HomeBrowserView: NSView {
         }
         return min(range.upperBound, max(range.lowerBound, size))
     }
+
+    /// The grid's metrics with the Cards and List styles at the card size's step.
+    private var metrics: GridMetrics { GridMetrics().sized(.init(cardSize: cardSize)) }
 
     /// The photo columns at the grid's width now (also where there are no photos: the steps are the same).
     private var photoColumns: Int {
@@ -1695,7 +1699,7 @@ public final class HomeBrowserView: NSView {
         let width = scroll.contentSize.width > 0 ? scroll.contentSize.width : bounds.width
         gridWidth = width
         sections = makeSections()
-        var metrics = GridMetrics()
+        var metrics = self.metrics
         metrics.top = topInset
         // The list has its column heads under the toolbar, above the first row.
         let shownStyle = shownCardStyle(width: width)
@@ -1769,7 +1773,9 @@ public final class HomeBrowserView: NSView {
                 collection.names = names
             } else if let file = card as? FileCard {
                 file.aspect = files.aspect
+                if file.metrics != grid.metrics { file.metrics = grid.metrics }
             }
+            if let folder = card as? FolderCard, folder.metrics != grid.metrics { folder.metrics = grid.metrics }
             if let row = card as? ListRow { row.showsSeparator = i < entries.count - 1 }
             // Straight to the slot: a view's frame animates only in an animation group that allows it (the sidebar's).
             card.frame = grid.frame(of: i)

@@ -43,6 +43,7 @@ extension HomeBrowserView {
         guard shown else { return }
         header.sortable = sortKeys
         header.sort = sort
+        header.metrics = grid.metrics
         let x = GridMetrics().collectionEdge, w = max(0, width - 2 * x)
         let top = topInset
         let bottom = grid.count > 0 ? grid.frame(of: grid.count - 1).maxY : top + ListHeader.height

@@ -106,6 +106,31 @@ public struct GridMetrics: Equatable, Sendable {
     }
 
     public init() {}
+
+    /// The Cards and List styles' three sizes, picked by the card size the slider and ⌘= / ⌘− set (the owner,
+    /// 2026-10-27, over a slider that did nothing in them): under 200 pt small, from 300 pt large, between the
+    /// mockups' own (the default 220 among them). ⌘= / ⌘− (`HomeResize.sizes`: 100, 160, 240, 360) go small,
+    /// small, regular, large.
+    public enum SizeStep: Sendable, CaseIterable {
+        case small, regular, large
+
+        public init(cardSize: CGFloat) {
+            self = cardSize < 200 ? .small : cardSize < 300 ? .regular : .large
+        }
+    }
+
+    /// These metrics with the compact card and the list row of `step`: the card 260 × 80, 300 × 92 or 360 × 110 (its
+    /// cover the height less the padding), the row 34, 44 or 56 tall (its cover 24, 32 or 44).
+    public func sized(_ step: SizeStep) -> GridMetrics {
+        var m = self
+        switch step {
+        case .small: (m.cardWidth, m.cardHeight, m.listRow, m.listCover) = (260, 80, 34, 24)
+        case .regular: break
+        case .large: (m.cardWidth, m.cardHeight, m.listRow, m.listCover) = (360, 110, 56, 44)
+        }
+        m.cardCover = m.cardHeight - 2 * m.cardPadding
+        return m
+    }
 }
 
 /// A poster's band of facts at one size: one line (the name, the `+N` pill or ✓), two (the facts with the dates'
@@ -171,7 +196,7 @@ public struct GridLayout: Equatable, Sendable {
     public let count: Int
     public let footerFrame: CGRect
     private let placed: [Placed]
-    private let metrics: GridMetrics
+    public let metrics: GridMetrics
 
     /// `style` is for the collection sections (a narrow column falls back to posters); the photo sections do not use it.
     /// `fileAspect` is a photo slot's width over its picture's height (`FileStyle.aspect`: 1 for photos, 16:9 for video).

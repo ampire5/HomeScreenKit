@@ -95,6 +95,16 @@ import Testing
         #expect((view.card(for: id) as? PhotoCard)?.names == .below)
     }
 
+    @Test func theCardSizePicksTheCardsAndRowsStep() async {
+        let view = await shown(FakeHomeSource(), BrowserFixtures.files(5))
+        view.cardSize = 360
+        view.layoutSubtreeIfNeeded()
+        #expect(view.grid.metrics.listRow == 56 && view.grid.metrics.cardHeight == 110)   // its top is the view's inset
+        view.cardSize = 120
+        view.layoutSubtreeIfNeeded()
+        #expect(view.grid.metrics.listRow == 34 && view.grid.metrics.cardHeight == 80)
+    }
+
     // MARK: Photo marks (photo-cards spec §2)
 
     private func photo(_ view: HomeBrowserView, _ i: Int) -> PhotoCard? { view.card(for: view.entries[i].id) as? PhotoCard }

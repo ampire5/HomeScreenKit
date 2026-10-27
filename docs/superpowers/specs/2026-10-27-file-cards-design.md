@@ -77,3 +77,8 @@ and pauses with the posters. The store saves in bursts like the durations do.
 - `GridLayout`: the facts line reserved only with `belowFacts`; files on card slots in the Cards style.
 - `FileCard`: rows filled for a video and a photo; no facts draws the format, date and size.
 - Apps: the probe's facts from a fixture (FrameScrub), the EXIF of a fixture JPEG (Loupe), the stores' round trip.
+
+**Sizes in Cards and List (2026-10-27).** The card size (the slider, ⌘= / ⌘−, the wheel) picks one of three steps
+for both styles (`GridMetrics.SizeStep`): under 200 pt small, from 300 pt large, regular between. The compact card is
+260 × 80, 300 × 92 or 360 × 110 (its cover the height less the padding), the list row 34, 44 or 56 tall (its cover
+24, 32 or 44). Before, the size did nothing in those styles while the slider stayed live.
