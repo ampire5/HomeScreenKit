@@ -60,11 +60,13 @@ final class HomeSidebar: NSView {
                 // The browser moved: the light follows it, into view after the layout.
                 followedID = currentID
                 selectedID = currentID
+                followsCurrent = true
                 if current != nil { revealsSelected = true }
             }
-            // The row the arrows lit stays lit when rows come or go around it (a folder opened, a reply).
+            // The row the arrows lit stays lit when rows come or go around it (a folder opened, a reply); the current
+            // one is kept in view only while the replies of its path come, not when the user opens a folder above it.
             let line = selectedID.flatMap(line(of:)) ?? current
-            if line != nil, line != selected, selectedID == currentID { revealsSelected = true }
+            if line != nil, line != selected, selectedID == currentID, followsCurrent { revealsSelected = true }
             selected = line
             rebuild()
         }
@@ -73,6 +75,9 @@ final class HomeSidebar: NSView {
     private var selectedID: String?
     /// The current row's id as last followed.
     private var followedID: String?
+    /// The browser moved and the user has not opened or closed a folder since: the current row is kept in view as
+    /// the rows above it fill in.
+    private var followsCurrent = false
 
     private func rowID(at line: Int) -> String? {
         let lines = tree.lines
@@ -256,7 +261,9 @@ final class HomeSidebar: NSView {
         let lines = tree.lines
         guard lines.indices.contains(line) else { return }
         switch lines[line] {
-        case .heading(let section, _, _): onToggleSection?(section)
+        case .heading(let section, _, _):
+            followsCurrent = false
+            onToggleSection?(section)
         case .row(let row, _, _, _):
             selected = line
             selectedID = row.id
@@ -269,6 +276,7 @@ final class HomeSidebar: NSView {
         let lines = tree.lines
         guard lines.indices.contains(line), case .row(let row, _, let expanded, _) = lines[line], row.expandable,
               case .folder(let url) = row.location else { return }
+        followsCurrent = false
         if expanded { onCollapse?(url) } else { onExpand?(url) }
     }
 
@@ -295,8 +303,12 @@ final class HomeSidebar: NSView {
         }
         switch tree.move(key, from: from) {
         case .select(let i): light(i)
-        case .expand(let url): onExpand?(url)
-        case .collapse(let url): onCollapse?(url)
+        case .expand(let url):
+            followsCurrent = false
+            onExpand?(url)
+        case .collapse(let url):
+            followsCurrent = false
+            onCollapse?(url)
         case .open(let location): onOpen?(location)
         case .none: break
         }

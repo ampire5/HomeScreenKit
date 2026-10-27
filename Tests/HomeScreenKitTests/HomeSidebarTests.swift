@@ -170,6 +170,33 @@ import Testing
         #expect(view.visibleLineRect.contains(view.lineFrames[line]))
     }
 
+    /// A folder opened above the current row stays where it was: its many folders push the current row down, and the
+    /// list does not run after it (it jumped there, the opened folder far off).
+    @Test func openingAFolderAboveTheCurrentRowKeepsTheList() {
+        let rows = (0..<40).map { i in
+            HomeSidebarRow(id: "/V\(i)", title: "V\(i)", symbol: "externaldrive", location: .folder(url("/V\(i)")),
+                           expandable: true)
+        }
+        var t = SidebarTree(sections: [HomeSidebarSection(id: "places", title: "Places", rows: rows)])
+        _ = t.follow(.folder(url("/V35")))
+        let view = HomeSidebar()
+        view.frame = CGRect(x: 0, y: 0, width: HomeSidebar.width, height: 300)
+        view.onExpand = { folder in
+            _ = t.expand(folder)
+            t.setChildren((0..<50).map { BrowserEntry(url: self.url("/V30/\($0)"), name: "\($0)", kind: .folder) },
+                          of: folder)
+            view.tree = t
+        }
+        view.tree = t
+        view.layoutSubtreeIfNeeded()
+        let line = view.titles.firstIndex(of: "V30")!
+        let before = view.lineFrames[line].minY - view.visibleLineRect.minY
+        view.clickDisclosure(line: line)
+        view.layoutSubtreeIfNeeded()
+        #expect(view.titles[line + 1] == "0")
+        #expect(view.lineFrames[line].minY - view.visibleLineRect.minY == before)
+    }
+
     /// A row's context menu: what the app gives for it (a folder's Show in Finder, Copy Path), the item chosen going
     /// back with the row; a heading has none.
     @Test func rowMenuComesFromTheApp() throws {
