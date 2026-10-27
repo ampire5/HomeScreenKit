@@ -99,9 +99,15 @@ public final class HomeView: NSView {
     /// Whether the divider is moving under the user's drag now: a left-button drag in this window (the split view's
     /// tracking loop makes each of its events the current one). The split view moves the divider itself too — the
     /// window not at its size yet, narrowed, the sidebar's minimum — and none of that is a width to keep.
+    /// Only a drag at the divider itself counts: a release elsewhere in the window (the green button, a title-bar
+    /// double click: the window narrows and the split moves the divider with it) once passed for one, and that
+    /// passing width was kept and came back smaller at the next launch (the owner's report of 2026-10-27).
     lazy var isUserDrag: () -> Bool = { [weak self] in
-        guard let event = NSApp.currentEvent, event.window === self?.window else { return false }
-        return event.type == .leftMouseDragged || event.type == .leftMouseUp
+        guard let self, let event = NSApp.currentEvent, event.window === self.window,
+              event.type == .leftMouseDragged || event.type == .leftMouseUp else { return false }
+        let split = self.splitController.splitView
+        let x = split.convert(event.locationInWindow, from: nil).x
+        return abs(x - self.sidebarPaneWidth) <= 12
     }
     /// The split view's width when the kept width was last put on the divider without holding (the split too narrow
     /// for it): it is put again once the split has another width, not at every layout.

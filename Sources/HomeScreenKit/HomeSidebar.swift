@@ -383,7 +383,7 @@ private final class SidebarLineView: NSView {
         triangle.contentTintColor = .secondaryLabelColor
         triangle.symbolConfiguration = .init(pointSize: 10, weight: .semibold)
         symbol.contentTintColor = .controlAccentColor
-        symbol.symbolConfiguration = .init(pointSize: 15, weight: .regular, scale: .large)
+        symbol.symbolConfiguration = .init(pointSize: 16, weight: .regular, scale: .large)
         for view in [light, triangle, symbol, title, count, spinner] { addSubview(view) }
         addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect],
                                        owner: self, userInfo: nil))
@@ -471,9 +471,11 @@ private final class SidebarLineView: NSView {
                                    width: 12, height: 12)
     }
 
-    /// Where a top-level row's triangle starts; its symbol's column is 22 pt from 13.5 pt after it, the name 41 pt
-    /// after it (Photos: chevron at 16, symbol centred at 37.5, name at 55).
-    static let lead: CGFloat = 14
+    /// Where a top-level row's triangle starts; its symbol's column 22 pt wide 14.5 pt after it, the name's text 42 pt
+    /// after it (Photos, measured on its screenshot 2026-10-27: chevron centred at 19, symbol at 37.5, name's text at 55,
+    /// a heading's at 16.5). A text field draws its text 2 pt in from its frame: the frames below are 2 pt to the left.
+    static let lead: CGFloat = 13
+    private static let fieldInset: CGFloat = 2
 
     override func layout() {
         super.layout()
@@ -481,19 +483,20 @@ private final class SidebarLineView: NSView {
         light.frame = CGRect(x: HomeSidebar.inset, y: 0, width: max(0, w - 2 * HomeSidebar.inset), height: h)
         if isHeading {
             // Photos sets a heading low in its line, nearer the rows it heads.
-            title.frame = CGRect(x: 16, y: h - 15 - 4, width: max(0, w - 48), height: 15)
+            title.frame = CGRect(x: 16.5 - Self.fieldInset, y: h - 15 - 4, width: max(0, w - 48), height: 15)
             triangle.frame = CGRect(x: w - 30, y: h - 12 - 5, width: 12, height: 12)
             return
         }
         let x = Self.lead + HomeSidebar.offset(depth: depth, compact: compactIndent)
         layoutGuides()
         triangle.frame = CGRect(x: x, y: (h - 12) / 2, width: 12, height: 12)
-        symbol.frame = CGRect(x: x + 12.5, y: (h - 22) / 2, width: 22, height: 22)
+        symbol.frame = CGRect(x: x + 14.5, y: (h - 22) / 2, width: 22, height: 22)
         let countWidth: CGFloat = count.stringValue.isEmpty ? 0 : 40
         let right = w - HomeSidebar.inset - 10
         count.frame = CGRect(x: right - countWidth, y: (h - 15) / 2, width: countWidth, height: 15)
         spinner.frame = CGRect(x: right - 16, y: (h - 16) / 2, width: 16, height: 16)
-        title.frame = CGRect(x: x + 41, y: (h - 17) / 2, width: max(0, right - countWidth - (x + 41) - 4), height: 17)
+        let textX = x + 42 - Self.fieldInset
+        title.frame = CGRect(x: textX, y: (h - 17) / 2, width: max(0, right - countWidth - textX - 4), height: 17)
     }
 
     /// A line under each level's triangle, from the first level down to the row's own.
