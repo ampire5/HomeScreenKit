@@ -112,8 +112,7 @@ import QuartzCore
     private var cells: [Int: Cell] = [:]
     private var pool: [Cell] = []
     /// The edges' fade (the mask) over everything the cells are in.
-    private let fadeLayer = CALayer()
-    private let fadeMask = CAGradientLayer()
+    private let fade = FilmstripFade(axis: .horizontal)
     /// The cells, moved as one: its x is the view x of base x 0.
     private let contentLayer = CALayer()
     /// What `show` was last asked to show.
@@ -152,12 +151,7 @@ import QuartzCore
         layerContentsRedrawPolicy = .never
         // The hover label stands above the band, outside the view's bounds.
         clipsToBounds = false
-        fadeMask.startPoint = CGPoint(x: 0, y: 0.5)
-        fadeMask.endPoint = CGPoint(x: 1, y: 0.5)
-        fadeMask.colors = [CGColor(gray: 0, alpha: 0), CGColor(gray: 0, alpha: 1), CGColor(gray: 0, alpha: 1),
-                           CGColor(gray: 0, alpha: 0)]
-        fadeLayer.mask = fadeMask
-        fadeLayer.addSublayer(contentLayer)
+        fade.layer.addSublayer(contentLayer)
         label.isHidden = true
         addSubview(label)
     }
@@ -167,7 +161,7 @@ import QuartzCore
 
     public override func makeBackingLayer() -> CALayer {
         let layer = CALayer()
-        layer.addSublayer(fadeLayer)
+        layer.addSublayer(fade.layer)
         return layer
     }
 
@@ -188,13 +182,8 @@ import QuartzCore
     /// The fade over the band: the whole view, opaque but for the ends where the strip goes on past the view
     /// (`FilmstripLayout.fades`), so a fading edge always means there is more there.
     private func placeFade() {
-        fadeLayer.frame = bounds
-        fadeMask.frame = fadeLayer.bounds
-        let width = Double(bounds.width)
-        guard width > 0 else { return }
         let fades = layout.fades(cells: shownCells, current: current)
-        let left = min(0.5, fades.start / width), right = min(0.5, fades.end / width)
-        fadeMask.locations = [0, NSNumber(value: left), NSNumber(value: 1 - right), 1]
+        fade.place(bounds: bounds, start: fades.start, end: fades.end)
     }
 
     // MARK: Showing
