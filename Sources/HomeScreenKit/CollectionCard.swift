@@ -64,7 +64,7 @@ final class CollectionCard: GridCard {
     var isShowingSymbol: Bool { !placeholder.isHidden }
 
     override func itemChanged() {
-        placeholder.image = Lucide.icon(item.symbol, pointSize: item.glassSymbol ? 36 : 30, weight: .light)
+        placeholder.image = Icons.symbol(item.symbol, pointSize: item.glassSymbol ? 36 : 30, weight: .light)
         glassTile.isHidden = !item.glassSymbol
         progressBar.isHidden = item.progress == nil
         imageChanged()

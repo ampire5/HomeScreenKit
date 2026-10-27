@@ -275,7 +275,7 @@ import HomeScreenModel
 
     /// A toolbar icon: Lucide at the size of the toolbar's symbols, smaller for the zoom slider's ends.
     private func symbol(_ name: String, _ description: String, pointSize: CGFloat = 14) -> NSImage {
-        Lucide.icon(name, pointSize: pointSize, description: description) ?? NSImage()
+        Icons.symbol(name, pointSize: pointSize, description: description) ?? NSImage()
     }
 
     private func button(_ id: NSToolbarItem.Identifier, _ symbolName: String, label: String, tip: String,

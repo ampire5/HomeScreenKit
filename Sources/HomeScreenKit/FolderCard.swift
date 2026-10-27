@@ -313,7 +313,7 @@ class FolderCard: GridCard {
     }
 
     /// The placeholder's symbol: a card is shown again for every scroll step, Lucide makes the image once.
-    static func symbol(_ name: String) -> NSImage? { Lucide.icon(name, pointSize: 30, weight: .light) }
+    static func symbol(_ name: String) -> NSImage? { Icons.symbol(name, pointSize: 30, weight: .light) }
 
     /// The name must keep this much of its line; a badge that would squeeze it further is left out.
     static let minName: CGFloat = 48

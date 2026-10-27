@@ -30,7 +30,7 @@ import HomeChrome
         super.init(frame: frame)
         Chrome.Palette.overMedia.apply(to: self)   // chrome over photos is always dark
         addSubview(glass)
-        image.image = Lucide.icon(edge == .bottom ? "chevron.up" : "chevron.left", pointSize: 11,
+        image.image = Icons.symbol(edge == .bottom ? "chevron.up" : "chevron.left", pointSize: 11,
                                   description: "Show filmstrip")
         image.contentTintColor = Chrome.Palette.overMedia.text
         image.imageScaling = .scaleNone

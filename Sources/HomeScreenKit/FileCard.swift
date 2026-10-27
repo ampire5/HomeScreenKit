@@ -114,7 +114,7 @@ final class FileCard: GridCard {
         }
         if placeholderSymbol != item.symbol {
             placeholderSymbol = item.symbol
-            placeholder.image = Lucide.icon(item.symbol, pointSize: 24, weight: .light)
+            placeholder.image = Icons.symbol(item.symbol, pointSize: 24, weight: .light)
         }
         needsLayout = true
     }

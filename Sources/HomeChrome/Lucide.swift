@@ -6,8 +6,8 @@ import AppKit
 /// is cut down to the icons the apps use (`scripts/lucide-names.txt`, `LucideFont.swift`); its line is Lucide's own,
 /// 2 on 24, at every size, and it has no filled variants.
 ///
-/// The apps still name their icons as SF Symbols (`folder`, `play.fill`): `icon(_:pointSize:)` draws the Lucide icon
-/// standing for that name (`symbols`), and the SF Symbol itself for a name it has none for.
+/// The apps name their icons as SF Symbols (`folder`, `play.fill`); `symbols` has the Lucide icon standing for each,
+/// and `Icons` draws one or the other by the set the user picked.
 public enum Lucide {
     /// The font, made from the embedded data, not registered with the system: nothing outside the app sees it.
     private static let graphicsFont: CGFont? = {
@@ -53,21 +53,6 @@ public enum Lucide {
         image.accessibilityDescription = description
         images[key] = image
         return image
-    }
-
-    /// Lucide's box drawn this many times the point size asked of an SF Symbol: an SF Symbol at 16 pt is about 20 pt
-    /// across, as Lucide's box at 20 is with its point of room each side.
-    public static let symbolScale: CGFloat = 1.25
-
-    /// The icon for the SF Symbol name `symbol` at the size an SF Symbol of `pointSize` would have: Lucide's when
-    /// `symbols` has one, else the SF Symbol in `weight`.
-    public static func icon(_ symbol: String, pointSize: CGFloat, weight: NSFont.Weight = .regular,
-                            description: String? = nil) -> NSImage? {
-        if let name = symbols[symbol] {
-            return image(name, size: (pointSize * symbolScale).rounded(), description: description)
-        }
-        return NSImage(systemSymbolName: symbol, accessibilityDescription: description)?
-            .withSymbolConfiguration(.init(pointSize: pointSize, weight: weight))
     }
 
     /// The Lucide icon standing for each SF Symbol name the apps use. A filled SF Symbol (`play.fill`, `pin.fill`)

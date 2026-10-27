@@ -438,10 +438,10 @@ private final class SidebarLineView: NSView {
     }
 
     /// A row's symbol (Lucide keeps one image per name and size for every line).
-    private static func symbol(_ name: String) -> NSImage? { Lucide.icon(name, pointSize: 16) }
+    private static func symbol(_ name: String) -> NSImage? { Icons.symbol(name, pointSize: 16) }
 
     /// The disclosure triangle's chevron.
-    private static func triangle(_ name: String) -> NSImage? { Lucide.icon(name, pointSize: 10, weight: .semibold) }
+    private static func triangle(_ name: String) -> NSImage? { Icons.symbol(name, pointSize: 10, weight: .semibold) }
 
     private func showSpinner(_ on: Bool) {
         spinner.isHidden = !on

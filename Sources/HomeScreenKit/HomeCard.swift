@@ -65,7 +65,7 @@ final class HomeCard: GridCard {
 
     /// The text, bar and label of the item.
     override func itemChanged() {
-        placeholder.image = Lucide.icon(item.symbol, pointSize: 30, weight: .light)
+        placeholder.image = Icons.symbol(item.symbol, pointSize: 30, weight: .light)
         title.stringValue = item.title
         subtitle.stringValue = item.subtitle ?? " "
         badge.stringValue = item.badge.map { " \($0) " } ?? ""

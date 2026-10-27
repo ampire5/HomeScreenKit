@@ -26,12 +26,21 @@ import Testing
         #expect(image.size == NSSize(width: 20, height: 20))
         #expect(image.accessibilityDescription == "Folder")
         // An SF Symbol name Lucide stands for is drawn by Lucide, 1.25 times its point size.
-        #expect(Lucide.icon("folder", pointSize: 16)?.size == NSSize(width: 20, height: 20))
+        #expect(Icons.symbol("folder", pointSize: 16, in: .lucide)?.size == NSSize(width: 20, height: 20))
         #expect(Lucide.image("no-such-icon", size: 20) == nil)
     }
 
     @Test func aNameLucideLacksKeepsItsSFSymbol() {
-        #expect(Lucide.icon("person.crop.circle", pointSize: 16) != nil)
+        #expect(Icons.symbol("person.crop.circle", pointSize: 16, in: .lucide)?.isTemplate == true)
+    }
+
+    @Test func theSFSetDrawsTheSymbolsThemselves() throws {
+        let sf = try #require(Icons.symbol("folder", pointSize: 16, in: .sf))
+        #expect(sf.size != NSSize(width: 20, height: 20))   // an SF Symbol's own size, not Lucide's box
+        // In a line: Lucide is a character of its font, an SF Symbol an attachment.
+        let lucide = Icons.inline("timer", size: 11, color: .white, in: .lucide)
+        #expect(lucide.attribute(.attachment, at: 0, effectiveRange: nil) == nil)
+        #expect(Icons.inline("timer", size: 11, color: .white, in: .sf).attribute(.attachment, at: 0, effectiveRange: nil) != nil)
     }
 }
 

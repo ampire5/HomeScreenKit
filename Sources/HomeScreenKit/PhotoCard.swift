@@ -196,8 +196,8 @@ final class PhotoCard: GridCard {
         needsLayout = true   // the left text is fitted to the room the size leaves (`layoutStrip`)
     }
 
-    /// The strip's left text in the room the size leaves: the exposure in mono, each value after its coloured glyph
-    /// (`MediaPalette.exposure`; whole values, as many as fit), or
+    /// The strip's left text in the room the size leaves: the exposure in mono, each value after its glyph
+    /// (`ExposureLine`; whole values, as many as fit), or
     /// with the facts line under the name the camera and the lens; the format without either. The size gives way
     /// when the exposure would keep fewer than two values beside it.
     private func layoutStrip(_ line: CGRect) {
@@ -212,7 +212,8 @@ final class PhotoCard: GridCard {
             if !factsLineShown, let f = item.facts, case let parts = FileFactsText.exposureValues(f), !parts.isEmpty {
                 var count = parts.count
                 func line(_ n: Int) -> NSAttributedString {
-                    MediaPalette.exposure(Array(parts.prefix(n)), font: Self.stripFont)
+                    ExposureLine.text(Array(parts.prefix(n)), font: Self.stripFont, color: .white,
+                                      glyphColor: NSColor(white: 1, alpha: 0.7))
                 }
                 while count > 0, line(count).size().width > room - 2 { count -= 1 }
                 if count == 0 || (sizeShown && count < parts.count && count < 2) { return false }

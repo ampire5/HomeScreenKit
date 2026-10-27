@@ -27,16 +27,6 @@ public final class HomeBrowserView: NSView {
     public var style = GridStyle.aspect {
         didSet { if style != oldValue { toolbar.show(style: style); tile() } }
     }
-    /// The badges and the exposure's glyphs in light grey, not in the colours of what they say
-    /// (`MediaPalette.monochrome`, the apps' `monochrome` key): a change lays the cards on screen out again.
-    public var monochrome: Bool {
-        get { MediaPalette.monochrome }
-        set {
-            guard newValue != MediaPalette.monochrome else { return }
-            MediaPalette.monochrome = newValue
-            for card in live.values { card.needsLayout = true }
-        }
-    }
     /// Where the names go: a change re-tiles, the cards keep their pictures.
     public var names = GridNames.off { didSet { if names != oldValue { tile() } } }
     /// The names as the grid draws them: the Square style (the pictures fill their tiles) has them on the picture,
