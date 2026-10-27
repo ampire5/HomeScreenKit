@@ -27,8 +27,9 @@ public enum MediaPalette {
         }
     }
 
-    /// The colour of the glyph in front of an exposure value of `kind`.
-    public static func color(_ kind: FileFactsText.ExposureKind) -> NSColor {
+    /// The colour of the glyph in front of an exposure value of `kind` (a view with its own monochrome switch, as
+    /// Loupe's stats bar, passes it).
+    public static func color(_ kind: FileFactsText.ExposureKind, monochrome: Bool = monochrome) -> NSColor {
         guard !monochrome else { return quietGlyph }
         switch kind {
         case .shutter: return rgb(0xFF9F43)
@@ -53,7 +54,7 @@ public enum MediaPalette {
     /// The exposure as a line: each value after its glyph in its colour (a Lucide glyph a point larger than the text,
     /// set on the text's baseline), the numbers in `color`, two spaces between the values.
     public static func exposure(_ values: [FileFactsText.ExposureValue], font: NSFont, color: NSColor = text,
-                                shadow: NSShadow? = nil) -> NSAttributedString {
+                                shadow: NSShadow? = nil, monochrome: Bool = monochrome) -> NSAttributedString {
         let glyphFont = Lucide.font(ofSize: font.pointSize + 1)
         var base: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color]
         if let shadow { base[.shadow] = shadow }
@@ -63,7 +64,7 @@ public enum MediaPalette {
             if let glyph = Lucide.glyph(glyph(value.kind)) {
                 var attributes = base
                 attributes[.font] = glyphFont
-                attributes[.foregroundColor] = Self.color(value.kind)
+                attributes[.foregroundColor] = Self.color(value.kind, monochrome: monochrome)
                 // The box stands on the baseline: lowered by the text's descent, it centres on the digits.
                 attributes[.baselineOffset] = -(glyphFont.pointSize * 0.14).rounded()
                 line.append(NSAttributedString(string: glyph, attributes: attributes))
