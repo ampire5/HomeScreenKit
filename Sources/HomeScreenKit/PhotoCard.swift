@@ -60,7 +60,7 @@ final class PhotoCard: GridCard {
     /// The chip: a 12 pt glyph, padding 2 × 3, radius 5.
     private static let chipSize = CGSize(width: 18, height: 16)
     private static let stripFont = NSFont.monospacedDigitSystemFont(ofSize: 10.5, weight: .regular)
-    private static let stripPadding = CGSize(width: 6, height: 4)
+    private static let stripPadding = CGSize(width: 7, height: 5)
     private static let markFill = NSColor(srgbRed: 18 / 255, green: 18 / 255, blue: 20 / 255, alpha: 1)
 
     var pictureLayer: CALayer { picture }
@@ -191,10 +191,9 @@ final class PhotoCard: GridCard {
          item.bytes.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? "")
     }
 
-    /// The exposure as ProCam draws it (glyphs and values), nil without EXIF.
-    private var stripExposure: NSAttributedString? {
-        item.facts.flatMap { FactsGlyphs.exposure($0, font: Self.stripFont, color: .white) }
-    }
+    /// The facts line under the name shows already: the strip then says what it does not (the camera), not the
+    /// exposure again.
+    private var factsLineShown: Bool { names == .below && showsFactsLine && !factsLabel.stringValue.isEmpty }
 
     /// The line under the name: a video with its badges on the picture says only its codec and size.
     private var factsLine: String {
@@ -205,10 +204,37 @@ final class PhotoCard: GridCard {
     private var showsBadges: Bool { showsNames && bounds.width >= Self.badgesFrom }
 
     private func fillStrip() {
+        guard let stripSize else { return }
+        stripSize.stringValue = stripText.size
+        needsLayout = true   // the left text is fitted to the room the size leaves (`layoutStrip`)
+    }
+
+    /// The strip's left text in the room the size leaves: the exposure in glyphs (whole values, as many as fit), or
+    /// with the facts line under the name the camera and the lens; the format without either. The size gives way
+    /// when the exposure would keep fewer than two values beside it.
+    private func layoutStrip(_ line: CGRect) {
         guard let stripFormat, let stripSize else { return }
-        let text = stripText
-        if let exposure = stripExposure { stripFormat.attributedStringValue = exposure } else { stripFormat.stringValue = text.format }
-        stripSize.stringValue = text.size
+        let size = stripText.size
+        let sizeWidth = size.isEmpty ? 0 : ceil(stripSize.intrinsicContentSize.width)
+        func place(sizeShown: Bool) -> Bool {
+            let room = max(0, line.width - (sizeShown ? sizeWidth + 8 : 0))
+            stripSize.isHidden = !sizeShown
+            stripSize.frame = line
+            stripFormat.frame = CGRect(x: line.minX, y: line.minY, width: room, height: line.height)
+            if !factsLineShown, let f = item.facts, FileFactsText.exposureLine(f) != nil {
+                let full = FactsGlyphs.exposure(f, font: Self.stripFont, color: .white)
+                let fitted = FactsGlyphs.exposure(f, font: Self.stripFont, color: .white, maxWidth: room - 2)
+                if fitted == nil || (sizeShown && fitted != full && fitted!.string.components(separatedBy: "   ").count < 2) {
+                    return false
+                }
+                stripFormat.attributedStringValue = fitted!
+                return true
+            }
+            let words = factsLineShown ? item.facts.flatMap(FileFactsText.cameraLine) ?? item.format : item.format
+            stripFormat.stringValue = words ?? ""
+            return true
+        }
+        if !place(sizeShown: !size.isEmpty) { _ = place(sizeShown: false) }
     }
 
     override func show(_ item: HomeCardItem) {
@@ -325,7 +351,7 @@ final class PhotoCard: GridCard {
         for label in [format, size] {
             label.font = Self.stripFont
             label.textColor = .white
-            label.lineBreakMode = .byClipping
+            label.lineBreakMode = .byTruncatingTail
             strip.addSubview(label)
         }
         size.alignment = .right
@@ -336,8 +362,10 @@ final class PhotoCard: GridCard {
         self.strip = strip
     }
 
+    /// The text's line or the glyphs' height, whichever is taller, and the padding.
     private static let stripHeight =
-        (stripFont.ascender - stripFont.descender + stripFont.leading).rounded(.up) + 2 * stripPadding.height
+        max(stripFont.ascender - stripFont.descender + stripFont.leading, stripFont.pointSize + 3).rounded(.up)
+            + 2 * stripPadding.height
 
     override func layout() {
         super.layout()
@@ -366,10 +394,7 @@ final class PhotoCard: GridCard {
             let pad = Self.stripPadding
             let line = CGRect(x: pad.width, y: pad.height, width: max(0, rect.width - 2 * pad.width),
                               height: stripHeight - 2 * pad.height)
-            stripSize.frame = line
-            let sizeWidth = min(line.width, stripSize.intrinsicContentSize.width)
-            stripFormat.frame = CGRect(x: line.minX, y: line.minY, width: max(0, line.width - sizeWidth - 4),
-                                       height: line.height)
+            if !strip.isHidden { layoutStrip(line) }
         }
         let line = factsLine   // it depends on the width (the badges take a video's stream)
         if factsLabel.stringValue != line { factsLabel.stringValue = line }
