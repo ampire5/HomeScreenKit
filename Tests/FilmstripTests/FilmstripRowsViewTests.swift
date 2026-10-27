@@ -86,3 +86,13 @@ private final class CountingView: NSView {
     let still = card.layer?.animationKeys() ?? []
     #expect(still.isEmpty)
 }
+
+/// A press on the rows is told at once (it stops a glide), before it is known to be a click or a drag.
+@MainActor @Test func pressBeganIsReported() {
+    let view = strip(20, current: 5)
+    var began = 0
+    view.onPressBegan = { began += 1 }
+    view.mouseDown(with: mouse(.leftMouseDown, at: NSPoint(x: 50, y: 300)))
+    let count = began
+    #expect(count == 1)
+}

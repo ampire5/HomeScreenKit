@@ -66,6 +66,8 @@ import QuartzCore
         }
     }
     public var onPress: ((Int) -> Void)?
+    /// A press began on the rows (before it is a click or a drag): the owner stops a glide still going.
+    public var onPressBegan: (() -> Void)?
     /// The pointer dragged the rows by this many points down (negative: up).
     public var onDrag: ((CGFloat) -> Void)?
     public var onDragEnd: (() -> Void)?
@@ -324,6 +326,7 @@ import QuartzCore
     public override func mouseDown(with event: NSEvent) {
         let y = convert(event.locationInWindow, from: nil).y
         press = (y, y, item(at: y), false)
+        onPressBegan?()
     }
 
     public override func mouseDragged(with event: NSEvent) {
