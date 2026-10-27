@@ -43,7 +43,6 @@ final class HomeCard: GridCard {
         picture.layer?.addSublayer(track)
         picture.layer?.addSublayer(bar)
         placeholder.contentTintColor = Chrome.Palette.window.tertiaryLabel
-        placeholder.symbolConfiguration = .init(pointSize: 30, weight: .light)
         picture.addSubview(placeholder)
         badge.font = Chrome.Text.font(.badge)
         badge.textColor = Chrome.Palette.overMedia.text
@@ -66,7 +65,7 @@ final class HomeCard: GridCard {
 
     /// The text, bar and label of the item.
     override func itemChanged() {
-        placeholder.image = NSImage(systemSymbolName: item.symbol, accessibilityDescription: nil)
+        placeholder.image = Lucide.icon(item.symbol, pointSize: 30, weight: .light)
         title.stringValue = item.title
         subtitle.stringValue = item.subtitle ?? " "
         badge.stringValue = item.badge.map { " \($0) " } ?? ""

@@ -78,7 +78,7 @@ import AppKit
     }
 
     private static func image(_ symbol: String, _ tip: String) -> NSImage {
-        NSImage(systemSymbolName: symbol, accessibilityDescription: tip) ?? NSImage()
+        Lucide.icon(symbol, pointSize: 14, description: tip) ?? NSImage()
     }
 
     private func paintLight() {

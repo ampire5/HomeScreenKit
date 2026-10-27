@@ -96,16 +96,34 @@ public enum FileFactsText {
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
-    /// The exposure's values as a camera's screen orders them: `1/250`, `f/2.8`, `ISO 800`, `35 mm`, `−0.3 EV`.
-    public static func exposureParts(_ f: FileFacts) -> [String] {
-        var parts: [String] = []
-        if let e = f.exposure, e > 0 { parts.append(shutter(e)) }
-        if let a = f.aperture, a > 0 { parts.append("f/" + number(a)) }
-        if let iso = f.iso, iso > 0 { parts.append("ISO" + nbsp + "\(iso)") }
-        if let mm = f.focalLength, mm > 0 { parts.append(number(mm) + nbsp + "mm") }
-        if let ev = f.exposureBias, ev != 0, ev.isFinite { parts.append(bias(ev)) }
-        return parts
+    /// What an exposure value is, for its glyph and colour on a card (the hover strip, Loupe's facts row).
+    public enum ExposureKind: Sendable, CaseIterable {
+        case shutter, aperture, iso, focalLength, bias
     }
+
+    /// One value of the exposure, as written (`1/250`, `ISO 800`), and what it is.
+    public struct ExposureValue: Equatable, Sendable {
+        public let text: String
+        public let kind: ExposureKind
+        public init(_ text: String, _ kind: ExposureKind) {
+            self.text = text
+            self.kind = kind
+        }
+    }
+
+    /// The exposure's values as a camera's screen orders them: `1/250`, `f/2.8`, `ISO 800`, `35 mm`, `−0.3 EV`.
+    public static func exposureValues(_ f: FileFacts) -> [ExposureValue] {
+        var values: [ExposureValue] = []
+        if let e = f.exposure, e > 0 { values.append(.init(shutter(e), .shutter)) }
+        if let a = f.aperture, a > 0 { values.append(.init("f/" + number(a), .aperture)) }
+        if let iso = f.iso, iso > 0 { values.append(.init("ISO" + nbsp + "\(iso)", .iso)) }
+        if let mm = f.focalLength, mm > 0 { values.append(.init(number(mm) + nbsp + "mm", .focalLength)) }
+        if let ev = f.exposureBias, ev != 0, ev.isFinite { values.append(.init(bias(ev), .bias)) }
+        return values
+    }
+
+    /// The texts of `exposureValues`.
+    public static func exposureParts(_ f: FileFacts) -> [String] { exposureValues(f).map(\.text) }
 
     /// `1/250 · f/2.8 · ISO 800 · 35 mm · −0.3 EV`: what is known of the exposure.
     public static func exposureLine(_ f: FileFacts) -> String? {
@@ -181,24 +199,39 @@ public enum FileFactsText {
         return (mp >= 10 ? String(Int(mp.rounded())) : number((mp * 10).rounded() / 10)) + nbsp + "MP"
     }
 
+    /// What a badge says, for its colour: the frame's class or size, the rate, the colour (`HLG`, `HDR10`), `RAW`,
+    /// the megapixels.
+    public enum BadgeKind: Sendable, CaseIterable {
+        case resolution, rate, transfer, raw, megapixels
+    }
+
+    public struct Badge: Equatable, Sendable {
+        public let text: String
+        public let kind: BadgeKind
+        public init(_ text: String, _ kind: BadgeKind) {
+            self.text = text
+            self.kind = kind
+        }
+    }
+
     /// The badges on a picture (guide F1: at most two, at its top left): a video's class, then its colour when it is
     /// not SDR, else its rate (`UHD HLG`, `FHD 59.94p`); a photo's format when it is RAW, then its megapixels
     /// (`RAW 24 MP`). `format` is the file's extension in capitals.
-    public static func badges(_ f: FileFacts?, format: String?) -> [String] {
+    public static func badges(_ f: FileFacts?, format: String?) -> [Badge] {
         guard let f else { return [] }
         if f.isVideo {
-            var out: [String] = []
-            if let r = resolution(f) { out.append(r) }
+            var out: [Badge] = []
+            if let r = resolution(f) { out.append(.init(r, .resolution)) }
             if let t = f.transfer, t != .sdr {
-                out.append(t.rawValue)
+                out.append(.init(t.rawValue, .transfer))
             } else if let fps = f.fps, fps > 0 {
-                out.append(rate(fps) + "p")
+                out.append(.init(rate(fps) + "p", .rate))
             }
             return out
         }
-        var out: [String] = []
-        if let format, rawFormats.contains(format.uppercased()) { out.append("RAW") }
-        if let mp = megapixels(f) { out.append(mp) }
+        var out: [Badge] = []
+        if let format, rawFormats.contains(format.uppercased()) { out.append(.init("RAW", .raw)) }
+        if let mp = megapixels(f) { out.append(.init(mp, .megapixels)) }
         return out
     }
 

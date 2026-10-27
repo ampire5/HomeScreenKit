@@ -47,7 +47,6 @@ final class FileCard: GridCard {
         picture.contentsGravity = .resizeAspectFill
         for sub in [plate, edge, picture] { layer?.addSublayer(sub) }
         placeholder.contentTintColor = Chrome.Palette.window.tertiaryLabel
-        placeholder.symbolConfiguration = .init(pointSize: 24, weight: .light)
         addSubview(placeholder)
         lengthChip.textColor = Chrome.Palette.card.coverChipText
         addSubview(lengthChip)
@@ -115,7 +114,7 @@ final class FileCard: GridCard {
         }
         if placeholderSymbol != item.symbol {
             placeholderSymbol = item.symbol
-            placeholder.image = NSImage(systemSymbolName: item.symbol, accessibilityDescription: nil)
+            placeholder.image = Lucide.icon(item.symbol, pointSize: 24, weight: .light)
         }
         needsLayout = true
     }

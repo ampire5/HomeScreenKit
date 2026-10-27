@@ -33,6 +33,19 @@ import Testing
         #expect(badges(small).isEmpty)
     }
 
+    @Test func badgesTakeTheColourOfWhatTheySayUnlessMonochrome() throws {
+        let video = card(FileFacts(width: 3840, height: 2160, duration: 60, codec: "HEVC", fps: 25, transfer: .hlg),
+                         format: "MOV", width: 300, names: .below, video: true)
+        let hlg = try #require(video.subviews.compactMap { $0 as? MediaBadge }.first { $0.label == "HLG" })
+        #expect(hlg.layer?.borderWidth == 1)
+        #expect(hlg.layer?.borderColor == MediaPalette.color(.transfer)?.withAlphaComponent(0.6).cgColor)
+        MediaPalette.monochrome = true
+        defer { MediaPalette.monochrome = false }
+        hlg.show(.init("HLG", .transfer))
+        #expect(hlg.layer?.borderWidth == 0)
+        #expect(MediaPalette.color(.aperture) == MediaPalette.color(.shutter))
+    }
+
     @Test func autoNamesShowABandOnHover() {
         let c = card(FileFacts(width: 6000, height: 4000, exposure: 1.0 / 250), format: "JPG", width: 140, names: .auto)
         #expect(c.nameLabel.isHidden)

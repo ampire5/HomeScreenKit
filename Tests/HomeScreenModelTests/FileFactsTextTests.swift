@@ -47,6 +47,7 @@ import Testing
         #expect(FileFactsText.shutter(2) == "2\u{2033}")
         #expect(FileFactsText.shutter(1.0 / 3) == "1/3")
         #expect(FileFactsText.bias(1) == nb("+1_EV"))
+        #expect(FileFactsText.exposureValues(f).map(\.kind) == [.shutter, .aperture, .iso, .focalLength, .bias])
         #expect(FileFactsText.exposureLine(FileFacts(aperture: 1.8)) == "f/1.8")
         #expect(FileFactsText.exposureLine(FileFacts(exposureBias: 0)) == nil)
         #expect(FileFactsText.exposureLine(FileFacts()) == nil)
@@ -89,11 +90,11 @@ import Testing
         #expect(FileFactsText.megapixels(FileFacts(width: 3264, height: 2448)) == nb("8_MP"))
         #expect(FileFactsText.megapixels(FileFacts(width: 2560, height: 1440)) == nb("3.7_MP"))
         // A photo: the format first, then the size (guide F3); a video: the class, then its colour or its rate.
-        #expect(FileFactsText.badges(FileFacts(width: 6000, height: 4000), format: "arw") == ["RAW", nb("24_MP")])
+        #expect(FileFactsText.badges(FileFacts(width: 6000, height: 4000), format: "arw") == [.init("RAW", .raw), .init(nb("24_MP"), .megapixels)])
         let hlg = FileFacts(width: 3840, height: 2160, codec: "HEVC", fps: 25, transfer: .hlg)
-        #expect(FileFactsText.badges(hlg, format: "MOV") == ["UHD", "HLG"])
+        #expect(FileFactsText.badges(hlg, format: "MOV") == [.init("UHD", .resolution), .init("HLG", .transfer)])
         let sdr = FileFacts(width: 1920, height: 1080, codec: "HEVC", fps: 59.94, transfer: .sdr)
-        #expect(FileFactsText.badges(sdr, format: "MP4") == ["FHD", "59.94p"])
+        #expect(FileFactsText.badges(sdr, format: "MP4") == [.init("FHD", .resolution), .init("59.94p", .rate)])
         #expect(FileFactsText.badges(nil, format: "JPG").isEmpty)
         #expect(FileFactsText.videoLineWithBadges(FileFacts(codec: "H.264"), bytes: 1_150_000_000) == nb("H.264 · 1.1_GB"))
     }

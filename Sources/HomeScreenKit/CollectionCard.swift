@@ -33,7 +33,6 @@ final class CollectionCard: GridCard {
         picture.layer?.contentsGravity = .resizeAspectFill
         picture.layer?.addSublayer(shade)
         placeholder.contentTintColor = Chrome.Palette.window.tertiaryLabel
-        placeholder.symbolConfiguration = .init(pointSize: 30, weight: .light)
         glassTile.cornerRadius = Self.corner
         glassTile.isHidden = true
         picture.addSubview(glassTile)
@@ -65,8 +64,7 @@ final class CollectionCard: GridCard {
     var isShowingSymbol: Bool { !placeholder.isHidden }
 
     override func itemChanged() {
-        placeholder.image = NSImage(systemSymbolName: item.symbol, accessibilityDescription: nil)
-        placeholder.symbolConfiguration = .init(pointSize: item.glassSymbol ? 36 : 30, weight: .light)
+        placeholder.image = Lucide.icon(item.symbol, pointSize: item.glassSymbol ? 36 : 30, weight: .light)
         glassTile.isHidden = !item.glassSymbol
         progressBar.isHidden = item.progress == nil
         imageChanged()

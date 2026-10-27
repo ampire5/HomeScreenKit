@@ -210,8 +210,7 @@ public enum FilmstripGlyph: String, CaseIterable, Sendable {
                 b.addSubview(glyph)
                 b.glyphSize = kind.size
             } else {
-                let image = NSImage(systemSymbolName: tool.symbol, accessibilityDescription: tool.help)?
-                    .withSymbolConfiguration(.init(pointSize: Self.symbolSize, weight: .light))   // thin line icons
+                let image = Lucide.icon(tool.symbol, pointSize: Self.symbolSize, weight: .light, description: tool.help)
                 b = FilmstripToolButton(image: image ?? NSImage(), target: self, action: #selector(clicked(_:)))
                 b.imagePosition = .imageOnly
                 b.contentTintColor = Self.ink

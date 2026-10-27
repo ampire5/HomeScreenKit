@@ -273,8 +273,9 @@ import HomeScreenModel
         item.maxSize = NSSize(width: max(HomeToolbarTitleView.minWidth, titleView.textWidth), height: height)
     }
 
-    private func symbol(_ name: String, _ description: String) -> NSImage {
-        NSImage(systemSymbolName: name, accessibilityDescription: description) ?? NSImage()
+    /// A toolbar icon: Lucide at the size of the toolbar's symbols, smaller for the zoom slider's ends.
+    private func symbol(_ name: String, _ description: String, pointSize: CGFloat = 14) -> NSImage {
+        Lucide.icon(name, pointSize: pointSize, description: description) ?? NSImage()
     }
 
     private func button(_ id: NSToolbarItem.Identifier, _ symbolName: String, label: String, tip: String,
@@ -539,7 +540,7 @@ import HomeScreenModel
     private var shownCardSize: CGFloat = 0
 
     private func zoomButton(_ symbolName: String, _ tip: String, tag: Int) -> NSButton {
-        let button = NSButton(image: symbol(symbolName, tip), target: self, action: #selector(zoomButtonClicked(_:)))
+        let button = NSButton(image: symbol(symbolName, tip, pointSize: 11), target: self, action: #selector(zoomButtonClicked(_:)))
         button.isBordered = false
         button.contentTintColor = .secondaryLabelColor
         button.tag = tag

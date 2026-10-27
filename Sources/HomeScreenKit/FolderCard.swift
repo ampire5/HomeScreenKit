@@ -120,7 +120,6 @@ class FolderCard: GridCard {
         picture.layer?.masksToBounds = true
         picture.layer?.contentsGravity = .resizeAspectFill
         placeholder.contentTintColor = Chrome.Palette.window.tertiaryLabel
-        placeholder.symbolConfiguration = .init(pointSize: 30, weight: .light)
         picture.addSubview(placeholder)
         for bar in [progressTrack, progressBar] {
             bar.wantsLayer = true
@@ -313,14 +312,8 @@ class FolderCard: GridCard {
                                    height: size.height)
     }
 
-    /// Symbols by name: a card is shown again for every scroll step, the image is made once.
-    private static var symbols: [String: NSImage] = [:]
-    static func symbol(_ name: String, _ description: String? = nil) -> NSImage? {
-        if let image = symbols[name] { return image }
-        guard let image = NSImage(systemSymbolName: name, accessibilityDescription: description) else { return nil }
-        symbols[name] = image
-        return image
-    }
+    /// The placeholder's symbol: a card is shown again for every scroll step, Lucide makes the image once.
+    static func symbol(_ name: String) -> NSImage? { Lucide.icon(name, pointSize: 30, weight: .light) }
 
     /// The name must keep this much of its line; a badge that would squeeze it further is left out.
     static let minName: CGFloat = 48

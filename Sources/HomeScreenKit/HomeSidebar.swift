@@ -393,9 +393,7 @@ private final class SidebarLineView: NSView {
         spinner.isDisplayedWhenStopped = false
         spinner.isHidden = true
         triangle.contentTintColor = .secondaryLabelColor
-        triangle.symbolConfiguration = .init(pointSize: 10, weight: .semibold)
         symbol.contentTintColor = .controlAccentColor
-        symbol.symbolConfiguration = .init(pointSize: 16, weight: .regular, scale: .large)
         for view in [light, triangle, symbol, title, count, spinner] { addSubview(view) }
         addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect],
                                        owner: self, userInfo: nil))
@@ -431,7 +429,7 @@ private final class SidebarLineView: NSView {
             title.stringValue = row.title
             count.stringValue = row.count.map(BrowserSummary.number) ?? ""
             symbol.image = Self.symbol(row.symbol)
-            triangle.image = row.expandable ? Self.symbol(expanded ? "chevron.down" : "chevron.right") : nil
+            triangle.image = row.expandable ? Self.triangle(expanded ? "chevron.down" : "chevron.right") : nil
             alphaValue = row.isDimmed ? 0.45 : 1
             showSpinner(spinning)
         }
@@ -439,15 +437,11 @@ private final class SidebarLineView: NSView {
         needsLayout = true
     }
 
-    /// The rows' symbols, one image per name for every line.
-    private static var symbols: [String: NSImage] = [:]
+    /// A row's symbol (Lucide keeps one image per name and size for every line).
+    private static func symbol(_ name: String) -> NSImage? { Lucide.icon(name, pointSize: 16) }
 
-    private static func symbol(_ name: String) -> NSImage? {
-        if let image = symbols[name] { return image }
-        let image = NSImage(systemSymbolName: name, accessibilityDescription: nil)
-        symbols[name] = image
-        return image
-    }
+    /// The disclosure triangle's chevron.
+    private static func triangle(_ name: String) -> NSImage? { Lucide.icon(name, pointSize: 10, weight: .semibold) }
 
     private func showSpinner(_ on: Bool) {
         spinner.isHidden = !on
@@ -459,7 +453,7 @@ private final class SidebarLineView: NSView {
         if isHeading {
             title.font = .systemFont(ofSize: 11, weight: .semibold)
             title.textColor = .tertiaryLabelColor
-            triangle.image = hovering ? Self.symbol(collapsed ? "chevron.right" : "chevron.down") : nil
+            triangle.image = hovering ? Self.triangle(collapsed ? "chevron.right" : "chevron.down") : nil
             light.isHidden = true
             return
         }

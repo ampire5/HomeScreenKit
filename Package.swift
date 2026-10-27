@@ -13,7 +13,7 @@ let package = Package(
     ],
     targets: [
         .target(name: "HomeScreenModel"),
-        .target(name: "HomeChrome"),
+        .target(name: "HomeChrome", exclude: ["LICENSE-lucide"]),
         .target(name: "FilmstripModel"),
         .target(name: "HomeScreenKit", dependencies: ["HomeScreenModel", "HomeChrome"]),
         .target(name: "Filmstrip", dependencies: ["FilmstripModel", "HomeChrome"]),
