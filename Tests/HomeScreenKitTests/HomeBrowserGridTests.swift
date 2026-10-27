@@ -86,8 +86,13 @@ import Testing
         view.layoutSubtreeIfNeeded()
         let card = view.card(for: id) as? PhotoCard
         #expect(card?.style == .square)
-        #expect(card?.names == .below)
+        // Square fills the tile: the name goes on the picture's bottom line, not under it, and no slot room is kept.
+        #expect(card?.names == .photo)
         #expect(card?.image != nil)
+        #expect(!view.grid.namesBelow(inSection: 0))
+        view.style = .aspect
+        view.layoutSubtreeIfNeeded()
+        #expect((view.card(for: id) as? PhotoCard)?.names == .below)
     }
 
     // MARK: Photo marks (photo-cards spec §2)

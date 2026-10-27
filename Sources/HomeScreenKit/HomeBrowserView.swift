@@ -38,6 +38,10 @@ public final class HomeBrowserView: NSView {
     }
     /// Where the names go: a change re-tiles, the cards keep their pictures.
     public var names = GridNames.off { didSet { if names != oldValue { tile() } } }
+    /// The names as the grid draws them: the Square style (the pictures fill their tiles) has them on the picture,
+    /// its bottom line, where `below` and `auto` would put them under it (the owner, 2026-10-27); the facts are in the
+    /// strip over the picture's bottom on hover.
+    private var shownNames: GridNames { style == .square && (names == .below || names == .auto) ? .photo : names }
     /// What the files are (`FileStyle`: photos, or a video app's videos): their noun in the counts, their slot's shape
     /// and the length and progress on their pictures. Set before the first `show`; a change re-tiles.
     public var files = FileStyle.photos {
@@ -1281,7 +1285,7 @@ public final class HomeBrowserView: NSView {
                                      height: name.height))
             return
         }
-        if names == .below {
+        if shownNames == .below {
             y = slot.minY + slot.width + 1   // on the name line
         } else if isCollection(i) {
             y = slot.minY + slot.width - 42   // over the title on the picture
@@ -1697,7 +1701,7 @@ public final class HomeBrowserView: NSView {
         let shownStyle = shownCardStyle(width: width)
         let showsListHeader = shownStyle == .list && !entries.isEmpty && isShowingEntries
         if showsListHeader { metrics.top += ListHeader.height }
-        grid = GridLayout(sections: sections, width: width, target: cardSize, names: names, style: shownStyle,
+        grid = GridLayout(sections: sections, width: width, target: cardSize, names: shownNames, style: shownStyle,
                           fileAspect: files.aspect, factsLine: files.factsLine, metrics: metrics)
         // At least the view's height less the inset AppKit gives the scroll view under the toolbar: as tall as the
         // whole view, a grid that fits scrolled by that inset and kept a legacy scroller (a mouse plugged in).
@@ -1756,7 +1760,7 @@ public final class HomeBrowserView: NSView {
             if let photo = card as? PhotoCard {
                 photo.style = style
                 // `auto`: under the picture where the slots are wide enough, else the band on hover.
-                photo.names = names == .auto && grid.namesBelow(inSection: section) ? .below : names
+                photo.names = shownNames == .auto && grid.namesBelow(inSection: section) ? .below : shownNames
                 photo.aspect = files.aspect
                 photo.showsFacts = files.facts
                 photo.showsFactsLine = files.factsLine
