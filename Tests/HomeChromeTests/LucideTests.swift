@@ -34,3 +34,32 @@ import Testing
         #expect(Lucide.icon("person.crop.circle", pointSize: 16) != nil)
     }
 }
+
+extension LucideTests {
+    /// The ink's middle, in points from the image's middle, of `name` drawn `size` square at 2×.
+    private func inkOffset(_ name: String, size: CGFloat = 24) throws -> CGPoint {
+        let image = try #require(Lucide.image(name, size: size))
+        let px = Int(size * 2)
+        let rep = try #require(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: px, pixelsHigh: px, bitsPerSample: 8,
+                                                samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                                colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+        rep.size = image.size
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        image.draw(in: NSRect(origin: .zero, size: image.size))
+        NSGraphicsContext.restoreGraphicsState()
+        var minX = px, maxX = 0, minY = px, maxY = 0
+        for y in 0..<px { for x in 0..<px where (rep.colorAt(x: x, y: y)?.alphaComponent ?? 0) > 0.5 {
+            minX = min(minX, x); maxX = max(maxX, x); minY = min(minY, y); maxY = max(maxY, y)
+        } }
+        return CGPoint(x: (CGFloat(minX + maxX + 1) / 2 - CGFloat(px) / 2) / 2,
+                       y: (CGFloat(minY + maxY + 1) / 2 - CGFloat(px) / 2) / 2)
+    }
+
+    @Test func anIconIsCentredByItsDrawingNotByLucidesBox() throws {
+        for name in ["play", "volume-2", "volume", "house", "chevron-left", "file-image", "pin"] {
+            let offset = try inkOffset(name)
+            #expect(abs(offset.x) <= 0.5 && abs(offset.y) <= 0.5, "\(name) off by \(offset)")
+        }
+    }
+}

@@ -30,14 +30,23 @@ public enum Lucide {
     private static var images: [String: NSImage] = [:]
 
     /// The icon `name` as a template image `size` points square (its box: the line keeps a point of room inside),
-    /// drawn at whatever scale the screen asks.
+    /// drawn at whatever scale the screen asks. The drawing is centred in the box by its own outline, as SF Symbols
+    /// centre theirs: Lucide's own place for it is not always the middle (the play triangle sits right of it, a
+    /// speaker's waves pull it left), and a button centres the box.
     public static func image(_ name: String, size: CGFloat, description: String? = nil) -> NSImage? {
         let key = "\(name)@\(size)"
         if let image = images[key] { return image }
-        guard let glyph = glyph(name) else { return nil }
-        let font = font(ofSize: size)
+        guard var code = codepoints[name].map({ UniChar($0) }) else { return nil }
+        let font = font(ofSize: size) as CTFont
+        var glyph = CGGlyph(0)
+        guard CTFontGetGlyphsForCharacters(font, &code, &glyph, 1) else { return nil }
+        let outline = CTFontGetBoundingRectsForGlyphs(font, .default, &glyph, nil, 1)
+        let origin = CGPoint(x: size / 2 - outline.midX, y: size / 2 - outline.midY)
         let image = NSImage(size: NSSize(width: size, height: size), flipped: false) { _ in
-            NSAttributedString(string: glyph, attributes: [.font: font, .foregroundColor: NSColor.black]).draw(at: .zero)
+            guard let context = NSGraphicsContext.current?.cgContext else { return false }
+            context.setFillColor(NSColor.black.cgColor)
+            var position = origin
+            CTFontDrawGlyphs(font, &glyph, &position, 1, context)
             return true
         }
         image.isTemplate = true
