@@ -19,8 +19,8 @@ import Testing
     @Test func videoRows() {
         let c = card(FileFacts(width: 1920, height: 1080, duration: 750, codec: "HEVC", fps: 60))
         #expect(c.pictureFrame == CGRect(x: 8, y: 8, width: 135, height: 76))
-        #expect(c.rowTexts[0] == "1080p · HEVC · 60 fps")
-        #expect(c.rowTexts[1] == "12:30 · 1.2 GB")
+        #expect(c.rowTexts[0] == "FHD · 60p · HEVC")
+        #expect(c.rowTexts[1] == "12:30 · 1.2\u{00A0}GB")
         #expect(abs(c.nameFrame.minX - 154) < 0.01)   // 11 pt right of the picture
     }
 
@@ -35,13 +35,13 @@ import Testing
         let c = card(f, aspect: 1)
         #expect(c.pictureFrame.size == CGSize(width: 76, height: 76))
         #expect(c.rowTexts[0] == "Sony ILCE-7M4 · FE 24-70mm F2.8 GM II")
-        #expect(c.rowTexts[1] == "1/250 · f/2.8 · ISO 400")
-        #expect(c.rowTexts[2].hasSuffix("4032 × 3024 · 1.2 GB"))
+        #expect(c.rowTexts[1] == "1/250 · f/2.8 · ISO\u{00A0}400")
+        #expect(c.rowTexts[2].hasSuffix("4032 × 3024 · 1.2\u{00A0}GB"))
     }
 
     @Test func noFactsDrawsTheFormatDateAndSize() {
         let c = card(nil, aspect: 1)
         #expect(c.rowTexts[0] == "MP4")
-        #expect(c.rowTexts[2].hasSuffix("1.2 GB"))
+        #expect(c.rowTexts[2].hasSuffix("1.2\u{00A0}GB"))
     }
 }

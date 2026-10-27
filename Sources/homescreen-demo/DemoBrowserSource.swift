@@ -51,7 +51,7 @@ import HomeScreenKit
             var e = file("clip \(n).mp4", in: videos, n)
             e.size = Int64(300_000_000 + n * 97_000_000)
             e.facts = FileFacts(width: n % 3 == 0 ? 3840 : 1920, height: n % 3 == 0 ? 2160 : 1080, duration: Double(90 + n * 431),
-                                codec: n % 2 == 0 ? "HEVC" : "H.264", fps: n % 4 == 0 ? 59.94 : 30, hdr: n % 3 == 0)
+                                codec: n % 2 == 0 ? "HEVC" : "H.264", fps: n % 4 == 0 ? 59.94 : 30, transfer: n % 3 == 0 ? .hlg : .sdr)
             e.progress = n % 3 == 1 ? 0.35 : nil
             e.subtitle = n % 3 == 1 ? "1:02 / " + FileFactsText.length(Double(90 + n * 431)) : nil
             return e

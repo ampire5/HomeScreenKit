@@ -13,7 +13,8 @@ public struct FileFacts: Equatable, Sendable, Codable {
     public var fps: Double?
     /// Bits per second.
     public var bitrate: Int?
-    public var hdr: Bool?
+    /// The video's transfer (its colour as delivered): `SDR`, `HLG`, `HDR10`.
+    public var transfer: Transfer?
     /// Make and model (photo).
     public var camera: String?
     public var lens: String?
@@ -24,68 +25,99 @@ public struct FileFacts: Equatable, Sendable, Codable {
     public var iso: Int?
     /// Millimetres.
     public var focalLength: Double?
+    /// Exposure compensation in EV (`-0.3`, `+1`); nil when the camera wrote none or zero.
+    public var exposureBias: Double?
     /// When the photo was taken (DateTimeOriginal).
     public var taken: Date?
 
     public init(width: Int? = nil, height: Int? = nil, duration: Double? = nil, codec: String? = nil, fps: Double? = nil,
-                bitrate: Int? = nil, hdr: Bool? = nil, camera: String? = nil, lens: String? = nil,
+                bitrate: Int? = nil, transfer: Transfer? = nil, camera: String? = nil, lens: String? = nil,
                 exposure: Double? = nil, aperture: Double? = nil, iso: Int? = nil, focalLength: Double? = nil,
-                taken: Date? = nil) {
+                exposureBias: Double? = nil, taken: Date? = nil) {
         self.width = width
         self.height = height
         self.duration = duration
         self.codec = codec
         self.fps = fps
         self.bitrate = bitrate
-        self.hdr = hdr
+        self.transfer = transfer
         self.camera = camera
         self.lens = lens
         self.exposure = exposure
         self.aperture = aperture
         self.iso = iso
         self.focalLength = focalLength
+        self.exposureBias = exposureBias
         self.taken = taken
     }
 
     /// A video's facts: a codec, a rate or a length.
     public var isVideo: Bool { codec != nil || fps != nil || duration != nil }
+
+    /// The style guide's colour badge (Media UI Iconography D, «Цвет / HDR»): PQ is `HDR10`, ARIB STD-B67 is `HLG`.
+    /// Log gammas are not told apart from SDR: the stream does not say.
+    public enum Transfer: String, Equatable, Sendable, Codable {
+        case sdr = "SDR", hlg = "HLG", hdr10 = "HDR10"
+    }
 }
 
-/// The words of `FileFacts` on a card (file-cards spec §1).
+/// The words of `FileFacts` on a card, written as the Media UI Iconography style guide (sections D and E) says: the
+/// resolution class by the frame's width (`UHD` is 3840, `4K` is 4096), the rate unrounded with its `p`, a non-breaking
+/// space between a number and its unit (`35 mm`, `24 MP`), decimal file sizes.
 public enum FileFactsText {
-    /// A video by its 16:9 line (`720p`, `1080p`, `1440p`, `4K`, `8K`; else `480p`-style); a photo `4032 × 3024`.
+    /// Between a number and its unit (guide E, «Единицы»).
+    static let nbsp = "\u{00A0}"
+
+    /// A video by its class: `8K`, `6K`, `5K`, `4K` (DCI), `UHD`, `QHD`, `FHD`, `HD`, `SD`, by the long side, so a
+    /// 1920 × 800 scope is `FHD` and a turned phone clip keeps its class; a photo `4032 × 3024`.
     public static func resolution(_ f: FileFacts) -> String? {
         guard let w = f.width, let h = f.height, w > 0, h > 0 else { return nil }
         guard f.isVideo else { return "\(w) × \(h)" }
-        // The height a 16:9 frame of this width would have, or the shorter side if taller: 1920 × 800 is 1080p.
-        let short = min(w, h), long = max(w, h)
-        let line = max(short, long * 9 / 16)
-        if line >= 4000 { return "8K" }
-        if line >= 2000 { return "4K" }
-        if line >= 1400 { return "1440p" }
-        if line >= 1000 { return "1080p" }
-        if line >= 700 { return "720p" }
-        return "\(short)p"
+        let long = max(w, h)
+        if long >= 7680 { return "8K" }
+        if long >= 6000 { return "6K" }
+        if long >= 5000 { return "5K" }
+        if long >= 4096 { return "4K" }
+        if long >= 3840 { return "UHD" }
+        if long >= 2560 { return "QHD" }
+        if long >= 1920 { return "FHD" }
+        if long >= 1280 { return "HD" }
+        return "SD"
     }
 
-    /// `1080p · HEVC · 60 fps · HDR`: what is known of the stream, in that order.
+    /// `UHD · 25p · HEVC · HLG`: what is known of the stream, in the guide's order (class, rate, codec, colour);
+    /// SDR is not said.
     public static func stream(_ f: FileFacts) -> String? {
         var parts: [String] = []
         if let r = resolution(f) { parts.append(r) }
+        if let fps = f.fps, fps > 0 { parts.append(rate(fps) + "p") }
         if let c = f.codec, !c.isEmpty { parts.append(c) }
-        if let fps = f.fps, fps > 0 { parts.append(rate(fps) + " fps") }
-        if f.hdr == true { parts.append("HDR") }
+        if let t = f.transfer, t != .sdr { parts.append(t.rawValue) }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
-    /// `1/250 · f/2.8 · ISO 400 · 24 mm`: what is known of the exposure.
-    public static func exposureLine(_ f: FileFacts) -> String? {
+    /// The exposure's values as a camera's screen orders them: `1/250`, `f/2.8`, `ISO 800`, `35 mm`, `−0.3 EV`.
+    public static func exposureParts(_ f: FileFacts) -> [String] {
         var parts: [String] = []
         if let e = f.exposure, e > 0 { parts.append(shutter(e)) }
         if let a = f.aperture, a > 0 { parts.append("f/" + number(a)) }
-        if let iso = f.iso, iso > 0 { parts.append("ISO \(iso)") }
-        if let mm = f.focalLength, mm > 0 { parts.append(number(mm) + " mm") }
+        if let iso = f.iso, iso > 0 { parts.append("ISO" + nbsp + "\(iso)") }
+        if let mm = f.focalLength, mm > 0 { parts.append(number(mm) + nbsp + "mm") }
+        if let ev = f.exposureBias, ev != 0, ev.isFinite { parts.append(bias(ev)) }
+        return parts
+    }
+
+    /// `1/250 · f/2.8 · ISO 800 · 35 mm · −0.3 EV`: what is known of the exposure.
+    public static func exposureLine(_ f: FileFacts) -> String? {
+        let parts = exposureParts(f)
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// `−0.3 EV`, `+1 EV`: the true minus sign (guide E, «Минус»), one decimal at most.
+    public static func bias(_ ev: Double) -> String {
+        let r = (ev * 10).rounded() / 10
+        let digits = r == r.rounded() ? String(Int(abs(r))) : String(format: "%.1f", abs(r))
+        return (r < 0 ? "\u{2212}" : "+") + digits + nbsp + "EV"
     }
 
     /// `Sony ILCE-7M4 · FE 24-70mm F2.8 GM II`; nil without a camera or a lens.
@@ -107,15 +139,29 @@ public enum FileFactsText {
         return make + " " + model
     }
 
-    /// `12:30`, `1:02:10`: a video's length.
+    /// `0:48`, `12:30`, `1:02:10`: a video's length, no leading zero in its first place.
     public static func length(_ seconds: Double) -> String {
         let total = Int(seconds.rounded())
         let h = total / 3600, m = total / 60 % 60, sec = total % 60
         return h > 0 ? String(format: "%d:%02d:%02d", h, m, sec) : String(format: "%d:%02d", m, sec)
     }
 
-    /// The size of a file: `1.2 GB`.
-    public static func size(_ bytes: Int64) -> String { ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file) }
+    /// The size of a file in decimal units (guide E, «Размер файла»): one decimal under 100, whole from 100:
+    /// `4.2 MB`, `24.6 MB`, `148 MB`, `3.2 GB`; under a kilobyte `850 B`.
+    public static func size(_ bytes: Int64) -> String {
+        var value = Double(bytes)
+        guard value >= 1000 else { return "\(bytes)" + nbsp + "B" }
+        var unit = 0
+        let units = ["KB", "MB", "GB", "TB", "PB"]
+        value /= 1000
+        // 999.7 KB would print as `1000 KB`: it is `1.0 MB`.
+        while unit < units.count - 1, value >= 999.5 {
+            value /= 1000
+            unit += 1
+        }
+        let text = value >= 99.95 ? String(Int(value.rounded())) : String(format: "%.1f", value)
+        return text + nbsp + units[unit]
+    }
 
     /// The line under a poster's name (file-cards spec §2): a video's stream and size, a photo's exposure (else its
     /// pixels and size); nil when there is nothing to say.
@@ -132,44 +178,28 @@ public enum FileFactsText {
     public static func megapixels(_ f: FileFacts) -> String? {
         guard let w = f.width, let h = f.height, w > 0, h > 0 else { return nil }
         let mp = Double(w) * Double(h) / 1_000_000
-        return (mp >= 10 ? String(Int(mp.rounded())) : number((mp * 10).rounded() / 10)) + " MP"
+        return (mp >= 10 ? String(Int(mp.rounded())) : number((mp * 10).rounded() / 10)) + nbsp + "MP"
     }
 
-    /// The badges on a picture (file-cards spec, board «Эскизы файлов» B and video B): a photo's megapixels and RAW;
-    /// a video's resolution, HDR and rate (rounded: `60`, `30`, `24`). `format` is the file's extension in capitals.
-    public static func badges(_ f: FileFacts?, format: String?) -> [Badge] {
+    /// The badges on a picture (guide F1: at most two, at its top left): a video's class, then its colour when it is
+    /// not SDR, else its rate (`UHD HLG`, `FHD 59.94p`); a photo's format when it is RAW, then its megapixels
+    /// (`RAW 24 MP`). `format` is the file's extension in capitals.
+    public static func badges(_ f: FileFacts?, format: String?) -> [String] {
         guard let f else { return [] }
         if f.isVideo {
-            var out: [Badge] = []
-            if let r = resolution(f) { out.append(Badge(text: r, kind: .resolution)) }
-            if f.hdr == true { out.append(Badge(text: "HDR", kind: .hdr)) }
-            if let fps = f.fps, fps > 0 { out.append(Badge(text: String(Int(fps.rounded())), unit: "FPS", kind: .rate)) }
+            var out: [String] = []
+            if let r = resolution(f) { out.append(r) }
+            if let t = f.transfer, t != .sdr {
+                out.append(t.rawValue)
+            } else if let fps = f.fps, fps > 0 {
+                out.append(rate(fps) + "p")
+            }
             return out
         }
-        var out: [Badge] = []
-        if let mp = megapixels(f) {
-            out.append(Badge(text: String(mp.dropLast(3)), unit: "MP", kind: .megapixels))
-        }
-        if let format, rawFormats.contains(format.uppercased()) { out.append(Badge(text: "RAW", kind: .raw)) }
+        var out: [String] = []
+        if let format, rawFormats.contains(format.uppercased()) { out.append("RAW") }
+        if let mp = megapixels(f) { out.append(mp) }
         return out
-    }
-
-    /// One badge: a value, its unit (drawn smaller after it, as a camera's body marks `30 FPS`), and what it is (its
-    /// plate's colour: silver for the size and the rate, gold for HDR, graphite for RAW).
-    public struct Badge: Equatable, Sendable {
-        public enum Kind: Sendable { case resolution, hdr, rate, megapixels, raw }
-        public var text: String
-        public var unit: String?
-        public var kind: Kind
-        public init(text: String, unit: String? = nil, kind: Kind) {
-            self.text = text
-            self.unit = unit
-            self.kind = kind
-        }
-
-        /// `30 FPS`, `24 MP`: the badge read as one string (tooltips, tests).
-        public var label: String { unit.map { text + " " + $0 } ?? text }
-        public var isHighlight: Bool { kind == .hdr }
     }
 
     static let rawFormats: Set<String> = ["ARW", "CR2", "CR3", "NEF", "NRW", "DNG", "RAF", "ORF", "RW2", "PEF", "SRW", "3FR", "IIQ"]
@@ -180,16 +210,21 @@ public enum FileFactsText {
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
-    /// `1/250` under a second (the nearest whole denominator), else `0.5 s`, `2 s`.
+    /// `1/250` under 0.4 s (the nearest whole denominator), `0.5 s` below a second, `2″` for whole seconds.
     public static func shutter(_ seconds: Double) -> String {
         if seconds < 0.4 { return "1/\(Int((1 / seconds).rounded()))" }
-        return number(seconds) + " s"
+        let r = (seconds * 10).rounded() / 10
+        if r >= 1, r == r.rounded() { return "\(Int(r))\u{2033}" }
+        return number(seconds) + nbsp + "s"
     }
 
-    /// `29.97`, `60`, `23.976` → `23.98`.
-    static func rate(_ fps: Double) -> String {
-        let rounded = (fps * 100).rounded() / 100
-        return number(rounded)
+    /// `23.976`, `29.97`, `59.94`, `25`: never rounded to the whole rate (guide E, «Дробный fps»).
+    public static func rate(_ fps: Double) -> String {
+        let r = (fps * 1000).rounded() / 1000
+        if r == r.rounded() { return String(Int(r)) }
+        var s = String(format: "%.3f", r)
+        while s.hasSuffix("0") { s.removeLast() }
+        return s
     }
 
     /// A number without trailing zeros, at most two decimals: `2.8`, `24`, `0.5`.

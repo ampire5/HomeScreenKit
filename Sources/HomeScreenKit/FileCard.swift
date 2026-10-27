@@ -6,7 +6,7 @@ import HomeScreenModel
 /// share more), radius 12, a 0.5 pt edge, 8 pt padding. At the left the picture, 76 pt tall and `aspect` × 76 wide
 /// (radius 8; a video's length in a chip at its bottom right); 11 pt to its right four rows spread over the height:
 /// 1. the name;
-/// 2. a video's stream (`1080p · HEVC · 60 fps`), a photo's camera and lens (else the format);
+/// 2. a video's stream (`FHD · 60p · HEVC`), a photo's camera and lens (else the format);
 /// 3. a video's length and size, a photo's exposure (else its pixels);
 /// 4. a video's progress track with `12:30 / 1:02:10` (else the date and the size), a photo's date taken (else
 ///    modified), its pixels and its size.
@@ -26,7 +26,7 @@ final class FileCard: GridCard {
     private let ring = CALayer()
     private let picture = CALayer()
     private let placeholder = NSImageView()
-    private let lengthChip = ChipView(font: CardFont.text(10, .semibold), fill: Chrome.Palette.card.coverChip)
+    private let lengthChip = ChipView(font: .monospacedDigitSystemFont(ofSize: 11, weight: .medium), fill: Chrome.Palette.card.coverChip)
     private let nameLabel = CardText()
     private let lines = [CardText(), CardText(), CardText()]
     private let track = CALayer()

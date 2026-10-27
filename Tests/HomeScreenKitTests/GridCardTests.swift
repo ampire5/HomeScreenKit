@@ -138,7 +138,7 @@ import Testing
         #expect(strip.frame.maxY == card.pictureRect.maxY)
         #expect(strip.frame.minX == card.pictureRect.minX && strip.frame.width == card.pictureRect.width)
         #expect(card.stripText.format == "JXL")
-        #expect(card.stripText.size == ByteCountFormatter.string(fromByteCount: 24_000_000, countStyle: .file))
+        #expect(card.stripText.size == FileFactsText.size(24_000_000))
         card.isHovered = false
         #expect(strip.isHidden)
     }

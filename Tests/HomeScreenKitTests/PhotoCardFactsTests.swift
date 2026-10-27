@@ -19,16 +19,16 @@ import Testing
     }
 
     private func badges(_ c: PhotoCard) -> [String] {
-        c.subviews.compactMap { $0 as? BadgePlate }.filter { !$0.isHidden }.map(\.label)
+        c.subviews.compactMap { $0 as? MediaBadge }.filter { !$0.isHidden }.map(\.label)
     }
 
     @Test func photoBadgesAndVideoBadges() {
         let photo = card(FileFacts(width: 6000, height: 4000, iso: 400), format: "ARW", width: 220, names: .below)
-        #expect(badges(photo) == ["24 MP", "RAW"])
-        let video = card(FileFacts(width: 1280, height: 720, duration: 60, codec: "H.264", fps: 59.94, hdr: true),
+        #expect(badges(photo) == ["RAW", "24\u{00A0}MP"])
+        let video = card(FileFacts(width: 3840, height: 2160, duration: 60, codec: "H.264", fps: 25, transfer: .hlg),
                          format: "MP4", width: 300, names: .below, video: true)
-        #expect(badges(video) == ["720p", "HDR", "60 FPS"])
-        #expect(video.factsLabel.stringValue == "H.264 · 1.15 GB")   // the rest is on the picture
+        #expect(badges(video) == ["UHD", "HLG"])
+        #expect(video.factsLabel.stringValue == "H.264 · 1.1\u{00A0}GB")   // the rest is on the picture
         let small = card(FileFacts(width: 6000, height: 4000), format: "JPG", width: 100, names: .below)
         #expect(badges(small).isEmpty)
     }
