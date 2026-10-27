@@ -26,6 +26,16 @@ public final class HomeBrowserView: NSView {
     public var style = GridStyle.aspect {
         didSet { if style != oldValue { toolbar.show(style: style); tile() } }
     }
+    /// The badges and the exposure's glyphs in light grey, not in the colours of what they say
+    /// (`MediaPalette.monochrome`, the apps' `monochrome` key): a change lays the cards on screen out again.
+    public var monochrome: Bool {
+        get { MediaPalette.monochrome }
+        set {
+            guard newValue != MediaPalette.monochrome else { return }
+            MediaPalette.monochrome = newValue
+            for card in live.values { card.needsLayout = true }
+        }
+    }
     /// Where the names go: a change re-tiles, the cards keep their pictures.
     public var names = GridNames.off { didSet { if names != oldValue { tile() } } }
     /// What the files are (`FileStyle`: photos, or a video app's videos): their noun in the counts, their slot's shape
