@@ -1,4 +1,5 @@
 import AppKit
+import os
 
 /// The apps' line icons: Lucide (lucide.dev, ISC, `LICENSE-lucide`) as a font, chosen over SF Symbols by the owner on
 /// 2026-10-27 for its heavier line. A glyph is a character: it takes the text's colour and sits in a line of text (the
@@ -27,7 +28,8 @@ public enum Lucide {
         codepoints[name].flatMap(Unicode.Scalar.init).map { String(Character($0)) }
     }
 
-    private static var images: [String: NSImage] = [:]
+    /// The icons drawn so far. Locked: the apps draw on the main thread, but tests (and any caller) may not.
+    private static let images = OSAllocatedUnfairLock(initialState: [String: NSImage]())
 
     /// The icon `name` as a template image `size` points square (its box: the line keeps a point of room inside),
     /// drawn at whatever scale the screen asks. The drawing is centred in the box by its own outline, as SF Symbols
@@ -35,7 +37,7 @@ public enum Lucide {
     /// speaker's waves pull it left), and a button centres the box.
     public static func image(_ name: String, size: CGFloat, description: String? = nil) -> NSImage? {
         let key = "\(name)@\(size)"
-        if let image = images[key] { return image }
+        if let image = images.withLock({ $0[key] }) { return image }
         guard var code = codepoints[name].map({ UniChar($0) }) else { return nil }
         let font = font(ofSize: size) as CTFont
         var glyph = CGGlyph(0)
@@ -51,7 +53,7 @@ public enum Lucide {
         }
         image.isTemplate = true
         image.accessibilityDescription = description
-        images[key] = image
+        images.withLock { $0[key] = image }
         return image
     }
 
