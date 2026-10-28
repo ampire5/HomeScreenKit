@@ -51,6 +51,8 @@ import QuartzCore
         var progress: Double?
     }
 
+    public var indent: (Int) -> CGFloat = { _ in 0 }
+
     public var layout = FilmstripRows(itemCount: 0, aspects: [], length: 0, width: 0, rowPicture: 96,
                                       currentPicture: 280, cardHeight: 0) {
         didSet { if layout != oldValue { placeRows(animated: false) } }
@@ -178,13 +180,21 @@ import QuartzCore
                            height: shown.length)
         let place = {
             row.layer.frame = frame
-            row.picture.frame = shown.picture
+            let inset = max(0, min(self.indent(shown.item), frame.width / 3))
+            var picture = shown.picture
+            if inset > 0 {
+                picture.origin.x += inset
+                let scale = max(0, (picture.width - inset) / max(1, picture.width))
+                picture.size.width *= scale; picture.size.height *= scale
+            }
+            row.picture.frame = picture
             row.track.frame = CGRect(x: 0, y: shown.picture.height - Self.barHeight, width: shown.picture.width,
                                      height: Self.barHeight)
             let progress = self.texts[shown.item]?.progress ?? 0
             row.bar.frame = CGRect(x: 0, y: 0, width: shown.picture.width * progress, height: Self.barHeight)
             // Under the picture, as wide; the browsed row's title grows with its picture, so the two move as one.
-            let caption = shown.caption
+            var caption = shown.caption
+            caption.origin.x += inset; caption.size.width = max(0, caption.width - inset)
             let size = shown.item == self.current
                 ? Self.titleSize + (Self.currentTitleSize - Self.titleSize) * CGFloat(self.expansion) : Self.titleSize
             row.title.fontSize = size

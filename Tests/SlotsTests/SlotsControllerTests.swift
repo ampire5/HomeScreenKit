@@ -47,6 +47,23 @@ import SlotModel
         #expect(dropped == 1 && focuses == 1)
         #expect(host.page(a, edge: .right) == nil)
     }
+    @Test func explicitPreparationKeepsHiddenPluginAliveWithoutShowingIt() {
+        let (w, host) = host(); defer { w.close() }
+        var made = 0, visible = false
+        host.register(SlotTabDescriptor(id: a, title: "A") { _ in
+            made += 1; return SlotPage(view: NSView(), visibilityChanged: { visible = $0 })
+        })
+        host.configure(SlotConfiguration(tabs: [a,b]), edge: .right)
+        host.start()
+        #expect(made == 0)
+        host.prepare(a, edge: .right)
+        #expect(made == 1 && !visible && !host.isShown(.right))
+        host.show(.right); host.select(b, edge: .right)
+        #expect(host.tabIDs(in: .right) == [a,b])
+        #expect(host.configuration(.right).tabs == [b,a])
+        host.select(a, edge: .right)
+        #expect(made == 1)
+    }
     @Test func movingKeepsLiveView() {
         let (w, host) = host(); defer { w.close() }
         var made = 0, dropped = 0

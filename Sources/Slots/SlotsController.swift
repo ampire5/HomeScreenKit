@@ -77,6 +77,8 @@ import SlotChrome
         self.container = container; self.above = above
         for edge in SlotEdge.allCases {
             let slot = Slot(edge: edge); slots[edge] = slot
+            // Hidden views still participate in AppKit constraint solving; avoid a zero-sized card at creation.
+            slot.view.frame = CGRect(x: 0, y: 0, width: max(240, container.bounds.width), height: max(120, container.bounds.height))
             container.addSubview(slot.view, positioned: .above, relativeTo: above)
             wire(slot)
         }
@@ -84,6 +86,13 @@ import SlotChrome
     public func register(_ descriptor: SlotTabDescriptor) {
         if descriptors[descriptor.id] == nil { descriptorOrder.append(descriptor.id) }
         descriptors[descriptor.id] = descriptor
+    }
+    public func unregister(_ id: SlotTabID) {
+        descriptors[id] = nil; descriptorOrder.removeAll { $0 == id }
+        for slot in orderedSlots { invalidatePage(id, edge: slot.edge) }
+    }
+    public var shownPages: [SlotPage] {
+        orderedSlots.filter { $0.view.isShown }.sorted { $0.shownOrder < $1.shownOrder }.compactMap(\.page)
     }
     public func configure(_ configuration: SlotConfiguration, edge: SlotEdge) {
         guard let slot = slots[edge] else { return }
@@ -98,12 +107,24 @@ import SlotChrome
         guard let slot = slots[edge] else { return SlotConfiguration() }
         slot.sync(); return slot.setting
     }
+    public func tabIDs(in edge: SlotEdge) -> [SlotTabID] { slots[edge]?.tabs ?? [] }
+    /// Apps with background bridge actions may explicitly prepare an active tab without revealing it.
+    public func prepare(_ id: SlotTabID, edge: SlotEdge) {
+        guard let slot = slots[edge], slot.tabs.contains(id) else { return }
+        if slot.pages[id] == nil, let descriptor = descriptors[id] { slot.pages[id] = descriptor.makePage(edge) }
+        refresh(slot)
+    }
     public func activeTab(_ edge: SlotEdge) -> SlotTabID? { slots[edge]?.shownTab }
     public func isShown(_ edge: SlotEdge) -> Bool { slots[edge]?.view.isShown ?? false }
     public func page(_ id: SlotTabID, edge: SlotEdge) -> SlotPage? { slots[edge]?.pages[id] }
     public func capsule(_ edge: SlotEdge) -> SlotCapsuleView? { slots[edge]?.view.capsule }
     public func effectiveMode(_ edge: SlotEdge) -> SlotMode { slots[edge].map(effectiveMode) ?? .overlay }
     public func refreshLayout() { containerDidLayout() }
+    public func invalidatePage(_ id: SlotTabID, edge: SlotEdge) {
+        guard let slot = slots[edge], let page = slot.pages.removeValue(forKey: id) else { return }
+        page.visibilityChanged(false); page.cancelInteraction(); page.dropped()
+        refresh(slot)
+    }
     public func refreshContents() { for slot in orderedSlots { refresh(slot) } }
     public func select(_ id: SlotTabID, edge: SlotEdge) { if let slot = slots[edge] { select(id, in: slot) } }
     public func add(_ id: SlotTabID, edge: SlotEdge, transient: Bool = false) {
@@ -141,7 +162,7 @@ import SlotChrome
         }
         for slot in orderedSlots where slot.setting.shown {
             if slot.setting.mode == .pinned && !slot.tabs.isEmpty {
-                refresh(slot)
+                refresh(slot, creating: true)
                 showCounter += 1
                 slot.shownOrder = showCounter
                 slot.view.setShown(true, animated: false)
@@ -226,7 +247,7 @@ import SlotChrome
     }
 
     private func show(_ slot: Slot, focus: Bool) {
-        refresh(slot)
+        refresh(slot, creating: true)
         slot.flash?.cancel()   // an explicit show is the user's: a flash under way no longer hides it
         slot.flash = nil
         slot.flashEndedInMenu = false
@@ -415,10 +436,10 @@ import SlotChrome
         if hadFocus && !holdsFocus(slot) { onFocusContent?() }
         onChanged?()
     }
-    private func refresh(_ slot: Slot) {
+    private func refresh(_ slot: Slot, creating: Bool = false) {
         slot.view.note = nil
         // Do not instantiate content while its slot is hidden.
-        if let id = slot.shownTab, slot.pages[id] == nil, let descriptor = descriptors[id] {
+        if (creating || slot.view.isShown), let id = slot.shownTab, slot.pages[id] == nil, let descriptor = descriptors[id] {
             slot.pages[id] = descriptor.makePage(slot.edge)
         }
         let views = Dictionary(uniqueKeysWithValues: slot.pages.map { ($0.key.rawValue, $0.value.view) })
@@ -674,6 +695,7 @@ import SlotChrome
         // Left, right, middle, back and forward only: a mouse or its driver can leave a higher button down in the HID
         // state for good (button 6 seen stuck system-wide, Mac Mouse Fix off or on, 2026-10-27), and the edges
         // would stay quiet until a reboot.
+        guard !container.isHiddenOrHasHiddenAncestor else { return }
         let buttonHeld = NSEvent.pressedMouseButtons & 0b11111 != 0
         let bounds = container.bounds
         let quiet = container.window?.attachedSheet != nil
