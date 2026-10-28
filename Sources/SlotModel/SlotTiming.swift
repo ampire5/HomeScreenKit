@@ -174,6 +174,13 @@ public struct AutoHideClock: Sendable {
         return now - leftAt + Self.slack >= leaveDelay
     }
 
+    /// A single pending check, rather than a polling timer while the pointer rests in a panel.
+    public func nextChange(now: Double) -> Double? {
+        guard mode == .mouseLeaves, !busy, let leftAt else { return nil }
+        let deadline = leftAt + leaveDelay
+        return deadline > now ? deadline : nil
+    }
+
     /// The slot hides once its page starts something playing.
     public var hidesOnChoice: Bool { mode == .afterChoice }
 }

@@ -7,6 +7,7 @@ let package = Package(
     products: [
         .library(name: "SlotModel", targets: ["SlotModel"]),
         .library(name: "Slots", targets: ["Slots"]),
+        .library(name: "SlotChrome", targets: ["SlotChrome"]),
         .library(name: "HomeScreenModel", targets: ["HomeScreenModel"]),
         .library(name: "HomeScreenKit", targets: ["HomeScreenKit"]),
         .library(name: "HomeChrome", targets: ["HomeChrome"]),
@@ -15,7 +16,9 @@ let package = Package(
     ],
     targets: [
         .target(name: "SlotModel"),
-        .target(name: "Slots", dependencies: ["SlotModel", "HomeChrome"]),
+        .target(name: "SlotChrome", dependencies: ["SlotModel", "HomeChrome"]),
+        .target(name: "Slots", dependencies: ["SlotModel", "SlotChrome", "HomeChrome"]),
+        .testTarget(name: "SlotChromeTests", dependencies: ["SlotChrome"]),
         .testTarget(name: "SlotsTests", dependencies: ["Slots", "SlotModel"]),
         .testTarget(name: "SlotModelTests", dependencies: ["SlotModel"]),
         .target(name: "HomeScreenModel"),
