@@ -5,6 +5,8 @@ let package = Package(
     name: "HomeScreenKit",
     platforms: [.macOS(.v26)],
     products: [
+        .library(name: "SlotModel", targets: ["SlotModel"]),
+        .library(name: "Slots", targets: ["Slots"]),
         .library(name: "HomeScreenModel", targets: ["HomeScreenModel"]),
         .library(name: "HomeScreenKit", targets: ["HomeScreenKit"]),
         .library(name: "HomeChrome", targets: ["HomeChrome"]),
@@ -12,6 +14,10 @@ let package = Package(
         .library(name: "Filmstrip", targets: ["Filmstrip"]),
     ],
     targets: [
+        .target(name: "SlotModel"),
+        .target(name: "Slots", dependencies: ["SlotModel", "HomeChrome"]),
+        .testTarget(name: "SlotsTests", dependencies: ["Slots", "SlotModel"]),
+        .testTarget(name: "SlotModelTests", dependencies: ["SlotModel"]),
         .target(name: "HomeScreenModel"),
         .target(name: "HomeChrome", exclude: ["LICENSE-lucide"]),
         .target(name: "FilmstripModel"),
