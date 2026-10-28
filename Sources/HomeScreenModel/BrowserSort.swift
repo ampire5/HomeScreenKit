@@ -28,30 +28,40 @@ public struct BrowserSort: Equatable, Sendable {
     public var text: String { ascending ? key.rawValue : key.rawValue + "-desc" }
 
     public func order(_ entries: [BrowserEntry]) -> [BrowserEntry] {
-        entries.sorted(by: less)
+        // The order is found on small keys, the entries moved once (Loupe, 2026-10-28: sorting the entries themselves
+        // moved and compared the large structs through generic code, ~190 ms for 50 000 photos by date).
+        let keys = entries.indices.map { i in
+            let e = entries[i]
+            let value: Double? = switch key {
+            case .name: nil
+            case .date: e.date?.timeIntervalSinceReferenceDate
+            case .size: e.size.map(Double.init)
+            }
+            return SortKey(index: i, leads: e.leads, isFile: e.isFile, value: value)
+        }
+        return keys.sorted { a, b in less(a, b, entries) }.map { entries[$0.index] }
     }
 
-    private func less(_ a: BrowserEntry, _ b: BrowserEntry) -> Bool {
+    /// What `less` needs of an entry without touching it: the value of the key (a size as a Double is exact far past
+    /// any file's size).
+    private struct SortKey {
+        let index: Int
+        let leads: Bool
+        let isFile: Bool
+        let value: Double?
+    }
+
+    private func less(_ a: SortKey, _ b: SortKey, _ entries: [BrowserEntry]) -> Bool {
         if a.leads != b.leads { return a.leads }
         if a.isFile != b.isFile { return !a.isFile }
-        switch key {
-        case .name:
-            let order = Self.compareNames(a, b)
+        switch (key, a.value, b.value) {
+        case (.name, _, _):
+            let order = Self.compareNames(entries[a.index], entries[b.index])
             return ascending ? order == .orderedAscending : order == .orderedDescending
-        case .date:
-            return valueLess(a.date, b.date, a, b)
-        case .size:
-            return valueLess(a.size, b.size, a, b)
-        }
-    }
-
-    /// By the value in this direction; a tie or two missing values by name; a missing value after any present one.
-    private func valueLess<T: Comparable>(_ x: T?, _ y: T?, _ a: BrowserEntry, _ b: BrowserEntry) -> Bool {
-        switch (x, y) {
-        case let (x?, y?) where x != y: return ascending ? x < y : x > y
-        case (_?, nil): return true
-        case (nil, _?): return false
-        default: return Self.compareNames(a, b) == .orderedAscending
+        case let (_, x?, y?) where x != y: return ascending ? x < y : x > y
+        case (_, _?, nil): return true
+        case (_, nil, _?): return false
+        default: return Self.compareNames(entries[a.index], entries[b.index]) == .orderedAscending
         }
     }
 
