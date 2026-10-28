@@ -52,3 +52,24 @@ private func reference(_ sort: BrowserSort, _ entries: [BrowserEntry]) -> [Brows
         }
     }
 }
+
+@Test func quicklyStandardizedIsStandardized() {
+    let paths = ["/a/b.jpg", "/a/./b.jpg", "/a/../b.jpg", "/a//b.jpg", "/a/b/", "/a/.hidden.jpg", "/a/b.jpg/.",
+                 "/a/b.jpg/..", "/Volumes/x y/é.jpg", "/a/b%20c.jpg", "/a/..b.jpg", "/"]
+    for path in paths {
+        for url in [URL(fileURLWithPath: path), URL(fileURLWithPath: path, isDirectory: false),
+                    URL(fileURLWithPath: "/root").appendingPathComponent(String(path.dropFirst()))] {
+            #expect(url.quicklyStandardized == url.standardizedFileURL, "\(url)")
+        }
+    }
+    // Under /private, standardizing drops it where the path exists without it.
+    let temporary = URL(fileURLWithPath: "/private" + FileManager.default.temporaryDirectory.path).appendingPathComponent("x.jpg")
+    #expect(temporary.path.hasPrefix("/private/"))
+    try? Data().write(to: temporary)
+    defer { try? FileManager.default.removeItem(at: temporary) }
+    #expect(temporary.quicklyStandardized == temporary.standardizedFileURL)
+    let relative = URL(fileURLWithPath: "b.jpg", relativeTo: URL(fileURLWithPath: "/a/"))
+    #expect(relative.quicklyStandardized == relative.standardizedFileURL)
+    let web = URL(string: "https://example.com/a/../b")!
+    #expect(web.quicklyStandardized == web.standardizedFileURL)
+}

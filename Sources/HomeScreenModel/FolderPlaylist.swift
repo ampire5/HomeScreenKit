@@ -19,7 +19,7 @@ public struct FolderPlaylist: Equatable, Sendable {
     public init(folder: URL, entries: [BrowserEntry], sort: BrowserSort, current: URL) {
         self.folder = folder.standardizedFileURL
         self.sort = sort
-        let me = current.standardizedFileURL
+        let me = current.quicklyStandardized
         var files = Self.files(of: entries)
         if !files.contains(where: { $0.url == me }) {
             files.append(BrowserEntry(url: me, name: me.lastPathComponent, kind: .file))
@@ -38,7 +38,7 @@ public struct FolderPlaylist: Equatable, Sendable {
 
     /// Moves to `url`; false when it is not in the list.
     public mutating func move(to url: URL) -> Bool {
-        let wanted = url.standardizedFileURL
+        let wanted = url.quicklyStandardized
         guard let found = files.firstIndex(where: { $0.url == wanted }) else { return false }
         index = found
         return true
@@ -80,7 +80,7 @@ public struct FolderPlaylist: Equatable, Sendable {
         entries.compactMap { entry in
             guard entry.isFile else { return nil }
             var entry = entry
-            entry.url = entry.url.standardizedFileURL
+            entry.url = entry.url.quicklyStandardized
             return entry
         }
     }
