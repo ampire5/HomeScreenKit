@@ -153,6 +153,8 @@ final class PhotoCard: GridCard {
 
     /// Square: the slot's box. Aspect: the image fitted in the box inset by 8 pt (that box while there is none).
     override var lastOpenedHighlightRect: CGRect { names == .below && showsNames ? bounds : pictureRect }
+    override var lastOpenedHighlightRadius: CGFloat { names == .below && showsNames ? 12 : Chrome.Radius.photo }
+    override var lastOpenedHighlightOutset: CGFloat { 4 }
 
     var pictureRect: CGRect {
         let side = bounds.width

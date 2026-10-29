@@ -34,7 +34,14 @@ import Testing
         if let marked {
             marked.names = .below
             marked.layoutSubtreeIfNeeded()
-            #expect((marked.lastOpenedHighlight?.frame.minY ?? 0) >= marked.bounds.maxY)
+            #expect(marked.lastOpenedHighlight?.frame.contains(marked.bounds) == true)
+            #expect(marked.lastOpenedHighlight?.backgroundColor == nil)
+            for side: CGFloat in [40, 120] {
+                marked.setFrameSize(CGSize(width: side, height: side + 20))
+                marked.layoutSubtreeIfNeeded()
+                #expect(marked.lastOpenedHighlight?.frame == marked.bounds.insetBy(dx: -4, dy: -4))
+                #expect(marked.lastOpenedHighlight?.borderWidth == 2.5)
+            }
         }
         #expect((view.card(for: next) as? PhotoCard)?.ring.isHidden == false)
         view.select(id: first, scrolls: false)

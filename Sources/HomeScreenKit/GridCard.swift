@@ -11,9 +11,11 @@ class GridCard: NSView {
     var isSelected = false { didSet { selectionChanged() } }
     /// What the files are called in the card's facts (`FileStyle.noun`), set by the browser.
     var fileNoun = "photo" { didSet { if fileNoun != oldValue { itemChanged() } } }
-    /// A warm underline is independent of the blue selection ring and never covers the picture.
+    /// A persistent amber outer ring is independent of the blue selection ring.
     private(set) var lastOpenedHighlight: CALayer?
     var lastOpenedHighlightRect: CGRect { bounds }
+    var lastOpenedHighlightRadius: CGFloat { 12 }
+    var lastOpenedHighlightOutset: CGFloat { 8 }
     var isLastOpened = false {
         didSet {
             guard isLastOpened != oldValue else { return }
@@ -25,11 +27,8 @@ class GridCard: NSView {
         if isLastOpened, lastOpenedHighlight == nil {
             let halo = CALayer()
             let color = NSColor(srgbRed: 1, green: 0.69, blue: 0.25, alpha: 1).cgColor
-            halo.backgroundColor = color
-            halo.shadowColor = color
-            halo.shadowOpacity = 0.65
-            halo.shadowRadius = 3
-            halo.shadowOffset = .zero
+            halo.borderColor = color
+            halo.borderWidth = 2.5
             halo.zPosition = -1
             layer?.addSublayer(halo)
             lastOpenedHighlight = halo
@@ -39,10 +38,8 @@ class GridCard: NSView {
         CATransaction.setDisableActions(true)
         halo.isHidden = !isLastOpened
         let rect = lastOpenedHighlightRect
-        halo.frame = CGRect(x: rect.minX, y: rect.maxY + 3, width: rect.width, height: 2)
-        halo.cornerRadius = 1
-        halo.shadowPath = CGPath(roundedRect: halo.bounds, cornerWidth: halo.cornerRadius,
-                                 cornerHeight: halo.cornerRadius, transform: nil)
+        halo.frame = rect.insetBy(dx: -lastOpenedHighlightOutset, dy: -lastOpenedHighlightOutset)
+        halo.cornerRadius = min(lastOpenedHighlightRadius, min(rect.width, rect.height) / 2) + lastOpenedHighlightOutset
         CATransaction.commit()
     }
     override func layout() {
