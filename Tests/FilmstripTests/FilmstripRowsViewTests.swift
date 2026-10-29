@@ -110,3 +110,25 @@ private final class CountingView: NSView {
     let plain = view.titleLayer(of: 4)!.fontSize, big = view.titleLayer(of: 5)!.fontSize
     #expect(big > plain)
 }
+
+@MainActor @Test func browsingAndPlayingHaveDistinctMarkers() {
+    let view = strip(20, current: 5)
+    view.setRow(5, title: "Five", detail: "", progress: nil)
+    view.setRow(6, title: "Six", detail: "", progress: nil)
+    view.playing = 5
+    view.show(offset: view.layout.centre(of: 6), current: 6, expansion: 1, animated: false)
+    #expect((view.titleLayer(of: 5)?.string as? String) == "▶ Five")
+    #expect((view.titleLayer(of: 6)?.string as? String) == "› Six")
+}
+
+@MainActor @Test func scrollbarBrowsesWithoutOpening() {
+    let view = strip(500, current: 0)
+    var browsed: Int?, opened = false
+    view.onBrowse = { browsed = $0 }
+    view.onPress = { _ in opened = true }
+    let bar = view.subviews.compactMap { $0 as? NSScroller }.first!
+    #expect(!bar.isHidden)
+    bar.doubleValue = 1
+    bar.sendAction(bar.action, to: bar.target)
+    #expect(browsed == 499 && !opened)
+}

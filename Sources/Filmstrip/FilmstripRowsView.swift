@@ -58,6 +58,11 @@ import QuartzCore
         didSet { if layout != oldValue { placeRows(animated: false) } }
     }
     /// The playing item: an accent edge on its picture and "▶" before its title.
+    public var activeLabel = "Playing" { didSet { refreshLabels() } }
+    public var activeMarker = "▶" { didSet { refreshLabels() } }
+    public var selectionHint = "Selected · click or Return" { didSet { refreshLabels() } }
+    private func refreshLabels() { for (item, row) in rows { fill(row, item: item) } }
+
     public var playing: Int? {
         didSet {
             guard playing != oldValue else { return }
@@ -72,6 +77,7 @@ import QuartzCore
             if let card {
                 card.wantsLayer = true
                 addSubview(card)
+                addSubview(scrollbar, positioned: .above, relativeTo: nil)
             }
             cardItem = nil
             placeCard()
@@ -85,6 +91,24 @@ import QuartzCore
     public var onDragEnd: (() -> Void)?
     public var onStripScroll: ((NSEvent) -> Void)?
     /// `visibleItems` changed.
+    public var onBrowse: ((Int) -> Void)?
+    private let scrollbar: NSScroller = {
+        let bar = NSScroller(frame: CGRect(x: 0, y: 0, width: 12, height: 120))
+        bar.scrollerStyle = .overlay; bar.knobStyle = .light
+        return bar
+    }()
+    @objc private func scrollChosen(_ sender: NSScroller) {
+        guard layout.itemCount > 0 else { return }
+        var item = Int((sender.doubleValue * Double(layout.itemCount - 1)).rounded())
+        switch sender.hitPart {
+        case .incrementLine: item = current + 1
+        case .decrementLine: item = current - 1
+        case .incrementPage: item = current + max(1, visibleItems.count - 1)
+        case .decrementPage: item = current - max(1, visibleItems.count - 1)
+        default: break
+        }
+        onBrowse?(min(max(0, item), layout.itemCount - 1))
+    }
     public var onVisibleChange: (() -> Void)?
     /// The items on screen, from the browsed one outwards.
     public private(set) var visibleItems: [Int] = []
@@ -106,6 +130,9 @@ import QuartzCore
     public override init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
+        scrollbar.target = self; scrollbar.action = #selector(scrollChosen(_:))
+        scrollbar.setAccessibilityLabel("Browse items")
+        addSubview(scrollbar)
         layerContentsRedrawPolicy = .never
         fade.layer.addSublayer(contentLayer)
     }
@@ -148,6 +175,10 @@ import QuartzCore
     private func placeRows(animated: Bool) {
         let shown = layout.rows(offset: offset, current: current, expansion: expansion)
         shownRows = shown
+        scrollbar.frame = CGRect(x: max(0, bounds.width - 13), y: 32, width: 12, height: max(0, bounds.height - 40))
+        scrollbar.isHidden = layout.itemCount <= 1
+        scrollbar.knobProportion = min(1, Double(max(1, shown.count)) / Double(max(1, layout.itemCount)))
+        scrollbar.doubleValue = Double(current) / Double(max(1, layout.itemCount - 1))
         CATransaction.begin()
         if animated {
             CATransaction.setAnimationDuration(Self.moveDuration)
@@ -176,6 +207,7 @@ import QuartzCore
     private func place(_ shown: FilmstripRow) {
         let isNew = rows[shown.item] == nil
         let row = rows[shown.item] ?? takeRow(for: shown.item)
+        fill(row, item: shown.item)
         let frame = CGRect(x: Self.padding, y: shown.start, width: max(0, bounds.width - 2 * Self.padding),
                            height: shown.length)
         let place = {
@@ -291,8 +323,12 @@ import QuartzCore
         row.picture.borderWidth = isPlaying ? 2 : image == nil ? 1 : 0
         row.picture.borderColor = isPlaying ? Chrome.Palette.window.accent.cgColor : Self.placeholderBorder
         let text = texts[item]
-        row.title.string = (isPlaying ? "▶ " : "") + (text?.title ?? "")
-        row.detail.string = text?.detail ?? ""
+        let selected = item == current
+        row.layer.backgroundColor = selected ? NSColor.white.withAlphaComponent(0.08).cgColor : nil
+        row.layer.cornerRadius = 6
+        row.title.string = (isPlaying ? activeMarker + " " : selected ? "› " : "") + (text?.title ?? "")
+        let status = isPlaying ? activeLabel : selected ? selectionHint : ""
+        row.detail.string = [status, text?.detail ?? ""].filter { !$0.isEmpty }.joined(separator: " · ")
         row.track.isHidden = text?.progress == nil
         if let progress = text?.progress {
             row.bar.frame.size.width = row.picture.bounds.width * progress
