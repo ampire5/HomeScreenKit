@@ -93,8 +93,8 @@ import QuartzCore
     /// `visibleItems` changed.
     public var onBrowse: ((Int) -> Void)?
     private let scrollbar: NSScroller = {
-        let bar = NSScroller(frame: CGRect(x: 0, y: 0, width: 12, height: 120))
-        bar.scrollerStyle = .overlay; bar.knobStyle = .light
+        let bar = VisibleFilmstripScroller(frame: CGRect(x: 0, y: 0, width: 12, height: 120))
+        bar.scrollerStyle = .legacy; bar.knobStyle = .light
         return bar
     }()
     @objc private func scrollChosen(_ sender: NSScroller) {
@@ -420,4 +420,16 @@ import QuartzCore
 extension FilmstripRowsView {
     /// The title layer of an item on screen (tests).
     func titleLayer(of item: Int) -> CATextLayer? { rows[item]?.title }
+}
+
+/// Standalone overlay scrollers can remain fully faded by AppKit. Keep native drag/hit geometry,
+/// but paint a persistent translucent track and thumb on the host's glass.
+@MainActor private final class VisibleFilmstripScroller: NSScroller {
+    override var isOpaque: Bool { false }
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor.white.withAlphaComponent(0.16).setFill()
+        NSBezierPath(roundedRect: bounds.insetBy(dx: 4, dy: 2), xRadius: 2, yRadius: 2).fill()
+        NSColor.white.withAlphaComponent(0.65).setFill()
+        NSBezierPath(roundedRect: rect(for: .knob).insetBy(dx: 2, dy: 0), xRadius: 4, yRadius: 4).fill()
+    }
 }
