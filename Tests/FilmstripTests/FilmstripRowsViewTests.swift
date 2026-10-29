@@ -4,6 +4,8 @@ import FilmstripModel
 @testable import Filmstrip
 
 @MainActor private func strip(_ count: Int, current: Int) -> FilmstripRowsView {
+    // NSControl.sendAction needs the application even for an unattached test view.
+    _ = NSApplication.shared
     let view = FilmstripRowsView(frame: NSRect(x: 0, y: 0, width: 300, height: 600))
     view.layout = FilmstripRows(itemCount: count, aspects: [], length: 600, width: 300, rowPicture: 160,
                                 currentPicture: 284, cardHeight: 60, captionHeight: 32, currentCaptionHeight: 38)
@@ -145,5 +147,6 @@ private final class CountingView: NSView {
     bar.mouseDown(with: mouse(.leftMouseDown, at: down))
     bar.mouseDragged(with: mouse(.leftMouseDragged, at: end))
     bar.mouseUp(with: mouse(.leftMouseUp, at: end))
-    #expect(browsed > 450)
+    #expect(bar.target === view)
+    #expect(browsed > 450, "browsed=\(browsed) value=\(bar.doubleValue) part=\(bar.hitPart.rawValue)")
 }

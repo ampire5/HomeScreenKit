@@ -39,6 +39,7 @@ import QuartzCore
     private final class Row {
         let layer = CALayer()
         let plate = CALayer()
+        let divider = CALayer()
         let picture = CALayer()
         let track = CALayer()
         let bar = CALayer()
@@ -242,6 +243,8 @@ import QuartzCore
                                      height: size + 4)
             row.detail.frame = CGRect(x: caption.minX, y: row.title.frame.maxY, width: caption.width,
                                       height: Self.detailSize + 4)
+            row.divider.isHidden = shown.item != self.current || self.expansion <= 0 || self.layout.cardHeight <= 20
+            row.divider.frame = CGRect(x: caption.minX, y: shown.caption.maxY, width: caption.width, height: 0.5)
         }
         // A row that comes on screen starts where it belongs; only rows already there move.
         if isNew { withoutAnimation(place) } else { place() }
@@ -307,6 +310,8 @@ import QuartzCore
         row.plate.cornerCurve = .continuous
         row.plate.borderWidth = 1
         row.layer.addSublayer(row.plate)
+        row.divider.backgroundColor = NSColor.white.withAlphaComponent(0.14).cgColor
+        row.layer.addSublayer(row.divider)
         row.picture.cornerRadius = 7
         row.picture.masksToBounds = true
         row.picture.contentsGravity = .resizeAspectFill
@@ -335,7 +340,7 @@ import QuartzCore
         let image = pictures[item]
         row.picture.contents = image
         let isPlaying = item == playing
-        row.picture.borderColor = isPlaying ? Chrome.Palette.window.accent.cgColor : Self.placeholderBorder
+        row.picture.borderColor = Self.placeholderBorder
         let text = texts[item]
         let selected = item == current
         row.plate.backgroundColor = NSColor(white: selected ? 0.15 : 0.10, alpha: 0.88).cgColor
