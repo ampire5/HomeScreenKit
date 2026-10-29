@@ -130,6 +130,7 @@ private final class CountingView: NSView {
     #expect(!bar.isHidden)
     bar.doubleValue = 1
     bar.sendAction(bar.action, to: bar.target)
+    #expect(bar.target === view)
     #expect(browsed == 499 && !opened)
 }
 
