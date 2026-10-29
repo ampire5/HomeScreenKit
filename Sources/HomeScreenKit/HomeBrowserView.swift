@@ -58,6 +58,15 @@ public final class HomeBrowserView: NSView {
     public var onResize: ((HomeResize) -> Void)?
     /// After every move: the app keeps the last folder.
     public var onLocation: ((BrowserLocation) -> Void)?
+    /// Selection or its listing facts changed; nil when navigation/filtering removes it. No file access.
+    public var onSelectionChange: ((BrowserEntry?) -> Void)?
+    private var reportedSelection: BrowserEntry?
+    private func reportSelection() {
+        let entry = selectedEntry
+        guard entry != reportedSelection else { return }
+        reportedSelection = entry
+        onSelectionChange?(entry)
+    }
     /// The location on screen got its first complete listing, with its entries (`HomeView` gives them to the tree's
     /// node of the folder and lists the path's other folders only after it).
     var onListingComplete: ((BrowserLocation, [BrowserEntry]) -> Void)?
@@ -895,6 +904,7 @@ public final class HomeBrowserView: NSView {
 
     /// Under the path: while names come, how many; else the selected card; else the footer line.
     private func updateSubtitle() {
+        reportSelection()
         let loading = listing?.more == true ? listing?.entries.count : nil
         var line = loading.map { "Loading… \(BrowserSummary.number($0))" } ?? footerText.line
         if loading == nil, let state = footerText.state, !state.isEmpty {
@@ -1258,7 +1268,12 @@ public final class HomeBrowserView: NSView {
 
     // MARK: Rename and trash
 
-    private var selectedEntry: BrowserEntry? { selectedIndex.map { entries[$0] } }
+    public var selectedEntry: BrowserEntry? {
+        guard let index = selectedIndex else { return nil }
+        var entry = entries[index]
+        if let latest = facts[entry.id] { entry.facts = latest }
+        return entry
+    }
 
     /// The name field over the selected card's title (F2, or the app's Rename… item).
     public func beginRename() {
@@ -1386,6 +1401,7 @@ public final class HomeBrowserView: NSView {
     private func setEntries(_ new: [BrowserEntry]) {
         entries = new
         indexByID = Dictionary(new.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { a, _ in a })
+        if new.isEmpty { reportSelection() }
         tile()
     }
 
@@ -2082,6 +2098,7 @@ public final class HomeBrowserView: NSView {
     public func setFacts(_ new: [String: FileFacts]) {
         guard !new.isEmpty else { return }
         facts.merge(new) { _, latest in latest }
+        if let selectedID, new[selectedID] != nil { reportSelection() }
         for (i, card) in live where new[card.item.id] != nil && entries.indices.contains(i) {
             let item = item(for: entries[i])
             if card.item != item { card.show(item) }

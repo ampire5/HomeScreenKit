@@ -11,6 +11,12 @@ import HomeScreenModel
 
     /// The house: back to the start page (the app decides which).
     var onHome: (() -> Void)?
+    var onInspector: (() -> Void)? { didSet { items[.inspector]?.isHidden = onInspector == nil } }
+    @objc private func inspectorClicked() { onInspector?() }
+    func showInspector(visible: Bool) {
+        items[.inspector]?.toolTip = visible ? "Hide Info (⌘I)" : "Show Info (⌘I)"
+        items[.inspector]?.label = visible ? "Hide Info" : "Show Info"
+    }
     var onBack: (() -> Void)?
     var onForward: (() -> Void)?
     var onCrumb: ((BrowserLocation) -> Void)?
@@ -114,6 +120,7 @@ import HomeScreenModel
         // The search item keeps its own priority, 1001 (set to anything else, it stays): it folds into the magnifier long
         // before it goes. The sidebar toggle is AppKit's standard item.
         for (item, toolbarItem) in items where item != .search { toolbarItem.visibilityPriority = .init(item.priority) }
+        items[.inspector]?.isHidden = true
         items[.cards]?.isHidden = true
         items[.progress]?.isHidden = true
         items[.path]?.isHidden = true
@@ -186,6 +193,8 @@ import HomeScreenModel
             return group(id, [("square.grid.2x2", "Posters", "as Posters (⌥⌘1)"), ("rectangle.grid.1x2", "Cards", "as Cards (⌥⌘2)"),
                               ("list.bullet", "List", "as List (⌥⌘3)")], mode: .selectOne,
                          label: "Folders", tip: "Show folders as Posters, Cards or List", action: #selector(cardsClicked(_:)))
+        case .inspector:
+            return button(id, "sidebar.right", label: "Show Info", tip: "Show Info (⌘I)", action: #selector(inspectorClicked))
         case .search:
             let search = NSSearchToolbarItem(itemIdentifier: id)
             search.label = "Filter"

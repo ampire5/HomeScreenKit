@@ -2,7 +2,7 @@ import AppKit
 
 /// The items of the browser's `NSToolbar`, with the order a narrow window hides them in.
 enum HomeToolbarItem: CaseIterable {
-    case title, home, history, path, aspect, filter, sort, zoom, progress, cards, search
+    case title, home, history, path, aspect, filter, sort, zoom, progress, cards, search, inspector
 
     var identifier: NSToolbarItem.Identifier {
         switch self {
@@ -17,6 +17,7 @@ enum HomeToolbarItem: CaseIterable {
         case .progress: .init("home.progress")
         case .cards: .init("home.cards")
         case .search: .init("home.search")
+        case .inspector: .init("home.inspector")
         }
     }
 
@@ -32,6 +33,7 @@ enum HomeToolbarItem: CaseIterable {
         case .path: 50
         case .progress: 80
         case .search: 100
+        case .inspector: 950
         case .zoom: 300
         }
     }
@@ -41,5 +43,5 @@ enum HomeToolbarItem: CaseIterable {
     static let browserOrder: [NSToolbarItem.Identifier] =
         [.flexibleSpace, .toggleSidebar, .sidebarTrackingSeparator] + [HomeToolbarItem.home, .history, .path, .title].map(\.identifier)
         + [.flexibleSpace, HomeToolbarItem.filter.identifier, .flexibleSpace]
-        + [HomeToolbarItem.sort, .aspect, .progress, .zoom, .cards, .search].map(\.identifier)
+        + [HomeToolbarItem.sort, .aspect, .progress, .zoom, .cards, .search, .inspector].map(\.identifier)
 }

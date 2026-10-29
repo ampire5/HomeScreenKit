@@ -67,7 +67,11 @@ public final class HomeView: NSView {
             guard isParked != oldValue else { return }
             if isParked {
                 sidebarItem.isCollapsed = true
+                inspectorItem?.isCollapsed = true
             } else {
+                materializeInspectorIfNeeded()
+                inspectorItem?.isCollapsed = !isInspectorVisible
+                wantsInspectorWidth = true
                 sidebarItem.isCollapsed = !isSidebarVisible
                 wantsSidebarWidth = true
                 needsLayout = true
@@ -135,6 +139,7 @@ public final class HomeView: NSView {
     }
 
     private func splitDidResize() {
+        reportInspectorWidth()
         guard !sidebarItem.isCollapsed else { return }
         guard isUserDrag() else {
             // The split took its size (or another): a width that did not hold yet is put on the divider again.
@@ -158,6 +163,7 @@ public final class HomeView: NSView {
         super.layout()
         sidebarView.contentTopInset = browser.topInset
         applySidebarWidth()
+        applyInspectorWidth()
     }
 
     /// A folder holding one folder shows with it on one row (`home-sidebar-compact`).
@@ -195,6 +201,99 @@ public final class HomeView: NSView {
 
     /// The user moved the divider: the width to keep (the app writes it back and sets it next time).
     public var onSidebarWidthChange: ((CGFloat) -> Void)?
+
+    private var inspectorItem: NSSplitViewItem?
+    private var inspectorFactory: (() -> NSViewController)?
+    private var inspectorCollapseObservation: NSKeyValueObservation?
+    private var wantsInspectorWidth = false
+    private var inspectorWidth: CGFloat = 320
+    /// Docked inspector width changed by a divider drag, for the owner to persist.
+    public var onInspectorWidthChange: ((CGFloat) -> Void)?
+    /// The owner starts/stops its work when the inspector is shown or hidden.
+    public var onInspectorVisibilityChange: ((Bool) -> Void)?
+    public var isInspectorVisible = false {
+        didSet {
+            guard isInspectorVisible != oldValue else { return }
+            materializeInspectorIfNeeded()
+            browser.toolbar.showInspector(visible: isInspectorVisible)
+            guard let item = inspectorItem else {
+                onInspectorVisibilityChange?(isInspectorVisible)
+                return
+            }
+            if !isInspectorVisible, let responder = window?.firstResponder as? NSView,
+               responder.isDescendant(of: item.viewController.view) { window?.makeFirstResponder(browser) }
+            // One layout transaction, without a repeating animation or hidden tree reconstruction.
+            item.isCollapsed = isParked || !isInspectorVisible
+            wantsInspectorWidth = isInspectorVisible
+            browser.toolbar.showInspector(visible: isInspectorVisible)
+            needsLayout = true
+            onInspectorVisibilityChange?(isInspectorVisible)
+        }
+    }
+
+    /// Register a one-shot factory and expose the toolbar toggle without creating a controller, view or split item.
+    /// A parked Home keeps only the visibility intent; first unpark materializes it if still wanted.
+    public func configureInspector(width: CGFloat = 320, make: @escaping () -> NSViewController) {
+        guard inspectorItem == nil, inspectorFactory == nil else { return }
+        inspectorWidth = min(400, max(280, width))
+        inspectorFactory = make
+        browser.toolbar.onInspector = { [weak self] in self?.isInspectorVisible.toggle() }
+        browser.toolbar.showInspector(visible: isInspectorVisible)
+        materializeInspectorIfNeeded()
+    }
+
+    private func materializeInspectorIfNeeded() {
+        guard isInspectorVisible, !isParked, inspectorItem == nil, let factory = inspectorFactory else { return }
+        inspectorFactory = nil
+        installInspector(factory(), width: inspectorWidth)
+    }
+
+    /// Immediate installation for clients that already own a controller; closing it keeps its view and state alive.
+    public func installInspector(_ controller: NSViewController, width: CGFloat = 320) {
+        guard inspectorItem == nil else { return }
+        inspectorWidth = min(400, max(280, width))
+        let item = NSSplitViewItem(inspectorWithViewController: controller)
+        item.minimumThickness = 280
+        item.maximumThickness = 400
+        item.canCollapse = true
+        item.isCollapsed = true
+        inspectorItem = item
+        splitController.addSplitViewItem(item)
+        inspectorCollapseObservation = item.observe(\.isCollapsed, options: [.new]) { [weak self] item, _ in
+            MainActor.assumeIsolated {
+                guard let self, !self.isParked else { return }
+                self.isInspectorVisible = !item.isCollapsed
+            }
+        }
+        browser.toolbar.onInspector = { [weak self] in self?.isInspectorVisible.toggle() }
+        if isInspectorVisible, !isParked {
+            item.isCollapsed = false
+            wantsInspectorWidth = true
+            needsLayout = true
+        }
+    }
+
+    private func applyInspectorWidth() {
+        guard wantsInspectorWidth, let item = inspectorItem, !item.isCollapsed else { return }
+        let split = splitController.splitView
+        guard split.bounds.width > 0 else { return }
+        wantsInspectorWidth = false
+        split.setPosition(max(0, split.bounds.width - inspectorWidth - split.dividerThickness),
+                          ofDividerAt: split.arrangedSubviews.count - 2)
+    }
+
+    private func reportInspectorWidth() {
+        guard let item = inspectorItem, !item.isCollapsed, !wantsInspectorWidth,
+              let event = NSApp.currentEvent, event.window === window,
+              event.type == .leftMouseUp || event.type == .leftMouseDragged else { return }
+        let split = splitController.splitView
+        let width = item.viewController.view.frame.width.rounded()
+        let edge = split.bounds.width - width
+        guard abs(split.convert(event.locationInWindow, from: nil).x - edge) <= 12,
+              abs(width - inspectorWidth) >= 1 else { return }
+        inspectorWidth = width
+        onInspectorWidthChange?(width)
+    }
 
     /// The system's split: the sidebar item (with its material, divider, collapsing and the toolbar's tracking
     /// separator) and the browser's.

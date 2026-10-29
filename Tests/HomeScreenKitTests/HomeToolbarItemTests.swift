@@ -6,7 +6,7 @@ import Testing
     /// A narrow window hides the item with the least priority first; the location text goes last.
     @Test func hideOrderFollowsTheSpec() {
         let order = HomeToolbarItem.allCases.sorted { $0.priority < $1.priority }
-        #expect(order == [.cards, .aspect, .sort, .history, .home, .path, .progress, .search, .zoom, .filter, .title])
+        #expect(order == [.cards, .aspect, .sort, .history, .home, .path, .progress, .search, .zoom, .filter, .inspector, .title])
         let priorities = HomeToolbarItem.allCases.map(\.priority)
         #expect(Set(priorities).count == priorities.count)
     }
@@ -26,7 +26,7 @@ import Testing
 
     /// The layout left to right, as the spec draws it.
     private func rank(_ id: NSToolbarItem.Identifier) -> Int {
-        let left: [HomeToolbarItem] = [.home, .history, .path, .title, .filter, .sort, .aspect, .progress, .zoom, .cards, .search]
+        let left: [HomeToolbarItem] = [.home, .history, .path, .title, .filter, .sort, .aspect, .progress, .zoom, .cards, .search, .inspector]
         return left.firstIndex { $0.identifier == id } ?? -1
     }
 
