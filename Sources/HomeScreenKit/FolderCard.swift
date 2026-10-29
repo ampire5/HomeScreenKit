@@ -270,8 +270,7 @@ class FolderCard: GridCard {
     override func selectionChanged() {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        ring.isHidden = !(isSelected || isLastOpened)
-        ring.borderWidth = isLastOpened ? 4 : Self.ringWidth
+        ring.isHidden = !isSelected
         CATransaction.commit()
     }
 

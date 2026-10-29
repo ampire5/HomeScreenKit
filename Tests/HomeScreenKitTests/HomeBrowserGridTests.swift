@@ -29,10 +29,15 @@ import Testing
         #expect(view.card(for: first)?.isLastOpened == true)
         #expect(view.card(for: next)?.isLastOpened == false)
         let marked = view.card(for: first) as? PhotoCard
-        #expect(marked?.ring.isHidden == false)
-        #expect(marked?.ring.borderWidth == 4)
-        view.lastOpenedID = next
         #expect(marked?.ring.isHidden == true)
+        #expect(marked?.lastOpenedHighlight?.isHidden == false)
+        #expect((view.card(for: next) as? PhotoCard)?.ring.isHidden == false)
+        view.select(id: first, scrolls: false)
+        #expect(marked?.ring.isHidden == false)
+        #expect(marked?.lastOpenedHighlight?.isHidden == false)
+        view.lastOpenedID = next
+        #expect(marked?.ring.isHidden == false)
+        #expect(marked?.lastOpenedHighlight?.isHidden == true)
         #expect(view.card(for: first)?.isLastOpened == false)
         #expect(view.card(for: next)?.isLastOpened == true)
     }

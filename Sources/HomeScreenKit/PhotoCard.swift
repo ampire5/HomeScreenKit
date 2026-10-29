@@ -152,6 +152,8 @@ final class PhotoCard: GridCard {
     private var boxHeight: CGFloat { aspect == 1 ? bounds.width : (bounds.width / max(0.1, aspect)).rounded() }
 
     /// Square: the slot's box. Aspect: the image fitted in the box inset by 8 pt (that box while there is none).
+    override var lastOpenedHighlightRect: CGRect { pictureRect }
+
     var pictureRect: CGRect {
         let side = bounds.width
         switch style {
@@ -252,8 +254,7 @@ final class PhotoCard: GridCard {
     override func selectionChanged() {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        ring.isHidden = !(isSelected || isLastOpened)
-        ring.borderWidth = isLastOpened ? 4 : Self.ringWidth
+        ring.isHidden = !isSelected
         CATransaction.commit()
     }
 
