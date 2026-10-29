@@ -60,7 +60,7 @@ private final class CountingView: NSView {
     view.card = card
     let row = view.layout.rows(offset: view.layout.centre(of: 5), current: 5, expansion: 1).first { $0.item == 5 }!
     #expect(card.superview === view)
-    #expect(abs(card.frame.minY - (row.start + row.caption.maxY)) < 0.01)
+    #expect(abs(card.frame.minY - (row.start + row.caption.maxY + 8)) < 0.01)
 }
 
 /// Two old rows that map to one new row (the same file twice in a list): what is known of them merges, no trap.
@@ -105,7 +105,7 @@ private final class CountingView: NSView {
     for row in shown where row.item == 4 || row.item == 5 {
         let title = view.titleLayer(of: row.item)!
         #expect(title.frame.minY >= row.picture.maxY - 0.01)
-        #expect(abs(title.frame.minX - row.caption.minX) < 0.01)
+        #expect(abs(title.frame.minX - (row.caption.minX + 12)) < 0.01)
     }
     let plain = view.titleLayer(of: 4)!.fontSize, big = view.titleLayer(of: 5)!.fontSize
     #expect(big > plain)

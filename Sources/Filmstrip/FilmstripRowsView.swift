@@ -31,13 +31,14 @@ import QuartzCore
     /// Between a picture and its title.
     public static let captionGap: CGFloat = 4
     /// The caption's height for the layout: a plain row's, and the browsed row's.
-    public static let captionHeight = Double(captionGap + titleSize + 4 + detailSize + 4)
-    public static let currentCaptionHeight = Double(captionGap + currentTitleSize + 4 + detailSize + 4)
+    public static let captionHeight = Double(captionGap + titleSize + 4 + detailSize + 8)
+    public static let currentCaptionHeight = Double(captionGap + currentTitleSize + 4 + detailSize + 8)
     private static let placeholderBorder = CGColor(gray: 1, alpha: 0.38)
     private static let barHeight: CGFloat = 3
 
     private final class Row {
         let layer = CALayer()
+        let plate = CALayer()
         let picture = CALayer()
         let track = CALayer()
         let bar = CALayer()
@@ -221,14 +222,19 @@ import QuartzCore
                 let scale = max(0, (picture.width - inset) / max(1, picture.width))
                 picture.size.width *= scale; picture.size.height *= scale
             }
+            // The cover, caption and details share one plate and one inset.
+            let plateWidth = min(frame.width - inset, picture.width)
+            row.plate.frame = CGRect(x: inset, y: 0, width: max(0, plateWidth), height: max(0, frame.height))
+            let coverInset = min(8, max(0, min(picture.width, picture.height) / 4))
+            picture = picture.insetBy(dx: coverInset, dy: coverInset)
             row.picture.frame = picture
-            row.track.frame = CGRect(x: 0, y: shown.picture.height - Self.barHeight, width: shown.picture.width,
+            row.track.frame = CGRect(x: 0, y: picture.height - Self.barHeight, width: picture.width,
                                      height: Self.barHeight)
             let progress = self.texts[shown.item]?.progress ?? 0
-            row.bar.frame = CGRect(x: 0, y: 0, width: shown.picture.width * progress, height: Self.barHeight)
+            row.bar.frame = CGRect(x: 0, y: 0, width: picture.width * progress, height: Self.barHeight)
             // Under the picture, as wide; the browsed row's title grows with its picture, so the two move as one.
             var caption = shown.caption
-            caption.origin.x += inset; caption.size.width = max(0, caption.width - inset)
+            caption.origin.x += inset + 12; caption.size.width = max(0, plateWidth - 24)
             let size = shown.item == self.current
                 ? Self.titleSize + (Self.currentTitleSize - Self.titleSize) * CGFloat(self.expansion) : Self.titleSize
             row.title.fontSize = size
@@ -252,7 +258,10 @@ import QuartzCore
             return
         }
         let y = row.start + row.caption.maxY
-        let frame = NSRect(x: Self.padding, y: y, width: row.picture.width, height: max(0, row.start + row.length - y))
+        let inset = max(0, min(indent(current), (bounds.width - 2 * Self.padding - 20) / 3))
+        let width = max(0, min(bounds.width - 2 * Self.padding - 20 - inset, row.picture.width - inset))
+        let frame = NSRect(x: Self.padding + inset + 12, y: y + 8, width: max(0, width - 24),
+                           height: max(0, row.start + row.length - y - 20))
         let alpha = CGFloat(expansion)
         let moved = cardItem != current
         cardItem = current
@@ -294,7 +303,11 @@ import QuartzCore
     private func makeRow() -> Row {
         let row = Row()
         let scale = window?.backingScaleFactor ?? 2
-        row.picture.cornerRadius = Chrome.Radius.cell
+        row.plate.cornerRadius = 12
+        row.plate.cornerCurve = .continuous
+        row.plate.borderWidth = 1
+        row.layer.addSublayer(row.plate)
+        row.picture.cornerRadius = 7
         row.picture.masksToBounds = true
         row.picture.contentsGravity = .resizeAspectFill
         row.picture.borderColor = Self.placeholderBorder
@@ -305,7 +318,7 @@ import QuartzCore
         for (text, style, color) in [(row.title, Chrome.Text.Style.label, Chrome.Palette.overMedia.text),
                                      (row.detail, .small, Chrome.Palette.overMedia.secondaryText)] {
             let font = Chrome.Text.font(style)
-            text.font = font
+            text.font = style == .label ? NSFont.systemFont(ofSize: Self.titleSize, weight: .semibold) : font
             text.fontSize = style == .label ? Self.titleSize : Self.detailSize
             text.foregroundColor = color.cgColor
             text.truncationMode = text === row.title ? .middle : .end
@@ -322,12 +335,14 @@ import QuartzCore
         let image = pictures[item]
         row.picture.contents = image
         let isPlaying = item == playing
-        row.picture.borderWidth = isPlaying ? 2 : image == nil ? 1 : 0
         row.picture.borderColor = isPlaying ? Chrome.Palette.window.accent.cgColor : Self.placeholderBorder
         let text = texts[item]
         let selected = item == current
-        row.layer.backgroundColor = selected ? NSColor.white.withAlphaComponent(0.08).cgColor : nil
-        row.layer.cornerRadius = 6
+        row.plate.backgroundColor = NSColor(white: selected ? 0.15 : 0.10, alpha: 0.88).cgColor
+        row.plate.borderWidth = isPlaying ? 1.5 : 1
+        row.plate.borderColor = isPlaying ? Chrome.Palette.window.accent.cgColor
+            : NSColor.white.withAlphaComponent(selected ? 0.30 : 0.12).cgColor
+        row.picture.borderWidth = image == nil ? 1 : 0
         row.title.string = (isPlaying ? activeMarker + " " : selected ? "› " : "") + (text?.title ?? "")
         let status = isPlaying ? activeLabel : selected ? selectionHint : ""
         row.detail.string = [status, text?.detail ?? ""].filter { !$0.isEmpty }.joined(separator: " · ")
