@@ -8,21 +8,22 @@ import Testing
     let x = URL(fileURLWithPath: "/Volumes/T/x")
 
     func shown(_ source: FakeHomeSource, _ entries: [BrowserEntry], width: CGFloat = 1200,
-               complete: Bool = true) async -> HomeBrowserView {
+               complete: Bool = true) async throws -> HomeBrowserView {
         let view = HomeBrowserView(source: source)
         view.frame = CGRect(x: 0, y: 0, width: width, height: 800)
         view.show(.folder(x), selecting: nil)
         view.layoutSubtreeIfNeeded()
         source.yield(x, entries, complete: complete)
         await settle(seconds: 5) { view.entries.count == entries.count }
+        try #require(view.entries.count == entries.count, "Browser listing did not finish before the test deadline")
         view.layoutSubtreeIfNeeded()
         return view
     }
 
     private var mixed: [BrowserEntry] { (0..<3).map { BrowserFixtures.folder("f\($0)") } + BrowserFixtures.files(20) }
 
-    @Test func lastOpenedSurvivesHoverSelection() async {
-        let view = await shown(FakeHomeSource(), BrowserFixtures.files(5))
+    @Test func lastOpenedSurvivesHoverSelection() async throws {
+        let view = try await shown(FakeHomeSource(), BrowserFixtures.files(5))
         let first = view.entries[0].id, next = view.entries[1].id
         view.lastOpenedID = first
         view.select(id: next, scrolls: false)
@@ -53,8 +54,8 @@ import Testing
         #expect(view.card(for: first)?.isLastOpened == false)
         #expect(view.card(for: next)?.isLastOpened == true)
     }
-    @Test func gridFillsWidth() async {
-        let view = await shown(FakeHomeSource(), BrowserFixtures.files(50), width: 1203)
+    @Test func gridFillsWidth() async throws {
+        let view = try await shown(FakeHomeSource(), BrowserFixtures.files(50), width: 1203)
         let lastOfRow = view.card(for: view.entries[view.columns - 1].id)!
         // The clip view's width: 1203 with overlay scrollers, less a legacy scroller's width otherwise.
         #expect(view.gridContentWidth > 1180)
@@ -62,15 +63,15 @@ import Testing
         #expect(abs(lastOfRow.frame.maxX - (view.gridContentWidth - 20)) <= 0.5)
     }
 
-    @Test func mixedFolderHasTwoSections() async {
-        let view = await shown(FakeHomeSource(), mixed)
+    @Test func mixedFolderHasTwoSections() async throws {
+        let view = try await shown(FakeHomeSource(), mixed)
         #expect(view.headerTitles == ["Folders", "Photos · 20"])
         #expect(view.card(for: view.entries[0].id) is PosterCard)
         #expect(view.card(for: view.entries[3].id) is PhotoCard)
     }
 
-    @Test func singleKindHasNoHeader() async {
-        let view = await shown(FakeHomeSource(), BrowserFixtures.files(10))
+    @Test func singleKindHasNoHeader() async throws {
+        let view = try await shown(FakeHomeSource(), BrowserFixtures.files(10))
         #expect(view.headerTitles.isEmpty)
     }
 
@@ -106,8 +107,8 @@ import Testing
         #expect(view.footerLines.first?.hasPrefix("20 photos · 3 folders") == true)
     }
 
-    @Test func styleAndNamesReachCards() async {
-        let view = await shown(FakeHomeSource(), BrowserFixtures.files(5))
+    @Test func styleAndNamesReachCards() async throws {
+        let view = try await shown(FakeHomeSource(), BrowserFixtures.files(5))
         let id = view.entries[0].id
         let picture = CGContext(data: nil, width: 4, height: 4, bitsPerComponent: 8, bytesPerRow: 0,
                                 space: CGColorSpaceCreateDeviceRGB(),
@@ -127,8 +128,8 @@ import Testing
         #expect((view.card(for: id) as? PhotoCard)?.names == .below)
     }
 
-    @Test func theCardSizePicksTheCardsAndRowsStep() async {
-        let view = await shown(FakeHomeSource(), BrowserFixtures.files(5))
+    @Test func theCardSizePicksTheCardsAndRowsStep() async throws {
+        let view = try await shown(FakeHomeSource(), BrowserFixtures.files(5))
         view.cardSize = 360
         view.layoutSubtreeIfNeeded()
         #expect(view.grid.metrics.listRow == 56 && view.grid.metrics.cardHeight == 110)   // its top is the view's inset
@@ -141,8 +142,8 @@ import Testing
 
     private func photo(_ view: HomeBrowserView, _ i: Int) -> PhotoCard? { view.card(for: view.entries[i].id) as? PhotoCard }
 
-    @Test func photoMarksReachLiveCards() async {
-        let view = await shown(FakeHomeSource(), BrowserFixtures.files(20))
+    @Test func photoMarksReachLiveCards() async throws {
+        let view = try await shown(FakeHomeSource(), BrowserFixtures.files(20))
         view.setPhotoMarks(unseen: [view.entries[1].id, view.entries[2].id], paired: [view.entries[2].id])
         #expect(photo(view, 0)?.isUnseen == false && photo(view, 0)?.isPaired == false)
         #expect(photo(view, 1)?.isUnseen == true && photo(view, 1)?.isPaired == false)
@@ -151,8 +152,8 @@ import Testing
         #expect(photo(view, 1)?.isUnseen == false && photo(view, 2)?.isPaired == false)
     }
 
-    @Test func photoMarksBindOnScroll() async {
-        let view = await shown(FakeHomeSource(), BrowserFixtures.files(5_000))
+    @Test func photoMarksBindOnScroll() async throws {
+        let view = try await shown(FakeHomeSource(), BrowserFixtures.files(5_000))
         let last = view.entries.count - 1
         #expect(photo(view, last) == nil)
         view.setPhotoMarks(unseen: [view.entries[last].id], paired: [view.entries[last].id])
@@ -162,9 +163,9 @@ import Testing
         #expect(photo(view, last - 1)?.isUnseen == false)
     }
 
-    @Test func photoMarksForgottenOnPlaceChange() async {
+    @Test func photoMarksForgottenOnPlaceChange() async throws {
         let source = FakeHomeSource()
-        let view = await shown(source, BrowserFixtures.files(20))
+        let view = try await shown(source, BrowserFixtures.files(20))
         let id = view.entries[0].id
         view.setPhotoMarks(unseen: [id], paired: [id])
         // Away and back: the same ids, the marks of the earlier visit gone.
@@ -180,8 +181,8 @@ import Testing
         #expect(photo(view, 0)?.isPaired == false)
     }
 
-    @Test func columnStepTargets() async {
-        let view = await shown(FakeHomeSource(), BrowserFixtures.files(100))
+    @Test func columnStepTargets() async throws {
+        let view = try await shown(FakeHomeSource(), BrowserFixtures.files(100))
         let m = GridMetrics()
         view.cardSize = GridLayout.target(columns: 6, width: 1200, gap: m.photoGap, edge: m.photoEdge)
         view.layoutSubtreeIfNeeded()
@@ -193,10 +194,10 @@ import Testing
         #expect(view.cardSize(after: .reset, range: 60...480) == nil)
     }
 
-    @Test func footerSummary() async {
-        let view = await shown(FakeHomeSource(), mixed, complete: false)
+    @Test func footerSummary() async throws {
+        let view = try await shown(FakeHomeSource(), mixed, complete: false)
         #expect(view.footerLines == ["20 photos · 3 folders"])
-        let complete = await shown(FakeHomeSource(), mixed)
+        let complete = try await shown(FakeHomeSource(), mixed)
         #expect(complete.footerLines.first?.hasPrefix("20 photos · 3 folders · ") == true)
     }
 
