@@ -11,6 +11,26 @@ class GridCard: NSView {
     var isSelected = false { didSet { selectionChanged() } }
     /// What the files are called in the card's facts (`FileStyle.noun`), set by the browser.
     var fileNoun = "photo" { didSet { if fileNoun != oldValue { itemChanged() } } }
+    private var lastOpenedLabel: NSTextField?
+    var isLastOpened = false {
+        didSet {
+            guard isLastOpened != oldValue else { return }
+            if isLastOpened, lastOpenedLabel == nil {
+                let label = NSTextField(labelWithString: "Last opened")
+                label.textColor = .white; label.backgroundColor = NSColor.black.withAlphaComponent(0.8)
+                label.drawsBackground = true; label.font = .systemFont(ofSize: 11, weight: .semibold)
+                label.alignment = .center; label.wantsLayer = true; label.layer?.cornerRadius = 4; label.layer?.masksToBounds = true
+                label.layer?.zPosition = 100
+                addSubview(label); lastOpenedLabel = label
+            }
+            lastOpenedLabel?.isHidden = !isLastOpened
+            needsLayout = true
+        }
+    }
+    override func layout() {
+        super.layout()
+        lastOpenedLabel?.frame = CGRect(x: 8, y: 8, width: min(94, max(0, bounds.width - 16)), height: 20)
+    }
     private(set) var item: HomeCardItem
     var image: CGImage? { didSet { imageChanged() } }
 

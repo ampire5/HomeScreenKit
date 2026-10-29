@@ -74,6 +74,12 @@ public final class HomeBrowserView: NSView {
     public private(set) var lastBrowsed = BrowserLocation.places
 
     /// The selected entry's id (a session keeps it); while a restore waits for its entry, that one.
+    public var lastOpenedID: String? {
+        didSet {
+            guard lastOpenedID != oldValue else { return }
+            for card in live.values { card.isLastOpened = card.item.id == lastOpenedID }
+        }
+    }
     public var selection: String? { pendingSelection ?? selectedID }
 
     /// How far the grid is scrolled, for a session: the first card fully in view (else the first in view) and its
@@ -1878,6 +1884,7 @@ public final class HomeBrowserView: NSView {
         card.show(item(for: entry))
         card.image = nil
         card.isSelected = entry.id == selectedID
+        card.isLastOpened = entry.id == lastOpenedID
         if let photo = card as? PhotoCard {
             photo.isUnseen = unseen.contains(entry.id)
             photo.isPaired = paired.contains(entry.id)

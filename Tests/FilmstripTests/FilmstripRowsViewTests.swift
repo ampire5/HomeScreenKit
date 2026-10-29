@@ -132,3 +132,17 @@ private final class CountingView: NSView {
     bar.sendAction(bar.action, to: bar.target)
     #expect(browsed == 499 && !opened)
 }
+
+@MainActor @Test func scrollbarThumbCanBeGrabbedAndDragged() {
+    let view = strip(500, current: 0)
+    var browsed = 0
+    view.onBrowse = { browsed = $0 }
+    let bar = view.subviews.compactMap { $0 as? NSScroller }.first!
+    let thumb = bar.rect(for: .knob)
+    let down = bar.convert(NSPoint(x: thumb.midX, y: thumb.midY), to: nil)
+    let end = bar.convert(NSPoint(x: thumb.midX, y: bar.bounds.maxY - 3), to: nil)
+    bar.mouseDown(with: mouse(.leftMouseDown, at: down))
+    bar.mouseDragged(with: mouse(.leftMouseDragged, at: end))
+    bar.mouseUp(with: mouse(.leftMouseUp, at: end))
+    #expect(browsed > 450)
+}

@@ -175,10 +175,12 @@ import QuartzCore
     private func placeRows(animated: Bool) {
         let shown = layout.rows(offset: offset, current: current, expansion: expansion)
         shownRows = shown
-        scrollbar.frame = CGRect(x: max(0, bounds.width - 13), y: 32, width: 12, height: max(0, bounds.height - 40))
+        scrollbar.frame = CGRect(x: max(0, bounds.width - 21), y: 32, width: 20, height: max(0, bounds.height - 40))
         scrollbar.isHidden = layout.itemCount <= 1
-        scrollbar.knobProportion = min(1, Double(max(1, shown.count)) / Double(max(1, layout.itemCount)))
-        scrollbar.doubleValue = Double(current) / Double(max(1, layout.itemCount - 1))
+        if (scrollbar as? VisibleFilmstripScroller)?.isDragging != true {
+            scrollbar.knobProportion = min(1, Double(max(1, shown.count)) / Double(max(1, layout.itemCount)))
+            scrollbar.doubleValue = Double(current) / Double(max(1, layout.itemCount - 1))
+        }
         CATransaction.begin()
         if animated {
             CATransaction.setAnimationDuration(Self.moveDuration)
@@ -208,7 +210,7 @@ import QuartzCore
         let isNew = rows[shown.item] == nil
         let row = rows[shown.item] ?? takeRow(for: shown.item)
         fill(row, item: shown.item)
-        let frame = CGRect(x: Self.padding, y: shown.start, width: max(0, bounds.width - 2 * Self.padding),
+        let frame = CGRect(x: Self.padding, y: shown.start, width: max(0, bounds.width - 2 * Self.padding - 20),
                            height: shown.length)
         let place = {
             row.layer.frame = frame
@@ -425,11 +427,36 @@ extension FilmstripRowsView {
 /// Standalone overlay scrollers can remain fully faded by AppKit. Keep native drag/hit geometry,
 /// but paint a persistent translucent track and thumb on the host's glass.
 @MainActor private final class VisibleFilmstripScroller: NSScroller {
+    private var dragAnchor: CGFloat?
+    var isDragging: Bool { dragAnchor != nil }
+    override var isFlipped: Bool { true }
     override var isOpaque: Bool { false }
+    private var thumb: NSRect {
+        let available = max(0, bounds.height - 4)
+        let height = min(available, max(32, available * CGFloat(knobProportion)))
+        return NSRect(x: (bounds.width - 8) / 2, y: 2 + CGFloat(doubleValue) * (available - height), width: 8, height: height)
+    }
+    override func rect(for part: NSScroller.Part) -> NSRect {
+        part == .knob ? thumb : bounds.insetBy(dx: 0, dy: 2)
+    }
     override func draw(_ dirtyRect: NSRect) {
-        NSColor.white.withAlphaComponent(0.16).setFill()
-        NSBezierPath(roundedRect: bounds.insetBy(dx: 4, dy: 2), xRadius: 2, yRadius: 2).fill()
-        NSColor.white.withAlphaComponent(0.65).setFill()
-        NSBezierPath(roundedRect: rect(for: .knob).insetBy(dx: 2, dy: 0), xRadius: 4, yRadius: 4).fill()
+        NSColor.white.withAlphaComponent(0.12).setFill()
+        NSBezierPath(roundedRect: bounds.insetBy(dx: 8, dy: 2), xRadius: 2, yRadius: 2).fill()
+        NSColor.white.withAlphaComponent(isDragging ? 0.9 : 0.6).setFill()
+        NSBezierPath(roundedRect: thumb, xRadius: 4, yRadius: 4).fill()
+    }
+    override func mouseDown(with event: NSEvent) {
+        let p = convert(event.locationInWindow, from: nil)
+        dragAnchor = thumb.insetBy(dx: -6, dy: 0).contains(p) ? p.y - thumb.minY : thumb.height / 2
+        move(to: p.y)
+    }
+    override func mouseDragged(with event: NSEvent) { move(to: convert(event.locationInWindow, from: nil).y) }
+    override func mouseUp(with event: NSEvent) { move(to: convert(event.locationInWindow, from: nil).y); dragAnchor = nil; needsDisplay = true }
+    private func move(to y: CGFloat) {
+        guard let dragAnchor else { return }
+        let travel = max(1, bounds.height - 4 - thumb.height)
+        doubleValue = Double(min(1, max(0, (y - dragAnchor - 2) / travel)))
+        needsDisplay = true
+        sendAction(action, to: target)
     }
 }

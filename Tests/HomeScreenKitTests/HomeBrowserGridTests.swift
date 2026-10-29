@@ -21,6 +21,17 @@ import Testing
 
     private var mixed: [BrowserEntry] { (0..<3).map { BrowserFixtures.folder("f\($0)") } + BrowserFixtures.files(20) }
 
+    @Test func lastOpenedSurvivesHoverSelection() async {
+        let view = await shown(FakeHomeSource(), BrowserFixtures.files(5))
+        let first = view.entries[0].id, next = view.entries[1].id
+        view.lastOpenedID = first
+        view.select(id: next, scrolls: false)
+        #expect(view.card(for: first)?.isLastOpened == true)
+        #expect(view.card(for: next)?.isLastOpened == false)
+        view.lastOpenedID = next
+        #expect(view.card(for: first)?.isLastOpened == false)
+        #expect(view.card(for: next)?.isLastOpened == true)
+    }
     @Test func gridFillsWidth() async {
         let view = await shown(FakeHomeSource(), BrowserFixtures.files(50), width: 1203)
         let lastOfRow = view.card(for: view.entries[view.columns - 1].id)!
