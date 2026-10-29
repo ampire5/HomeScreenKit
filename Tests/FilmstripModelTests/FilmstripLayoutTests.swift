@@ -154,17 +154,22 @@ private func medianMicroseconds(_ body: () -> Void) -> Double {
 }
 
 @Test func windowIsConstantTime() {
-    let n = 1_000_000
-    let uniform = layout(n)
-    let offset = uniform.centre(of: 600_000)
-    let plain = medianMicroseconds { _ = uniform.cells(offset: offset, current: 600_000, expansion: 1) }
-    #expect(plain < 50, "\(plain) µs")
-    var aspects = [Double?](repeating: nil, count: n)
-    aspects[10] = 0.3
-    let mixed = layout(n, aspects: aspects)
-    let mixedOffset = mixed.centre(of: 600_000)
-    let summed = medianMicroseconds { _ = mixed.cells(offset: mixedOffset, current: 600_000, expansion: 1) }
-    #expect(summed < 200, "\(summed) µs")
+    func cost(_ n: Int, mixed: Bool) -> Double {
+        var aspects = mixed ? [Double?](repeating: nil, count: n) : []
+        if mixed { aspects[10] = 0.3 }
+        let strip = layout(n, aspects: aspects)
+        let current = n * 3 / 5
+        let offset = strip.centre(of: current)
+        return medianMicroseconds { _ = strip.cells(offset: offset, current: current, expansion: 1) }
+    }
+    // Intel CI under Rosetta measured 56.625 µs against the former 50 µs absolute limit.
+    // A 100× larger list must stay within 4× the lookup cost: this catches a full-list scan
+    // without turning the runner's speed into an algorithmic regression.
+    for mixed in [false, true] {
+        let small = cost(10_000, mixed: mixed)
+        let large = cost(1_000_000, mixed: mixed)
+        #expect(large < small * 4, "mixed=\(mixed): \(small) → \(large) µs")
+    }
 }
 
 /// A list that grew or was re-read keeps its items' pictures and the strip's centre: each old index's place in
