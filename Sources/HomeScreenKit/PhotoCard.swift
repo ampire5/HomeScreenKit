@@ -252,7 +252,8 @@ final class PhotoCard: GridCard {
     override func selectionChanged() {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        ring.isHidden = !isSelected
+        ring.isHidden = !(isSelected || isLastOpened)
+        ring.borderWidth = isLastOpened ? 4 : Self.ringWidth
         CATransaction.commit()
     }
 
@@ -371,8 +372,8 @@ final class PhotoCard: GridCard {
         picture.cornerRadius = radius
         ring.frame = rect
         ring.cornerRadius = radius
-        hairline.frame = ring.bounds.insetBy(dx: Self.ringWidth, dy: Self.ringWidth)
-        hairline.cornerRadius = max(0, radius - Self.ringWidth)
+        hairline.frame = ring.bounds.insetBy(dx: ring.borderWidth, dy: ring.borderWidth)
+        hairline.cornerRadius = max(0, radius - ring.borderWidth)
         if let dotLayer {
             let side = Self.dot + 2 * Self.dotRing
             dotLayer.frame = CGRect(x: rect.maxX - Self.markInset - Self.dot - Self.dotRing,

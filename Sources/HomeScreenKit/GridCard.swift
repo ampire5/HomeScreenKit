@@ -24,6 +24,7 @@ class GridCard: NSView {
                 addSubview(label); lastOpenedLabel = label
             }
             lastOpenedLabel?.isHidden = !isLastOpened
+            selectionChanged()
             needsLayout = true
         }
     }

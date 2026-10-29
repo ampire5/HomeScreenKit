@@ -28,7 +28,11 @@ import Testing
         view.select(id: next, scrolls: false)
         #expect(view.card(for: first)?.isLastOpened == true)
         #expect(view.card(for: next)?.isLastOpened == false)
+        let marked = view.card(for: first) as? PhotoCard
+        #expect(marked?.ring.isHidden == false)
+        #expect(marked?.ring.borderWidth == 4)
         view.lastOpenedID = next
+        #expect(marked?.ring.isHidden == true)
         #expect(view.card(for: first)?.isLastOpened == false)
         #expect(view.card(for: next)?.isLastOpened == true)
     }
