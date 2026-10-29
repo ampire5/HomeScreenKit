@@ -31,6 +31,11 @@ import Testing
         let marked = view.card(for: first) as? PhotoCard
         #expect(marked?.ring.isHidden == true)
         #expect(marked?.lastOpenedHighlight?.isHidden == false)
+        if let marked {
+            marked.names = .below
+            marked.layoutSubtreeIfNeeded()
+            #expect((marked.lastOpenedHighlight?.frame.minY ?? 0) >= marked.bounds.maxY)
+        }
         #expect((view.card(for: next) as? PhotoCard)?.ring.isHidden == false)
         view.select(id: first, scrolls: false)
         #expect(marked?.ring.isHidden == false)
