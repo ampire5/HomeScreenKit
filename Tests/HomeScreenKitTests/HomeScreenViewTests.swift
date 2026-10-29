@@ -147,7 +147,7 @@ import Testing
 
     func wheel(_ dy: Int32, _ dx: Int32 = 0, command: Bool = false) -> NSEvent {
         let e = CGEvent(scrollWheelEvent2Source: nil, units: .line, wheelCount: 2, wheel1: dy, wheel2: dx, wheel3: 0)!
-        if command { e.flags = .maskCommand }
+        e.flags = command ? .maskCommand : []
         return NSEvent(cgEvent: e)!
     }
 

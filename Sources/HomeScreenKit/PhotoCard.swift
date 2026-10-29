@@ -72,6 +72,9 @@ final class PhotoCard: GridCard {
         picture.masksToBounds = true
         layer?.addSublayer(picture)
         layer?.addSublayer(shade)
+        // This view is flipped: fade from clear above the caption to dark below it.
+        shade.startPoint = CGPoint(x: 0.5, y: 0)
+        shade.endPoint = CGPoint(x: 0.5, y: 1)
         ring.isHidden = true
         ring.borderWidth = Self.ringWidth
         // Above the strip, a subview whose layer comes later: a hovered card is the selected one.
@@ -153,8 +156,11 @@ final class PhotoCard: GridCard {
 
     /// Square: the slot's box. Aspect: the image fitted in the box inset by 8 pt (that box while there is none).
     override var lastOpenedHighlightRect: CGRect { names == .below && showsNames ? bounds : pictureRect }
-    override var lastOpenedHighlightRadius: CGFloat { names == .below && showsNames ? 12 : Chrome.Radius.photo }
+    override var lastOpenedHighlightRadius: CGFloat { pictureCornerRadius }
     override var lastOpenedHighlightOutset: CGFloat { 4 }
+
+    /// Small tiles keep restrained corners; every contour follows the same radius.
+    var pictureCornerRadius: CGFloat { min(6, min(pictureRect.width, pictureRect.height) * 0.06) }
 
     var pictureRect: CGRect {
         let side = bounds.width
@@ -367,7 +373,7 @@ final class PhotoCard: GridCard {
     override func layout() {
         super.layout()
         let rect = pictureRect
-        let radius = min(Chrome.Radius.photo, min(rect.width, rect.height) / 2)
+        let radius = pictureCornerRadius
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         picture.frame = rect
@@ -387,7 +393,6 @@ final class PhotoCard: GridCard {
         let stripHeight = Self.stripHeight
         if let strip, let stripFormat, let stripSize {
             strip.frame = CGRect(x: rect.minX, y: rect.maxY - stripHeight, width: rect.width, height: stripHeight)
-            strip.layer?.cornerRadius = radius
             let pad = Self.stripPadding
             let line = CGRect(x: pad.width, y: pad.height, width: max(0, rect.width - 2 * pad.width),
                               height: stripHeight - 2 * pad.height)
@@ -438,6 +443,21 @@ final class PhotoCard: GridCard {
             factsLabel.frame = CGRect(x: x, y: boxHeight + 3 + 16, width: width, height: 14)
         }
         layoutFacts(in: rect)
+        // Overlays share the picture's silhouette, including its lower corners.
+        clip(shade, to: rect, radius: radius)
+        clip(track, to: rect, radius: radius)
+        if let strip, let layer = strip.layer {
+            clip(layer, to: strip.convert(rect, from: self), radius: radius, local: true)
+        }
         CATransaction.commit()
     }
+    private func clip(_ layer: CALayer, to rect: CGRect, radius: CGFloat, local: Bool = false) {
+        let mask = (layer.mask as? CAShapeLayer) ?? CAShapeLayer()
+        mask.frame = layer.bounds
+        let localRect = local ? rect : rect.offsetBy(dx: -layer.frame.minX, dy: -layer.frame.minY)
+        mask.path = CGPath(roundedRect: localRect,
+                           cornerWidth: radius, cornerHeight: radius, transform: nil)
+        if layer.mask !== mask { layer.mask = mask }
+    }
+
 }

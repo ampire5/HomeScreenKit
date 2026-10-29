@@ -48,7 +48,7 @@ public struct GridSection: Equatable, Sendable {
 
 /// The grid's spacing (Photos measurements).
 public struct GridMetrics: Equatable, Sendable {
-    public var photoGap: CGFloat = 2
+    public var photoGap: CGFloat = 8
     /// On the line of the headings and the folders (board «Эскизы файлов» B, 2026-10-27), not edge to edge.
     public var photoEdge: CGFloat = 20
     public var collectionGap: CGFloat = 16

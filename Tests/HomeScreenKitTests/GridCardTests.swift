@@ -52,12 +52,15 @@ import Testing
         return card
     }
 
-    @Test func photoRadiusEight() {
+    @Test func photoCornersStayRestrainedAtEveryScale() {
         for style in [GridStyle.square, .aspect] {
             let card = photo(style)
-            #expect(card.pictureLayer.cornerRadius == 8)
-            #expect(card.ring.cornerRadius == 8)
+            #expect(card.pictureLayer.cornerRadius == 6)
+            #expect(card.ring.cornerRadius == 6)
         }
+        let small = photo(.square, size: CGSize(width: 40, height: 40))
+        #expect(small.pictureLayer.cornerRadius == 2.4)
+        #expect(small.ring.cornerRadius == small.pictureLayer.cornerRadius)
         let thin = photo(.aspect)
         thin.image = image(300, 20)
         thin.layoutSubtreeIfNeeded()
@@ -135,6 +138,7 @@ import Testing
         card.layoutSubtreeIfNeeded()
         let strip = try! #require(card.strip)
         #expect(!strip.isHidden)
+        #expect(strip.layer?.mask is CAShapeLayer)
         #expect(strip.frame.maxY == card.pictureRect.maxY)
         #expect(strip.frame.minX == card.pictureRect.minX && strip.frame.width == card.pictureRect.width)
         #expect(card.stripText.format == "JXL")
