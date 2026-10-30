@@ -11,8 +11,15 @@ import HomeScreenModel
 
     /// The house: back to the start page (the app decides which).
     var onHome: (() -> Void)?
+    var onInspector: (() -> Void)? { didSet { items[.inspector]?.isHidden = onInspector == nil } }
+    @objc private func inspectorClicked() { onInspector?() }
+    func showInspector(visible: Bool) {
+        items[.inspector]?.toolTip = visible ? "Hide Info (⌘I)" : "Show Info (⌘I)"
+        items[.inspector]?.label = visible ? "Hide Info" : "Show Info"
+    }
     var onBack: (() -> Void)?
     var onForward: (() -> Void)?
+    var onUp: (() -> Void)?
     var onCrumb: ((BrowserLocation) -> Void)?
     /// A sort field chosen: the view decides the direction (`BrowserSortChoice`).
     var onSortKey: ((BrowserSort.Key) -> Void)?
@@ -114,6 +121,7 @@ import HomeScreenModel
         // The search item keeps its own priority, 1001 (set to anything else, it stays): it folds into the magnifier long
         // before it goes. The sidebar toggle is AppKit's standard item.
         for (item, toolbarItem) in items where item != .search { toolbarItem.visibilityPriority = .init(item.priority) }
+        items[.inspector]?.isHidden = true
         items[.cards]?.isHidden = true
         items[.progress]?.isHidden = true
         items[.path]?.isHidden = true
@@ -139,8 +147,9 @@ import HomeScreenModel
         case .home:
             return button(id, "house", label: "Start Page", tip: "Start Page (⇧⌘H)", action: #selector(homeClicked))
         case .history:
-            return group(id, [("chevron.left", "Back", "Back"), ("chevron.right", "Forward", "Forward")], mode: .momentary,
-                         label: "History", tip: "Back and Forward", action: #selector(historyClicked(_:)))
+            return group(id, [("chevron.left", "Back", "Back"), ("chevron.right", "Forward", "Forward"),
+                              ("arrow.up", "Up", "Enclosing Folder (⌘↑)")], mode: .momentary,
+                         label: "Navigation", tip: "Back, Forward and Enclosing Folder", action: #selector(historyClicked(_:)))
         case .path:
             let menu = NSMenuToolbarItem(itemIdentifier: id)
             menu.image = symbol("folder", "Path")
@@ -186,6 +195,8 @@ import HomeScreenModel
             return group(id, [("square.grid.2x2", "Posters", "as Posters (⌥⌘1)"), ("rectangle.grid.1x2", "Cards", "as Cards (⌥⌘2)"),
                               ("list.bullet", "List", "as List (⌥⌘3)")], mode: .selectOne,
                          label: "Folders", tip: "Show folders as Posters, Cards or List", action: #selector(cardsClicked(_:)))
+        case .inspector:
+            return button(id, "sidebar.right", label: "Show Info", tip: "Show Info (⌘I)", action: #selector(inspectorClicked))
         case .search:
             let search = NSSearchToolbarItem(itemIdentifier: id)
             search.label = "Filter"
@@ -353,6 +364,7 @@ import HomeScreenModel
         historyGroup.isHidden = false
         historyGroup.subitems[0].isEnabled = canBack
         historyGroup.subitems[1].isEnabled = canForward
+        historyGroup.subitems[2].isEnabled = canUp
         crumbs = path
         windowTitle = path.last?.title ?? ""
         resetPathMenu()
@@ -464,7 +476,7 @@ import HomeScreenModel
     func clickHome() { onHome?() }
 
     func clickHistory(_ i: Int) {
-        if i == 0 { onBack?() } else if i == 1 { onForward?() }
+        if i == 0 { onBack?() } else if i == 1 { onForward?() } else if i == 2 { onUp?() }
     }
 
     func clickZoom(_ i: Int) {

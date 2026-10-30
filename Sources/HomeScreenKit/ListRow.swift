@@ -7,27 +7,25 @@ import HomeScreenModel
 /// others leave; when the window is narrow the columns go, the least needed first (Viewed, Inside, then Dates), so
 /// that the name keeps `minName`.
 struct ListColumns: Equatable {
-    enum Column: CaseIterable {
-        case name, inside, dates, viewed, size
-    }
+    typealias Column = TableColumn
 
     /// The container's padding at the sides.
     static let edge: CGFloat = 12
     static let gap: CGFloat = 10
     static let minName: CGFloat = 160
     /// The mockup's column widths.
-    static let widths: [Column: CGFloat] = [.inside: 64, .dates: 118, .viewed: 104, .size: 52]
+    static let widths: [Column: CGFloat] = Dictionary(uniqueKeysWithValues: Column.allCases.map { ($0, $0.width) })
     /// Which columns are kept first when the width is short.
     private static let priority: [Column] = [.size, .dates, .inside, .viewed]
 
     /// Each shown column's left edge and width.
     let frames: [Column: (x: CGFloat, width: CGFloat)]
 
-    init(width: CGFloat, metrics: GridMetrics = GridMetrics()) {
+    init(width: CGFloat, metrics: GridMetrics = GridMetrics(), selected: Set<Column> = Column.standard) {
         let nameX = Self.edge + metrics.listCover + Self.gap
         var room = width - Self.edge - nameX - Self.minName
         var kept = Set<Column>()
-        for column in Self.priority {
+        for column in (selected == Column.standard ? Self.priority : Column.allCases.filter { $0 != .name }) where selected.contains(column) {
             let need = Self.widths[column]! + Self.gap
             guard need <= room else { continue }
             room -= need
@@ -35,13 +33,18 @@ struct ListColumns: Equatable {
         }
         var frames: [Column: (x: CGFloat, width: CGFloat)] = [:]
         var right = width - Self.edge
-        for column in [Column.size, .viewed, .dates, .inside] where kept.contains(column) {
+        for column in Column.allCases.reversed() where kept.contains(column) {
             let w = Self.widths[column]!
             frames[column] = (right - w, w)
             right -= w + Self.gap
         }
         frames[.name] = (nameX, max(0, right - nameX))
         self.frames = frames
+    }
+
+    static func minimumWidth(for selected: Set<Column>, metrics: GridMetrics) -> CGFloat {
+        2 * edge + metrics.listCover + gap + minName
+            + selected.filter { $0 != .name }.reduce(0) { $0 + $1.width + gap }
     }
 
     static func == (a: ListColumns, b: ListColumns) -> Bool {
@@ -73,6 +76,8 @@ final class ListRow: FolderCard {
     /// The archive's type next to the name, outlined (`ZIP`).
     let typeChip = TextChip(.outlined(size: 9.5))
     private let separator = CALayer()
+    var selectedColumns = TableColumn.standard { didSet { if selectedColumns != oldValue { updateMetadata(); needsLayout = true } } }
+    private var metadataLabels: [TableColumn: CardText] = [:]
     /// The 1 pt line under the row; the last row of the container has none (the container's edge is there).
     var showsSeparator = true { didSet { separator.isHidden = !showsSeparator } }
 
@@ -105,7 +110,7 @@ final class ListRow: FolderCard {
     private var middle: CGFloat { (bounds.height - 1) / 2 }
 
     override var nameLine: CGRect {
-        let c = ListColumns(width: bounds.width, metrics: metrics)
+        let c = ListColumns(width: bounds.width, metrics: metrics, selected: selectedColumns)
         let name = c[.name] ?? (x: 0, width: bounds.width)
         return CGRect(x: name.x, y: (middle - 8).rounded(), width: name.width, height: 16)
     }
@@ -114,7 +119,7 @@ final class ListRow: FolderCard {
     /// 70 % and 45 % of the column), on the row's middle.
     override var waitingCover: (rect: CGRect, radius: CGFloat, topOnly: Bool) { (pictureFrame, Self.coverRadius, false) }
     override var waitingLines: [CGRect] {
-        let c = ListColumns(width: bounds.width, metrics: metrics), h = Self.waitingLineHeight
+        let c = ListColumns(width: bounds.width, metrics: metrics, selected: selectedColumns), h = Self.waitingLineHeight
         let y = (middle - h / 2).rounded()
         return zip([ListColumns.Column.inside, .dates], Self.waitingWidths).compactMap { column, fraction in
             c[column].map { CGRect(x: $0.x, y: y, width: ($0.width * fraction).rounded(), height: h) }
@@ -126,6 +131,7 @@ final class ListRow: FolderCard {
         // No poster seam, no cover chip (the type is beside the name), no ✓ or RTL in the mockup's row.
         for view in [coverChip, checkIcon, rtlLabel, fallbackLabel, viewedLabel, warningLabel] as [NSView] { view.isHidden = true }
         typeChip.text = item.badge ?? ""
+        updateMetadata()
         if let s = summary {
             insideLabel.stringValue = CardSummaryText.listInside(s, pages: holdsPages)
             yearsLabel.stringValue = CardSummaryText.years(s) ?? item.date.map(Self.dateText) ?? ""
@@ -138,6 +144,22 @@ final class ListRow: FolderCard {
             insideLabel.stringValue = item.format ?? fallbackLabel.stringValue
             yearsLabel.stringValue = item.date.map(Self.dateText) ?? ""
             sizeLabel.stringValue = item.bytes.flatMap { CardSummaryText.size(CardSummary(bytes: $0)) } ?? ""
+        }
+    }
+
+    private func updateMetadata() {
+        // Default rows allocate none of the optional cells. Retain cells once used while this row is pooled.
+        for column in selectedColumns where !TableColumn.standard.contains(column) {
+            if metadataLabels[column] == nil {
+                let label = CardText()
+                label.font = CardFont.text(11.5)
+                label.textColor = Chrome.Palette.card.label
+                addSubview(label)
+                metadataLabels[column] = label
+            }
+            let label = metadataLabels[column]!
+            label.stringValue = column.text(for: item)
+            label.toolTip = label.stringValue.isEmpty ? nil : label.stringValue
         }
     }
 
@@ -158,7 +180,7 @@ final class ListRow: FolderCard {
         separator.frame = CGRect(x: 0, y: bounds.height - 1, width: bounds.width, height: 1)
         CATransaction.commit()
         layoutCover(pictureFrame, radius: Self.coverRadius)
-        let c = ListColumns(width: bounds.width, metrics: metrics)
+        let c = ListColumns(width: bounds.width, metrics: metrics, selected: selectedColumns)
         let s = summary
         layoutNameLine(nameLine, after: [(typeChip, typeChip.fittingSize, !typeChip.text.isEmpty),
                                          (twoPagesIcon, CGSize(width: 13, height: 13), s?.twoPages ?? false),
@@ -168,6 +190,7 @@ final class ListRow: FolderCard {
             label.isHidden = false
             label.frame = CGRect(x: f.x, y: (middle - height / 2).rounded(), width: f.width, height: height)
         }
+        for (column, label) in metadataLabels { place(label, column, height: 15) }
         place(insideLabel, .inside, height: 15)
         place(sizeLabel, .size, height: 14)
         // Dates: the bars (12 tall) and the years on one bottom line.

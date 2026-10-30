@@ -58,6 +58,18 @@ public final class HomeBrowserView: NSView {
     public var onResize: ((HomeResize) -> Void)?
     /// After every move: the app keeps the last folder.
     public var onLocation: ((BrowserLocation) -> Void)?
+    /// Compatibility option for browsers that follow the pointer. False keeps click/keyboard selection stable;
+    /// the card's own hover decorations are independent. Configure before the first listing.
+    public var selectsOnHover = true
+    /// Selection or its listing facts changed; nil when navigation/filtering removes it. No file access.
+    public var onSelectionChange: ((BrowserEntry?) -> Void)?
+    private var reportedSelection: BrowserEntry?
+    private func reportSelection() {
+        let entry = selectedEntry
+        guard entry != reportedSelection else { return }
+        reportedSelection = entry
+        onSelectionChange?(entry)
+    }
     /// The location on screen got its first complete listing, with its entries (`HomeView` gives them to the tree's
     /// node of the folder and lists the path's other folders only after it).
     var onListingComplete: ((BrowserLocation, [BrowserEntry]) -> Void)?
@@ -173,6 +185,7 @@ public final class HomeBrowserView: NSView {
     private(set) var filter = BrowserFilter()
     private var footerText: (line: String, state: String?) = ("", nil)
     private var indexByID: [String: Int] = [:]
+    private var indicesByURL: [URL: [Int]] = [:]
     var sort: BrowserSort { sortChoice.current }
     /// The folder's sort and the last direction of each field in this view (More and ⌥1–3).
     private var sortChoice = BrowserSortChoice(current: .standard)
@@ -254,7 +267,8 @@ public final class HomeBrowserView: NSView {
 
     private func updateTopInset() {
         let inset = topInset
-        guard loadingBottom.constant != inset || skeletonTop.constant != inset || pageTop?.constant != inset else { return }
+        let pageInsetChanged = pageTop.map { $0.constant != inset } ?? false
+        guard loadingBottom.constant != inset || skeletonTop.constant != inset || pageInsetChanged else { return }
         loadingBottom.constant = inset
         skeletonTop.constant = inset
         pageTop?.constant = inset
@@ -305,6 +319,13 @@ public final class HomeBrowserView: NSView {
     var rowPool: [ListRow] = []
     /// The column heads over the list's rows; made with the first list.
     var listHeader: ListHeader?
+    var tableColumns: Set<TableColumn> = {
+        guard let saved = UserDefaults.standard.stringArray(forKey: "HomeScreenKit.tableColumns") else { return TableColumn.standard }
+        return Set(saved.compactMap(TableColumn.init(rawValue:))).union([.name])
+    }()
+    var availableTableColumns: Set<TableColumn> {
+        tableColumns.filter { $0.isAvailable(for: files.mediaKind) }.union([.name])
+    }
     /// The list's container under its rows.
     var listPlate: ListPlate?
     /// How the folders and archives of this location are drawn, from the source; a narrow column shows posters anyway.
@@ -419,6 +440,7 @@ public final class HomeBrowserView: NSView {
         toolbar.onCrumb = { [weak self] location in self?.show(location, selecting: nil) }
         toolbar.onBack = { [weak self] in self?.goBack() }
         toolbar.onForward = { [weak self] in self?.goForward() }
+        toolbar.onUp = { [weak self] in self?.goUp() }
         toolbar.onSortKey = { [weak self] key in self?.sortKeyChosen(key) }
         toolbar.onCardStyle = { [weak self] style in self?.chooseCardStyle(style) }
         toolbar.onZoom = { [weak self] step in self?.onResize?(step) }
@@ -895,6 +917,7 @@ public final class HomeBrowserView: NSView {
 
     /// Under the path: while names come, how many; else the selected card; else the footer line.
     private func updateSubtitle() {
+        reportSelection()
         let loading = listing?.more == true ? listing?.entries.count : nil
         var line = loading.map { "Loading… \(BrowserSummary.number($0))" } ?? footerText.line
         if loading == nil, let state = footerText.state, !state.isEmpty {
@@ -1258,7 +1281,12 @@ public final class HomeBrowserView: NSView {
 
     // MARK: Rename and trash
 
-    private var selectedEntry: BrowserEntry? { selectedIndex.map { entries[$0] } }
+    public var selectedEntry: BrowserEntry? {
+        guard let index = selectedIndex else { return nil }
+        var entry = entries[index]
+        if let latest = facts[entry.id] { entry.facts = latest }
+        return entry
+    }
 
     /// The name field over the selected card's title (F2, or the app's Rename… item).
     public func beginRename() {
@@ -1384,8 +1412,18 @@ public final class HomeBrowserView: NSView {
     }
 
     private func setEntries(_ new: [BrowserEntry]) {
+        let new = new.map { entry -> BrowserEntry in
+            guard let i = indexByID[entry.id], entries.indices.contains(i), entries[i].url == entry.url,
+                  let previous = entries[i].lastViewedAt,
+                  entry.lastViewedAt.map({ $0 < previous }) ?? true else { return entry }
+            var value = entry
+            value.lastViewedAt = previous
+            return value
+        }
         entries = new
         indexByID = Dictionary(new.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { a, _ in a })
+        indicesByURL = Dictionary(grouping: Array(new.indices), by: { new[$0].url })
+        if new.isEmpty { reportSelection() }
         tile()
     }
 
@@ -1544,6 +1582,7 @@ public final class HomeBrowserView: NSView {
                                         supportsTabs: true))
             return
         }
+        dropRestore()
         select(id: id, scrolls: false)
         if clickCount > 1 { activate(id, .open) }
     }
@@ -1692,7 +1731,12 @@ public final class HomeBrowserView: NSView {
     /// Cards for the rows in view and a screen either side; the others go back to their pool. `atLeast`: the second
     /// pass after a legacy scroller came keeps the first pass's height, so the scroller stays (below).
     func tile(atLeast: CGFloat = 0) {
-        let width = scroll.contentSize.width > 0 ? scroll.contentSize.width : bounds.width
+        let viewportWidth = scroll.contentSize.width > 0 ? scroll.contentSize.width : bounds.width
+        let expandedTable = shownCardStyle(width: viewportWidth) == .list && availableTableColumns != TableColumn.standard
+        if scroll.hasHorizontalScroller != expandedTable { scroll.hasHorizontalScroller = expandedTable }
+        let width = expandedTable
+            ? max(viewportWidth, ListColumns.minimumWidth(for: availableTableColumns, metrics: self.metrics) + 2 * GridMetrics().collectionEdge)
+            : viewportWidth
         gridWidth = width
         sections = makeSections()
         var metrics = self.metrics
@@ -1715,7 +1759,7 @@ public final class HomeBrowserView: NSView {
             // (`auto` names leave the slots under 160 pt: shorter), and without it the scroller would go, the grid
             // widen and the passes never end.
             scroll.tile()
-            if atLeast == 0, scroll.contentSize.width != width { return tile(atLeast: height) }
+            if atLeast == 0, scroll.contentSize.width != viewportWidth { return tile(atLeast: height) }
         }
         let visible = scroll.contentView.documentVisibleRect
         let range = grid.indices(in: visible, margin: max(visible.height, 1))
@@ -1772,7 +1816,10 @@ public final class HomeBrowserView: NSView {
                 if file.metrics != grid.metrics { file.metrics = grid.metrics }
             }
             if let folder = card as? FolderCard, folder.metrics != grid.metrics { folder.metrics = grid.metrics }
-            if let row = card as? ListRow { row.showsSeparator = i < entries.count - 1 }
+            if let row = card as? ListRow {
+                row.showsSeparator = i < entries.count - 1
+                row.selectedColumns = availableTableColumns
+            }
             // Straight to the slot: a view's frame animates only in an animation group that allows it (the sidebar's).
             card.frame = grid.frame(of: i)
         }
@@ -1893,7 +1940,14 @@ public final class HomeBrowserView: NSView {
         card.onClick = { [weak self] middle, flags, clickCount in
             self?.clicked(id, middle: middle, flags: flags, clickCount: clickCount)
         }
-        card.onHover = { [weak self] in self?.select(id: id, scrolls: false) }
+        card.onHover = { [weak self] in
+            guard let self, self.selectsOnHover else { return }
+            self.select(id: id, scrolls: false)
+        }
+        card.onContextMenu = { [weak self] in
+            self?.dropRestore()
+            self?.select(id: id, scrolls: false)
+        }
         card.onMenu = { [weak self] item in self?.menuChosen(item, id) }
     }
 
@@ -1940,7 +1994,7 @@ public final class HomeBrowserView: NSView {
                             summary: summary, count: entry.count,
                             format: entry.isFile && !entry.url.pathExtension.isEmpty ? entry.url.pathExtension.uppercased() : nil,
                             date: entry.date, bytes: entry.size, facts: entry.facts ?? facts[entry.id],
-                            waiting: waits(entry, summary: summary))
+                            waiting: waits(entry, summary: summary), lastViewedAt: entry.lastViewedAt)
     }
 
     /// Whether the source may still send the card's facts or cover (`HomeCardItem.waiting`): a folder or an archive in
@@ -2079,9 +2133,24 @@ public final class HomeBrowserView: NSView {
 
     /// Files' facts learned after their listing (a poster made, a photo's EXIF read), for the place on screen: kept
     /// until the place changes, and drawn at once on the cards in view (file-cards spec §2). O(live).
+    /// Updates only addressed cards; history remains owned by the application, independently of cached facts.
+    public func setLastViewed(_ dates: [URL: Date]) {
+        var selectedChanged = false
+        for (url, date) in dates {
+            for i in indicesByURL[url] ?? [] where entries.indices.contains(i) {
+                guard entries[i].isFile, entries[i].lastViewedAt.map({ $0 < date }) ?? true else { continue }
+                entries[i].lastViewedAt = date
+                if let card = live[i] { card.show(item(for: entries[i])) }
+                if entries[i].id == selectedID { selectedChanged = true }
+            }
+        }
+        if selectedChanged { reportSelection() }
+    }
+
     public func setFacts(_ new: [String: FileFacts]) {
         guard !new.isEmpty else { return }
         facts.merge(new) { _, latest in latest }
+        if let selectedID, new[selectedID] != nil { reportSelection() }
         for (i, card) in live where new[card.item.id] != nil && entries.indices.contains(i) {
             let item = item(for: entries[i])
             if card.item != item { card.show(item) }

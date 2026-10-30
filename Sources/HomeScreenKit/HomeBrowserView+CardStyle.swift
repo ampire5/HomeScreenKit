@@ -31,6 +31,13 @@ extension HomeBrowserView {
         if shown, listHeader == nil {
             let header = ListHeader()
             header.onSort = { [weak self] key in self?.sortKeyChosen(key) }
+            header.onColumns = { [weak self] columns in
+                guard let self else { return }
+                self.tableColumns = columns
+                UserDefaults.standard.set(TableColumn.allCases.filter { columns.contains($0) }.map(\.rawValue),
+                                          forKey: "HomeScreenKit.tableColumns")
+                self.tile()
+            }
             document.addSubview(header)
             listHeader = header
             let plate = ListPlate()
@@ -41,6 +48,8 @@ extension HomeBrowserView {
         header.isHidden = !shown
         plate.isHidden = !shown
         guard shown else { return }
+        header.mediaKind = files.mediaKind
+        header.selectedColumns = availableTableColumns
         header.sortable = sortKeys
         header.sort = sort
         header.metrics = grid.metrics

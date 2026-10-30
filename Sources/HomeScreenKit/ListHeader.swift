@@ -18,8 +18,10 @@ final class ListHeader: NSView {
     /// The sort shown: its column carries ↑ or ↓.
     var sort = BrowserSort.standard { didSet { if sort != oldValue { showTitles() } } }
 
-    private static let names: [ListColumns.Column: String] = [.name: "Name", .inside: "Inside", .dates: "Dates",
-                                                              .viewed: "Viewed", .size: "Size"]
+    private static let names = Dictionary(uniqueKeysWithValues: TableColumn.allCases.map { ($0, $0.title) })
+    var selectedColumns = TableColumn.standard { didSet { if selectedColumns != oldValue { needsLayout = true } } }
+    var mediaKind = FileStyle.MediaKind.photo
+    var onColumns: ((Set<TableColumn>) -> Void)?
     private static let keys: [ListColumns.Column: BrowserSort.Key] = [.name: .name, .dates: .date, .size: .size]
 
     private var labels: [ListColumns.Column: CardText] = [:]
@@ -47,6 +49,7 @@ final class ListHeader: NSView {
             addSubview(label)
             labels[column] = label
         }
+        toolTip = "Right-click to choose columns"
         showTitles()
         appearanceChanged()
     }
@@ -58,7 +61,7 @@ final class ListHeader: NSView {
     // MARK: Shown
 
     /// The heads' texts in column order, whether or not the width has room for them.
-    var titles: [String] { ListColumns.Column.allCases.map { labels[$0]!.stringValue } }
+    var titles: [String] { ListColumns.Column.allCases.filter { selectedColumns.contains($0) }.map { labels[$0]!.stringValue } }
 
     private func showTitles() {
         for column in ListColumns.Column.allCases {
@@ -104,7 +107,7 @@ final class ListHeader: NSView {
         rim.path = Self.top(bounds.insetBy(dx: -0.25, dy: -0.25), radius: Self.radius + 0.25, closed: false)
         separator.frame = CGRect(x: 0, y: bounds.height - 1, width: bounds.width, height: 1)
         CATransaction.commit()
-        columns = ListColumns(width: bounds.width, metrics: metrics)
+        columns = ListColumns(width: bounds.width, metrics: metrics, selected: selectedColumns)
         let h = ceil(CardFont.lineHeight(CardFont.text(11)))
         for column in ListColumns.Column.allCases {
             let label = labels[column]!
@@ -112,6 +115,35 @@ final class ListHeader: NSView {
             label.isHidden = false
             label.frame = CGRect(x: f.x, y: 7, width: f.width, height: h)
         }
+    }
+
+    override func menu(for event: NSEvent) -> NSMenu? {
+        let menu = NSMenu(title: "Columns")
+        menu.autoenablesItems = false
+        for column in TableColumn.allCases where column.isAvailable(for: mediaKind) {
+            let item = NSMenuItem(title: column.title, action: #selector(toggleColumn(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = column.rawValue
+            item.state = selectedColumns.contains(column) ? .on : .off
+            item.isEnabled = column != .name
+            menu.addItem(item)
+        }
+        menu.addItem(.separator())
+        let reset = NSMenuItem(title: "Default Columns", action: #selector(resetColumns), keyEquivalent: "")
+        reset.target = self
+        menu.addItem(reset)
+        return menu
+    }
+
+    @objc private func toggleColumn(_ sender: NSMenuItem) {
+        guard let key = sender.representedObject as? String, let column = TableColumn(rawValue: key), column != .name else { return }
+        if !selectedColumns.insert(column).inserted { selectedColumns.remove(column) }
+        onColumns?(selectedColumns)
+    }
+
+    @objc private func resetColumns() {
+        selectedColumns = TableColumn.standard
+        onColumns?(selectedColumns)
     }
 
     // MARK: Clicks

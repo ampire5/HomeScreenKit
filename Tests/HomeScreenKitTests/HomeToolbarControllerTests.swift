@@ -157,14 +157,16 @@ import Testing
         var log: [String] = []
         controller.onBack = { log.append("back") }
         controller.onForward = { log.append("forward") }
+        controller.onUp = { log.append("up") }
         controller.onZoom = { log.append($0 == .smallerSize ? "smaller" : $0 == .largerSize ? "larger" : "\($0)") }
         controller.onHome = { log.append("home") }
         controller.clickHistory(0)
         controller.clickHistory(1)
+        controller.clickHistory(2)
         controller.clickZoom(0)
         controller.clickZoom(1)
         controller.clickHome()
-        #expect(log == ["back", "forward", "smaller", "larger", "home"])
+        #expect(log == ["back", "forward", "up", "smaller", "larger", "home"])
     }
 
     /// The slider sends a size, and only a new one; showing a size moves it without sending.
@@ -177,6 +179,21 @@ import Testing
         controller.dragZoomSlider(to: 200)
         controller.dragZoomSlider(to: 200.2)
         #expect(sent == [.to(200)])
+    }
+
+    @Test func upButtonFollowsTheLocation() throws {
+        let controller = HomeToolbarController()
+        let window = attach(controller)
+        let history = try #require(controller.nsToolbar.items.first {
+            $0.itemIdentifier == HomeToolbarItem.history.identifier
+        } as? NSToolbarItemGroup)
+        #expect(history.subitems.count == 3)
+        let up = try #require(history.subitems.first { $0.label == "Up" })
+        controller.show(path: [("Places", .places), ("a", .folder(a))], canBack: false, canForward: false, canUp: true)
+        #expect(up.isEnabled)
+        controller.show(path: [("Places", .places)], canBack: true, canForward: false, canUp: false)
+        #expect(!up.isEnabled)
+        withExtendedLifetime(window) {}
     }
 
     @Test func navigationFollowsThePath() {
