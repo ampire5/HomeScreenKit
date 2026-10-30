@@ -39,6 +39,7 @@ public struct HomeCardItem: Equatable, Sendable {
     /// capitals), the date and the size in bytes.
     public var format: String?
     public var date: Date?
+    public var lastViewedAt: Date?
     public var bytes: Int64?
     /// A file's facts (file-cards spec): the facts line under a poster, the rows of a file card.
     public var facts: FileFacts?
@@ -51,7 +52,8 @@ public struct HomeCardItem: Equatable, Sendable {
     public init(id: String, title: String, subtitle: String? = nil, tooltip: String, symbol: String,
                 progress: Double? = nil, badge: String? = nil, isDimmed: Bool = false, menu: [HomeMenuItem] = [],
                 glassSymbol: Bool = false, summary: CardSummary? = nil, count: Int? = nil, format: String? = nil,
-                date: Date? = nil, bytes: Int64? = nil, facts: FileFacts? = nil, waiting: Bool = false) {
+                date: Date? = nil, bytes: Int64? = nil, facts: FileFacts? = nil, waiting: Bool = false, lastViewedAt: Date? = nil) {
+        self.lastViewedAt = lastViewedAt
         self.facts = facts
         self.waiting = waiting
         self.format = format

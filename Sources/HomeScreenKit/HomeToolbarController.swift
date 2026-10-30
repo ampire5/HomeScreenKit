@@ -19,6 +19,7 @@ import HomeScreenModel
     }
     var onBack: (() -> Void)?
     var onForward: (() -> Void)?
+    var onUp: (() -> Void)?
     var onCrumb: ((BrowserLocation) -> Void)?
     /// A sort field chosen: the view decides the direction (`BrowserSortChoice`).
     var onSortKey: ((BrowserSort.Key) -> Void)?
@@ -146,8 +147,9 @@ import HomeScreenModel
         case .home:
             return button(id, "house", label: "Start Page", tip: "Start Page (⇧⌘H)", action: #selector(homeClicked))
         case .history:
-            return group(id, [("chevron.left", "Back", "Back"), ("chevron.right", "Forward", "Forward")], mode: .momentary,
-                         label: "History", tip: "Back and Forward", action: #selector(historyClicked(_:)))
+            return group(id, [("chevron.left", "Back", "Back"), ("chevron.right", "Forward", "Forward"),
+                              ("arrow.up", "Up", "Enclosing Folder (⌘↑)")], mode: .momentary,
+                         label: "Navigation", tip: "Back, Forward and Enclosing Folder", action: #selector(historyClicked(_:)))
         case .path:
             let menu = NSMenuToolbarItem(itemIdentifier: id)
             menu.image = symbol("folder", "Path")
@@ -362,6 +364,7 @@ import HomeScreenModel
         historyGroup.isHidden = false
         historyGroup.subitems[0].isEnabled = canBack
         historyGroup.subitems[1].isEnabled = canForward
+        historyGroup.subitems[2].isEnabled = canUp
         crumbs = path
         windowTitle = path.last?.title ?? ""
         resetPathMenu()
@@ -473,7 +476,7 @@ import HomeScreenModel
     func clickHome() { onHome?() }
 
     func clickHistory(_ i: Int) {
-        if i == 0 { onBack?() } else if i == 1 { onForward?() }
+        if i == 0 { onBack?() } else if i == 1 { onForward?() } else if i == 2 { onUp?() }
     }
 
     func clickZoom(_ i: Int) {

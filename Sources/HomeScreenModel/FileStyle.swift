@@ -4,6 +4,9 @@ import CoreGraphics
 /// over the picture's height), and whether a card carries the entry's own line (`BrowserEntry.subtitle`) and progress
 /// on its picture, as video apps put the length and how far it was watched. Photos unless the app says otherwise.
 public struct FileStyle: Equatable, Sendable {
+    public enum MediaKind: Sendable { case photo, video }
+    /// Semantic capabilities, independent of the app's displayed noun.
+    public var mediaKind: MediaKind
     public var noun: String
     public var aspect: CGFloat
     public var facts: Bool
@@ -11,7 +14,8 @@ public struct FileStyle: Equatable, Sendable {
     /// names are under the pictures (file-cards spec §2).
     public var factsLine: Bool
 
-    public init(noun: String, aspect: CGFloat, facts: Bool, factsLine: Bool = false) {
+    public init(noun: String, aspect: CGFloat, facts: Bool, factsLine: Bool = false, mediaKind: MediaKind = .photo) {
+        self.mediaKind = mediaKind
         self.noun = noun
         self.aspect = aspect
         self.facts = facts
@@ -19,7 +23,7 @@ public struct FileStyle: Equatable, Sendable {
     }
 
     public static let photos = FileStyle(noun: "photo", aspect: 1, facts: false)
-    public static let videos = FileStyle(noun: "video", aspect: 16.0 / 9, facts: true, factsLine: true)
+    public static let videos = FileStyle(noun: "video", aspect: 16.0 / 9, facts: true, factsLine: true, mediaKind: .video)
 
     /// `Photos`, `Videos`: the heading over a folder's files.
     public var heading: String { noun.prefix(1).uppercased() + noun.dropFirst() + "s" }

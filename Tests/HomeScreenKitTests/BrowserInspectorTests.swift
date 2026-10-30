@@ -3,6 +3,92 @@ import Testing
 @testable import HomeScreenKit
 
 @MainActor @Suite struct BrowserInspectorTests {
+    @Test func explicitSelectionSurvivesHoverAndMovesByClickAndKeys() async throws {
+        let source = FakeHomeSource()
+        let folder = URL(fileURLWithPath: "/Examples")
+        let files = ["a.jpg", "b.jpg", "c.jpg"].map { BrowserEntry(url: folder.appendingPathComponent($0), name: $0, kind: .file) }
+        let browser = HomeBrowserView(source: source)
+        browser.selectsOnHover = false
+        browser.frame = CGRect(x: 0, y: 0, width: 1200, height: 800)
+        browser.show(.folder(folder), selecting: nil)
+        await settle { source.listed.contains(folder) }
+        source.yield(folder, files)
+        await settle { browser.selectedEntry != nil }
+        browser.layoutSubtreeIfNeeded()
+        var changes: [String?] = []
+        browser.onSelectionChange = { changes.append($0?.id) }
+        let a = try #require(browser.card(for: files[0].id) as? PhotoCard)
+        let b = try #require(browser.card(for: files[1].id) as? PhotoCard)
+        let c = try #require(browser.card(for: files[2].id) as? PhotoCard)
+        let hover = try #require(NSEvent.enterExitEvent(with: .mouseEntered, location: .zero, modifierFlags: [],
+            timestamp: 0, windowNumber: 0, context: nil, eventNumber: 0, trackingNumber: 0, userData: nil))
+        b.mouseEntered(with: hover)
+        #expect(b.isHovered)
+        #expect(browser.selectedEntry?.id == files[0].id)
+        #expect(a.isSelected && !b.isSelected)
+        #expect(!a.ring.isHidden && b.ring.isHidden)
+        #expect(changes.isEmpty)
+        let point = b.convert(NSPoint(x: b.bounds.midX, y: b.bounds.midY), to: nil)
+        let click = try #require(NSEvent.mouseEvent(with: .leftMouseUp, location: point, modifierFlags: [],
+            timestamp: 0, windowNumber: 0, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+        b.mouseUp(with: click)
+        #expect(browser.selectedEntry?.id == files[1].id)
+        #expect(!a.isSelected && b.isSelected)
+        #expect(changes == [files[1].id])
+        c.mouseEntered(with: hover)
+        #expect(browser.selectedEntry?.id == files[1].id)
+        #expect(changes == [files[1].id])
+        browser.keyDown(with: keyEvent(code: 124, chars: ""))
+        #expect(browser.selectedEntry?.id == files[2].id)
+        #expect(changes == [files[1].id, files[2].id])
+    }
+
+    @Test func explicitClickCancelsASelectionStillWaitingForItsRestoredFile() async throws {
+        for contextMenu in [false, true] {
+            let source = FakeHomeSource()
+            let folder = URL(fileURLWithPath: "/Examples")
+            let files = ["a.jpg", "b.jpg", "c.jpg"].map { BrowserEntry(url: folder.appendingPathComponent($0), name: $0, kind: .file) }
+            let browser = HomeBrowserView(source: source)
+            browser.selectsOnHover = false
+            browser.frame = CGRect(x: 0, y: 0, width: 1200, height: 800)
+            browser.show(.folder(folder), selecting: files[2].id)
+            await settle { source.listed.contains(folder) }
+            source.yieldPartial(folder, Array(files.prefix(2)))
+            await settle { browser.entries.count == 2 }
+            browser.layoutSubtreeIfNeeded()
+            let card = try #require(browser.card(for: files[1].id))
+            let point = card.convert(NSPoint(x: card.bounds.midX, y: card.bounds.midY), to: nil)
+            let click = try #require(NSEvent.mouseEvent(with: contextMenu ? .rightMouseDown : .leftMouseUp,
+                location: point, modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil,
+                eventNumber: 0, clickCount: 1, pressure: 1))
+            if contextMenu { #expect(card.menu(for: click) != nil) }
+            else { card.mouseUp(with: click) }
+            #expect(browser.selectedEntry?.id == files[1].id)
+            source.yield(folder, files)
+            await settle { browser.hasCompleteListing && browser.entries.count == 3 }
+            #expect(browser.selectedEntry?.id == files[1].id)
+        }
+    }
+
+    @Test func contextMenuRequestIsExplicitSelectionEvenWithoutHoverSelection() async throws {
+        let source = FakeHomeSource()
+        let folder = URL(fileURLWithPath: "/Examples")
+        let files = ["cat.jpg", "dog.jpg"].map { BrowserEntry(url: folder.appendingPathComponent($0), name: $0, kind: .file) }
+        let browser = HomeBrowserView(source: source)
+        browser.selectsOnHover = false
+        browser.frame = CGRect(x: 0, y: 0, width: 1200, height: 800)
+        browser.show(.folder(folder), selecting: nil)
+        await settle { source.listed.contains(folder) }
+        source.yield(folder, files)
+        await settle { browser.selectedEntry != nil }
+        browser.layoutSubtreeIfNeeded()
+        let card = try #require(browser.card(for: files[1].id))
+        let click = try #require(NSEvent.mouseEvent(with: .rightMouseDown, location: .zero, modifierFlags: [],
+            timestamp: 0, windowNumber: 0, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+        #expect(card.menu(for: click) != nil)
+        #expect(browser.selectedEntry?.id == files[1].id)
+    }
+
     @Test func hiddenInspectorFactoryWaitsForFirstRequestAndIsRetained() {
         let source = FakeHomeSource()
         let home = HomeView(source: source)

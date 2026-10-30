@@ -29,11 +29,17 @@ public struct FileFacts: Equatable, Sendable, Codable {
     public var exposureBias: Double?
     /// When the photo was taken (DateTimeOriginal).
     public var taken: Date?
+    /// Header facts already stored by a source's catalog; absent in older records.
+    public var colorSpace: String?
+    public var orientation: Int?
+    public var progressive: Bool?
+    public var typeIdentifier: String?
 
     public init(width: Int? = nil, height: Int? = nil, duration: Double? = nil, codec: String? = nil, fps: Double? = nil,
                 bitrate: Int? = nil, transfer: Transfer? = nil, camera: String? = nil, lens: String? = nil,
                 exposure: Double? = nil, aperture: Double? = nil, iso: Int? = nil, focalLength: Double? = nil,
-                exposureBias: Double? = nil, taken: Date? = nil) {
+                exposureBias: Double? = nil, taken: Date? = nil, colorSpace: String? = nil, orientation: Int? = nil,
+                progressive: Bool? = nil, typeIdentifier: String? = nil) {
         self.width = width
         self.height = height
         self.duration = duration
@@ -49,6 +55,10 @@ public struct FileFacts: Equatable, Sendable, Codable {
         self.focalLength = focalLength
         self.exposureBias = exposureBias
         self.taken = taken
+        self.colorSpace = colorSpace
+        self.orientation = orientation
+        self.progressive = progressive
+        self.typeIdentifier = typeIdentifier
     }
 
     /// A video's facts: a codec, a rate or a length.

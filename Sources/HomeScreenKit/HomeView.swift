@@ -161,7 +161,7 @@ public final class HomeView: NSView {
 
     public override func layout() {
         super.layout()
-        sidebarView.contentTopInset = browser.topInset
+        sidebarView.contentTopInset = max(browser.topInset, sidebarView.safeAreaInsets.top)
         applySidebarWidth()
         applyInspectorWidth()
     }
@@ -313,13 +313,21 @@ public final class HomeView: NSView {
     /// The path's folders are being listed (`followTask` has not finished).
     private var isFollowing = false
 
-    public init(source: HomeSource) {
+    /// Extends the browser's edge under native window chrome without covering
+    /// the interactive content. Older systems retain the ordinary browser view.
+    public init(source: HomeSource, extendsBrowserBackground: Bool = false) {
         self.source = source
         browser = HomeBrowserView(source: source)
         let sidebarController = NSViewController()
         sidebarController.view = sidebarView
         let browserController = NSViewController()
-        browserController.view = browser
+        if extendsBrowserBackground, #available(macOS 26.0, *) {
+            let background = NSBackgroundExtensionView()
+            background.contentView = browser
+            browserController.view = background
+        } else {
+            browserController.view = browser
+        }
         sidebarItem = NSSplitViewItem(sidebarWithViewController: sidebarController)
         super.init(frame: .zero)
         wantsLayer = true
