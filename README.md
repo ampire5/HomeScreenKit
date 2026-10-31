@@ -1,5 +1,7 @@
 # HomeScreenKit
 
+Developer guide: [architecture and code map](docs/architecture.md).
+
 Home as Photos draws it, shared by Loupe (Home) and, later, FrameScrub: a sidebar of sources and places beside a browser
 of folders and the app's own lists. Only the view: each app keeps its own files, recent list and sessions and hands
 them over through `HomeSource`.
