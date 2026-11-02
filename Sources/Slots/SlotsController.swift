@@ -363,7 +363,15 @@ import SlotChrome
     // MARK: Contents
 
 
-    private func holdsFocus(_ slot: Slot) -> Bool { slot.view.holds(container.window?.firstResponder as? NSView) }
+    private func holdsFocus(_ slot: Slot) -> Bool {
+        guard let responder = container.window?.firstResponder as? NSView else { return false }
+        if slot.view.holds(responder) { return true }
+        // AppKit can place its shared field editor outside the control's hierarchy.
+        // The edited control remains its delegate and belongs to the owning slot.
+        guard let editor = responder as? NSTextView, editor.isFieldEditor,
+              let owner = editor.delegate as? NSView else { return false }
+        return slot.view.holds(owner)
+    }
     private static func tabID(_ content: SlotTabID) -> String { content.rawValue }
     private func content(ofTab id: String, in slot: Slot) -> SlotTabID? { slot.tabs.first { $0.rawValue == id } }
     private func select(_ content: SlotTabID, in slot: Slot) {

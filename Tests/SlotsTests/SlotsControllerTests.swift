@@ -79,3 +79,24 @@ import SlotModel
         #expect(made == 1 && dropped == 0)
     }
 }
+
+@MainActor private final class FieldEditorOwner: NSTextField, NSTextViewDelegate {}
+
+extension SlotsControllerTests {
+    @Test func closingTabWithSharedFieldEditorReturnsFocusToContent() {
+        let (w, host) = host(); defer { w.close() }
+        let owner = FieldEditorOwner()
+        var focusReturned = 0
+        host.onFocusContent = { focusReturned += 1 }
+        host.register(SlotTabDescriptor(id: a, title: "A") { _ in SlotPage(view: owner) })
+        host.configure(SlotConfiguration(tabs: [a]), edge: .right)
+        host.start(); host.show(.right)
+        let editor = NSTextView(frame: CGRect(x: 0, y: 0, width: 100, height: 30))
+        editor.isFieldEditor = true
+        editor.delegate = owner
+        w.contentView?.addSubview(editor) // shared editor is outside the slot hierarchy
+        #expect(w.makeFirstResponder(editor))
+        host.remove(a, edge: .right)
+        #expect(focusReturned == 1)
+    }
+}
