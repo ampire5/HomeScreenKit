@@ -259,9 +259,9 @@ public final class HomeView: NSView {
         item.isCollapsed = true
         inspectorItem = item
         splitController.addSplitViewItem(item)
-        inspectorCollapseObservation = item.observe(\.isCollapsed, options: [.new]) { [weak self] item, _ in
+        inspectorCollapseObservation = item.observe(\.isCollapsed, options: [.new]) { [weak self] _, _ in
             MainActor.assumeIsolated {
-                guard let self, !self.isParked else { return }
+                guard let self, !self.isParked, let item = self.inspectorItem else { return }
                 self.isInspectorVisible = !item.isCollapsed
             }
         }
@@ -349,9 +349,9 @@ public final class HomeView: NSView {
             MainActor.assumeIsolated { self?.splitDidResize() }
         })
         // The divider dragged past its minimum collapses the sidebar: the app is told as for the toggle's click.
-        collapseObservation = sidebarItem.observe(\.isCollapsed, options: [.new]) { [weak self] item, _ in
+        collapseObservation = sidebarItem.observe(\.isCollapsed, options: [.new]) { [weak self] _, _ in
             MainActor.assumeIsolated {
-                guard let self, !self.isParked, item.isCollapsed == self.isSidebarVisible else { return }
+                guard let self, !self.isParked, self.sidebarItem.isCollapsed == self.isSidebarVisible else { return }
                 self.onSidebarToggle?()
             }
         }

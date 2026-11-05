@@ -6,7 +6,7 @@ Home as Photos draws it, shared by Loupe (Home) and, later, FrameScrub: a sideba
 of folders and the app's own lists. Only the view: each app keeps its own files, recent list and sessions and hands
 them over through `HomeSource`.
 
-Requirements: macOS 26+, swift-tools 6.2 (the targets build in the Swift 5 language mode).
+Requirements: macOS 26+, swift-tools 6.2 (the targets build in the Swift 6 language mode).
 
 ![Home in Loupe: the sidebar's folder tree beside the browser](https://raw.githubusercontent.com/ampire5/Loupe/main/docs/images/sidebar.webp)
 

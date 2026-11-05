@@ -182,8 +182,9 @@ import SlotChrome
         let center = NotificationCenter.default
         observers = [
             center.addObserver(forName: NSWindow.didResignKeyNotification, object: nil, queue: .main) { [weak self] note in
+                guard let window = note.object as? NSWindow else { return }
                 MainActor.assumeIsolated {
-                    guard let self, let window = note.object as? NSWindow, window === self.container.window else { return }
+                    guard let self, window === self.container.window else { return }
                     self.resigned()
                 }
             },
@@ -191,8 +192,9 @@ import SlotChrome
                 MainActor.assumeIsolated { self?.resigned() }
             },
             center.addObserver(forName: NSWindow.willMoveNotification, object: nil, queue: .main) { [weak self] note in
+                guard let window = note.object as? NSWindow else { return }
                 MainActor.assumeIsolated {
-                    guard let self, let window = note.object as? NSWindow, window === self.container.window else { return }
+                    guard let self, window === self.container.window else { return }
                     self.windowMoving = true
                 }
             },

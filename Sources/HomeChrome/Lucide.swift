@@ -11,16 +11,22 @@ import os
 /// and `Icons` draws one or the other by the set the user picked.
 public enum Lucide {
     /// The font, made from the embedded data, not registered with the system: nothing outside the app sees it.
-    private static let graphicsFont: CGFont? = {
+    // CGFont lacks Sendable; construction and every use stay inside this lock.
+    // Replace uncheckedState/withLockUnchecked when the SDK supplies checked font sendability.
+    private static let graphicsFont = OSAllocatedUnfairLock(uncheckedState: { () -> CGFont? in
         guard let data = Data(base64Encoded: fontData, options: .ignoreUnknownCharacters),
               let provider = CGDataProvider(data: data as CFData) else { return nil }
         return CGFont(provider)
-    }()
+    }())
 
     /// The font at `size`: a glyph's 24-unit box is `size` square, standing on the baseline.
     public static func font(ofSize size: CGFloat) -> NSFont {
-        guard let graphicsFont else { return .systemFont(ofSize: size) }
-        return CTFontCreateWithGraphicsFont(graphicsFont, size, nil, nil) as NSFont
+        // The result is a newly created font owned by this caller; the cached CGFont never escapes.
+        let font = graphicsFont.withLockUnchecked { graphicsFont -> CTFont? in
+            guard let graphicsFont else { return nil }
+            return CTFontCreateWithGraphicsFont(graphicsFont, size, nil, nil)
+        }
+        return font.map { $0 as NSFont } ?? .systemFont(ofSize: size)
     }
 
     /// The character of the icon `name` (Lucide's name: `aperture`, `hard-drive`), nil for one the font lacks.

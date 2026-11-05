@@ -34,7 +34,12 @@ A card selection and a hover are distinct events; inspector consumers must follo
 
 ## Concurrency and lifetime
 
-View mutations are main-actor work. The browser cancels old listing/order/loading work and uses a generation check
+The package uses Swift 6 language mode with compiler-checked concurrency and no default global-actor isolation.
+View mutations and shared prebuilt `ChromeGlyph` values are main-actor work. `Icons.set` and Lucide's font/image
+caches use locks so image rendering remains callable from background work; cached font access never escapes
+the lock, and font construction returns a fresh caller-owned font. KVO callbacks read split items through their
+main-actor view owner; window notifications extract the actor-owned window before entering main-actor work.
+The browser cancels old listing/order/loading work and uses a generation check
 when navigating; sources must likewise stop obsolete reads and watchers. A stream may deliver an answer after
 cancellation, so publishing must remain generation-bound. Source I/O/thumbnail decoding belongs off the main actor.
 The package's motion/reveal work must stop at rest and honor visibility; do not add perpetual polling to cards.

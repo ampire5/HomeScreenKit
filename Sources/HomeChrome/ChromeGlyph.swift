@@ -140,22 +140,22 @@ public struct ChromeGlyph {
     // MARK: The cards' glyphs (view box 16)
 
     /// ⧉: two pages side by side.
-    public static let twoPages = ChromeGlyph([Part(rect(1.5, 3, 6, 10, radius: 1)), Part(rect(8.5, 3, 6, 10, radius: 1))])
+    @MainActor public static let twoPages = ChromeGlyph([Part(rect(1.5, 3, 6, 10, radius: 1)), Part(rect(8.5, 3, 6, 10, radius: 1))])
     /// ✓.
-    public static let check = ChromeGlyph([Part(svg("M3.5 8.5l3 3 6-7"))])
-    public static let photo = ChromeGlyph([Part(rect(2, 3, 12, 10, radius: 2)), Part(svg("M2 11l3.5-3.5 3 3 2-2L14 12"))])
-    public static let folder = ChromeGlyph([Part(svg(
+    @MainActor public static let check = ChromeGlyph([Part(svg("M3.5 8.5l3 3 6-7"))])
+    @MainActor public static let photo = ChromeGlyph([Part(rect(2, 3, 12, 10, radius: 2)), Part(svg("M2 11l3.5-3.5 3 3 2-2L14 12"))])
+    @MainActor public static let folder = ChromeGlyph([Part(svg(
         "M2 4.5A1.5 1.5 0 0 1 3.5 3h3l1.5 1.5h4.5A1.5 1.5 0 0 1 14 6v5.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 11.5z"))])
     /// A cloud struck through: the volume is not there.
-    public static let offline = ChromeGlyph([Part(svg("M4.5 12.5h7a2.5 2.5 0 0 0 .4-5 4 4 0 0 0-7.6-1A3 3 0 0 0 4.5 12.5z")),
+    @MainActor public static let offline = ChromeGlyph([Part(svg("M4.5 12.5h7a2.5 2.5 0 0 0 .4-5 4 4 0 0 0-7.6-1A3 3 0 0 0 4.5 12.5z")),
                                              Part(svg("M2 2l12 12"))])
     /// A warning triangle: the archive cannot be read.
-    public static let warning = ChromeGlyph([Part(svg("M8 2.5l6 11H2z")), Part(svg("M8 7v3M8 11.6v.4"))])
+    @MainActor public static let warning = ChromeGlyph([Part(svg("M8 2.5l6 11H2z")), Part(svg("M8 7v3M8 11.6v.4"))])
 
     // MARK: The strip capsule's glyphs
 
     /// "The strip is beside the photo": a window with its bottom band filled (16 × 14).
-    public static let stripBeside = ChromeGlyph(viewBox: CGSize(width: 16, height: 14), [
+    @MainActor public static let stripBeside = ChromeGlyph(viewBox: CGSize(width: 16, height: 14), [
         Part(rect(1, 1, 14, 12, radius: 2)),
         Part(rect(3, 8.5, 10, 2.5, radius: 0.6), stroke: false, fill: .ink),
     ])
@@ -167,14 +167,14 @@ public struct ChromeGlyph {
         ])
     }
     /// A pin, in outline (pin the strip) or filled (unpin it) (14 × 14, round strokes).
-    public static let pin = ChromeGlyph(viewBox: CGSize(width: 14, height: 14), round: true,
+    @MainActor public static let pin = ChromeGlyph(viewBox: CGSize(width: 14, height: 14), round: true,
                                         [Part(svg("M5 1.5h4M5.5 1.5v4L3.5 8h7l-2-2.5v-4M7 8v4.5"))])
-    public static let pinFilled = ChromeGlyph(viewBox: CGSize(width: 14, height: 14), round: true, [
+    @MainActor public static let pinFilled = ChromeGlyph(viewBox: CGSize(width: 14, height: 14), round: true, [
         Part(svg("M5 1.5h4M5.5 1.5v4L3.5 8h7l-2-2.5v-4z"), fill: .ink),
         Part(svg("M7 8v4.5")),
     ])
     /// A chevron down: hide the strip (14 × 14, round strokes).
-    public static let chevronDown = ChromeGlyph(viewBox: CGSize(width: 14, height: 14), round: true,
+    @MainActor public static let chevronDown = ChromeGlyph(viewBox: CGSize(width: 14, height: 14), round: true,
                                                 [Part(svg("M3 5l4 4 4-4"))])
 }
 

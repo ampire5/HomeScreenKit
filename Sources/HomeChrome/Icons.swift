@@ -1,4 +1,5 @@
 import AppKit
+import os
 
 /// The apps' line icons in the set the user picked (the apps' `icon-set` key): Lucide (`Lucide`, the default since
 /// 2026-10-27) or SF Symbols. Callers name an icon as an SF Symbol (`folder`, `play.fill`); in the Lucide set a name
@@ -16,7 +17,12 @@ public enum Icons {
     }
 
     /// Set by the app at launch, before its first window: an image already made keeps its set.
-    public static var set = Set.lucide
+    private static let selectedSet = OSAllocatedUnfairLock(initialState: Set.lucide)
+
+    public static var set: Set {
+        get { selectedSet.withLock { $0 } }
+        set { selectedSet.withLock { $0 = newValue } }
+    }
 
     /// Lucide's box drawn this many times the point size asked of an SF Symbol: an SF Symbol at 16 pt is about 20 pt
     /// across, as Lucide's box at 20 is with its point of room each side.

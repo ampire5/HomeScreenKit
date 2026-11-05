@@ -33,5 +33,5 @@ let package = Package(
         .testTarget(name: "FilmstripModelTests", dependencies: ["FilmstripModel"]),
         .testTarget(name: "FilmstripTests", dependencies: ["Filmstrip", "FilmstripModel"]),
     ],
-    swiftLanguageModes: [.v5]
+    swiftLanguageModes: [.v6]
 )

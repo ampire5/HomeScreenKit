@@ -12,7 +12,7 @@ import Testing
         #expect(abs(hv.minY - 7) < 0.001 && abs(hv.maxY - 12) < 0.001)
     }
 
-    @Test func arcsStayInsideTheViewBox() {
+    @Test @MainActor func arcsStayInsideTheViewBox() {
         // The cloud's arcs (one with a radius too small for its chord, which SVG grows) end where they should.
         let cloud = ChromeGlyph.svg("M4.5 12.5h7a2.5 2.5 0 0 0 .4-5 4 4 0 0 0-7.6-1A3 3 0 0 0 4.5 12.5z").boundingBoxOfPath
         #expect(cloud.minX > 1 && cloud.maxX < 15 && cloud.minY > 2 && cloud.maxY <= 12.51)
