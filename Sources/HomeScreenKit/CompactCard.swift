@@ -82,7 +82,7 @@ final class CompactCard: FolderCard {
             ownLabel.stringValue = ""
             foldersLabel.stringValue = ""
             sizeLabel.stringValue = ""
-            yearsLabel.stringValue = ""
+            yearsLabel.stringValue = sortDateText ?? ""
             viewedLabel.stringValue = ""
             insideLabel.stringValue = fallbackLabel.stringValue
             return
@@ -111,7 +111,7 @@ final class CompactCard: FolderCard {
             foldersLabel.attributedValue = nil
         }
         sizeLabel.stringValue = CardSummaryText.size(s) ?? "—"
-        yearsLabel.stringValue = CardSummaryText.span(s) ?? ""
+        yearsLabel.stringValue = sortDateText ?? CardSummaryText.span(s) ?? ""
         viewedLabel.stringValue = CardSummaryText.progressLine(s, now: Self.now()) ?? ""
         if let problem = s.problem { warningLabel.stringValue = Self.warning(problem, short: false) }
     }
@@ -162,7 +162,7 @@ final class CompactCard: FolderCard {
         insideLabel.isHidden = true
         // Row 3: the bars (3 pt, 12 tall) and the span, on the row's bottom.
         let y3 = tops[2], h3 = rows[2]
-        histogram.isHidden = s == nil || histogram.bins.isEmpty
+        histogram.isHidden = showsSortDate || s == nil || histogram.bins.isEmpty
         var cursor = x
         if !histogram.isHidden {
             let hw = histogram.barsWidth

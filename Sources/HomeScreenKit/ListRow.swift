@@ -134,11 +134,11 @@ final class ListRow: FolderCard {
         updateMetadata()
         if let s = summary {
             insideLabel.stringValue = CardSummaryText.listInside(s, pages: holdsPages)
-            yearsLabel.stringValue = CardSummaryText.years(s) ?? item.date.map(Self.dateText) ?? ""
+            yearsLabel.stringValue = sortDateText ?? CardSummaryText.years(s) ?? item.date.map(Self.dateText) ?? ""
             sizeLabel.stringValue = CardSummaryText.size(s) ?? "—"
         } else if isWaitingForFacts {
             insideLabel.stringValue = ""
-            yearsLabel.stringValue = ""
+            yearsLabel.stringValue = sortDateText ?? ""
             sizeLabel.stringValue = ""
         } else {
             insideLabel.stringValue = item.format ?? fallbackLabel.stringValue
@@ -199,7 +199,7 @@ final class ListRow: FolderCard {
         if let f = c[.dates], !yearsLabel.stringValue.isEmpty {
             yearsLabel.isHidden = false
             var x = f.x
-            if s != nil, !histogram.bins.isEmpty {
+            if !showsSortDate, s != nil, !histogram.bins.isEmpty {
                 histogram.isHidden = false
                 let hw = histogram.barsWidth
                 histogram.frame = CGRect(x: x, y: datesTop, width: hw, height: 12)

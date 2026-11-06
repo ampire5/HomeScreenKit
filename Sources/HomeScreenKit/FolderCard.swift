@@ -8,6 +8,11 @@ import HomeScreenModel
 /// cover's `ZIP` chip and the warning line. The colours are `Chrome.Palette.card`'s; the subclasses place the parts
 /// and pick their sizes. A card without `summary` shows its subtitle where the facts go.
 class FolderCard: GridCard {
+    /// When Date orders the grid, show its actual key rather than the contents' date range.
+    var showsSortDate = false {
+        didSet { if showsSortDate != oldValue { itemChanged(); needsLayout = true } }
+    }
+    var sortDateText: String? { showsSortDate ? item.date.map(ListRow.dateText) ?? "—" : nil }
     // MARK: Parts
 
     /// The card's plate (posters and compact cards) and its 0.5 pt ring, outside the plate as the mockups' shadow is.
@@ -184,6 +189,9 @@ class FolderCard: GridCard {
         warningLabel.isHidden = true
         progressBar.isHidden = shownProgress == nil
         toolTip = Self.tooltip(item, summary: s, pages: holdsPages, noun: fileNoun)
+        if showsSortDate, let date = item.date {
+            toolTip = "Modified " + ListRow.dateText(date) + "\n" + (toolTip ?? "")
+        }
         waitingChanged()
     }
 

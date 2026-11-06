@@ -30,6 +30,8 @@ integration. Filmstrip and slot hosts supply their own items and callbacks; they
 
 Flow: source location → `list` stream → browser sorting/filtering/layout → visible cards → source image requests →
 `setImage` delivery. Card reuse and visibility determine picture demand, not the size of the whole collection.
+When Date orders folders, all card styles show the entry's sorting date instead of the contents' date span;
+summary delivery and card reuse preserve that choice. Other sorts retain the contents' dates and histogram.
 A card selection and a hover are distinct events; inspector consumers must follow the intended selection contract.
 
 ## Concurrency and lifetime

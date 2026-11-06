@@ -403,6 +403,41 @@ import Testing
         zip(entries, entries.dropFirst()).allSatisfy { ascending ? $0.date! < $1.date! : $0.date! > $1.date! }
     }
 
+    @Test func dateSortedFolderCardsShowTheDateThatDeterminesTheirOrder() async {
+        let source = FakeHomeSource()
+        var older = BrowserFixtures.folder("Z older")
+        older.date = Date(timeIntervalSince1970: 1_700_000_000)
+        var newer = BrowserFixtures.folder("A newer")
+        newer.date = Date(timeIntervalSince1970: 1_800_000_000)
+        for style in CardStyle.allCases {
+            source.sorts[x.path] = BrowserSort(key: .date, ascending: false)
+            source.cardStyles[.folder(x)] = style
+            let view = await shown(source, [older, newer])
+            let initial = view.card(for: newer.id) as! FolderCard
+            #expect(initial.yearsLabel.stringValue == ListRow.dateText(newer.date!))
+            if let poster = initial as? PosterCard {
+                poster.frame.size.width = 400
+                poster.layoutSubtreeIfNeeded()
+                #expect(poster.viewedLabel.stringValue == ListRow.dateText(newer.date!))
+            }
+            let summary = CardSummary(photos: 1, first: Date(timeIntervalSince1970: 0), last: Date(timeIntervalSince1970: 0))
+            for entry in view.entries { view.setSummary(summary, for: entry.id) }
+            view.layoutSubtreeIfNeeded()
+            #expect(view.entries.map(\.name) == ["A newer", "Z older"])
+            let card = view.card(for: newer.id) as! FolderCard
+            #expect(card.yearsLabel.stringValue == ListRow.dateText(newer.date!), "\(style)")
+            #expect(card.histogram.isHidden, "\(style)")
+            if let poster = card as? PosterCard {
+                poster.frame.size.width = 400
+                poster.layoutSubtreeIfNeeded()
+                #expect(poster.viewedLabel.stringValue.hasPrefix(ListRow.dateText(newer.date!)))
+            }
+            view.sortKeyChosen(.name)
+            #expect(!card.showsSortDate)
+            #expect(card.yearsLabel.stringValue != ListRow.dateText(newer.date!))
+        }
+    }
+
     @Test func bigFolderOrdersOffMain() async {
         let source = FakeHomeSource()
         let view = await shown(source, Self.shuffled)

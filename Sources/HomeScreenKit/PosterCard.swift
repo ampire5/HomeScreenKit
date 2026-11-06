@@ -68,15 +68,15 @@ final class PosterCard: FolderCard {
         coverAlert.isHidden = problem == nil
         guard let s = summary else {
             insideLabel.stringValue = fallbackLabel.stringValue
-            yearsLabel.stringValue = ""
-            viewedLabel.stringValue = ""
-            progressWords = ""
+            yearsLabel.stringValue = sortDateText ?? ""
+            progressWords = sortDateText ?? ""
+            viewedLabel.stringValue = progressWords
             progressWithRecency = nil
             return
         }
         insideLabel.stringValue = CardSummaryText.facts(s, pages: holdsPages, withInside: withInside, noun: fileNoun)
-        yearsLabel.stringValue = CardSummaryText.years(s) ?? ""
-        let words = [CardSummaryText.span(s), CardSummaryText.viewed(s)].compactMap { $0 }
+        yearsLabel.stringValue = sortDateText ?? CardSummaryText.years(s) ?? ""
+        let words = [sortDateText ?? CardSummaryText.span(s), CardSummaryText.viewed(s)].compactMap { $0 }
         progressWords = words.joined(separator: " · ")
         progressWithRecency = s.visited.map { (words + [CardSummaryText.ago($0, now: Self.now())]).joined(separator: " · ") }
         viewedLabel.stringValue = progressWithRecency ?? progressWords
@@ -147,7 +147,7 @@ final class PosterCard: FolderCard {
                 right -= 8
             }
             let factsWidth = insideLabel.isHidden ? 0 : insideLabel.textWidth + 8
-            histogram.isHidden = problem != nil || !histogram.hasBars || x + factsWidth + histogram.barsWidth > right
+            histogram.isHidden = showsSortDate || problem != nil || !histogram.hasBars || x + factsWidth + histogram.barsWidth > right
             if !histogram.isHidden {
                 let hw = histogram.barsWidth
                 right -= hw
@@ -163,7 +163,7 @@ final class PosterCard: FolderCard {
         let y3 = line2.maxY + band.gap
         histogram.barWidth = 4
         histogram.barGap = 2
-        histogram.isHidden = !histogram.hasBars
+        histogram.isHidden = showsSortDate || !histogram.hasBars
         var cursor = x
         if !histogram.isHidden {
             let hw = histogram.barsWidth
