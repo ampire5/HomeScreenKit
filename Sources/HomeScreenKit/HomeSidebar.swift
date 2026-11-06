@@ -427,6 +427,17 @@ private final class SidebarLineView: NSView {
             isHeading = false
             depth = d
             title.stringValue = row.title
+            let text = NSMutableAttributedString(attributedString: title.attributedStringValue)
+            let name = row.title as NSString
+            // SF's slash sits against adjacent letters. Give it breathing room without
+            // inserting spaces into the folder's name (including composed Unicode names).
+            for (index, unit) in row.title.utf16.enumerated() where unit == 0x2F {
+                if index > 0 {
+                    text.addAttribute(.kern, value: 1, range: name.rangeOfComposedCharacterSequence(at: index - 1))
+                }
+                text.addAttribute(.kern, value: 1, range: NSRange(location: index, length: 1))
+            }
+            title.attributedStringValue = text
             count.stringValue = row.count.map(BrowserSummary.number) ?? ""
             symbol.image = Self.symbol(row.symbol)
             triangle.image = row.expandable ? Self.triangle(expanded ? "chevron.down" : "chevron.right") : nil
