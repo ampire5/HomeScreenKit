@@ -44,6 +44,8 @@ when navigating; sources must likewise stop obsolete reads and watchers. A strea
 cancellation, so publishing must remain generation-bound. Source I/O/thumbnail decoding belongs off the main actor.
 The package's motion/reveal work must stop at rest and honor visibility; do not add perpetual polling to cards.
 Slots keep content ownership distinct from reveal and placement. Reusing hidden pages is preferable to rebuilding.
+The app disables `SlotsController.isEnabled` while a browser covers the player. This suspends presentation,
+edge reveal, page visibility and layout reservations without changing saved tabs, pinning or shown state.
 
 ## Change and verification map
 

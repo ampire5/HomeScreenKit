@@ -11,6 +11,30 @@ import SlotChrome
     public var onFocusContent: (() -> Void)?
     public var topInset: CGFloat = 0 { didSet { if topInset != oldValue { refreshLayout() } } }
     public var revealBand: CGFloat = EdgeReveal.sideBand
+    /// Temporarily release the window to another screen without changing saved slot configuration.
+    public var isEnabled = true {
+        didSet {
+            guard isEnabled != oldValue else { return }
+            for slot in orderedSlots {
+                slot.flash?.cancel(); slot.flash = nil
+                slot.capsuleCheck?.cancel(); slot.capsuleCheck = nil
+                slot.reveal.reset()
+                hideTongue(slot)
+                if !isEnabled { slot.page?.cancelInteraction() }
+                slot.view.isHidden = !isEnabled || !slot.view.isShown
+                updatePagesShown(slot)
+            }
+            applyLayout(revealing: nil, animated: false)
+            if isEnabled {
+                for slot in orderedSlots where slot.view.isShown {
+                    slot.clock.shown(pointerInside: isPointer(in: slot), now: Self.now)
+                    updateCapsule(slot, animated: false)
+                }
+            }
+            updateAutoHideTimer()
+            onChanged?()
+        }
+    }
     private var started = false
     private var descriptors: [SlotTabID: SlotTabDescriptor] = [:]
     private var descriptorOrder: [SlotTabID] = []
@@ -92,7 +116,7 @@ import SlotChrome
         for slot in orderedSlots { invalidatePage(id, edge: slot.edge) }
     }
     public var shownPages: [SlotPage] {
-        orderedSlots.filter { $0.view.isShown }.sorted { $0.shownOrder < $1.shownOrder }.compactMap(\.page)
+        orderedSlots.filter { isEnabled && $0.view.isShown }.sorted { $0.shownOrder < $1.shownOrder }.compactMap(\.page)
     }
     public func configure(_ configuration: SlotConfiguration, edge: SlotEdge) {
         guard let slot = slots[edge] else { return }
@@ -115,7 +139,7 @@ import SlotChrome
         refresh(slot)
     }
     public func activeTab(_ edge: SlotEdge) -> SlotTabID? { slots[edge]?.shownTab }
-    public func isShown(_ edge: SlotEdge) -> Bool { slots[edge]?.view.isShown ?? false }
+    public func isShown(_ edge: SlotEdge) -> Bool { isEnabled && (slots[edge]?.view.isShown ?? false) }
     public func page(_ id: SlotTabID, edge: SlotEdge) -> SlotPage? { slots[edge]?.pages[id] }
     public func capsule(_ edge: SlotEdge) -> SlotCapsuleView? { slots[edge]?.view.capsule }
     public func effectiveMode(_ edge: SlotEdge) -> SlotMode { slots[edge].map(effectiveMode) ?? .overlay }
@@ -166,6 +190,7 @@ import SlotChrome
                 showCounter += 1
                 slot.shownOrder = showCounter
                 slot.view.setShown(true, animated: false)
+                if !isEnabled { slot.view.isHidden = true }
                 updatePagesShown(slot)
                 updateCapsule(slot, animated: false)
             } else {
@@ -215,18 +240,19 @@ import SlotChrome
     private var orderedSlots: [Slot] { SlotEdge.allCases.compactMap { slots[$0] } }
 
     public var isPointerOverShownSlot: Bool {
-        guard let window = container.window else { return false }
+        guard isEnabled, let window = container.window else { return false }
         let point = container.convert(window.mouseLocationOutsideOfEventStream, from: nil)
         return orderedSlots.contains { $0.view.isShown && $0.view.frame.contains(point) }
     }
 
     public func toggle(_ edge: SlotEdge) {
-        guard let slot = slots[edge] else { return }
+        guard isEnabled, let slot = slots[edge] else { return }
         if slot.view.isShown { hide(slot) } else { show(slot, focus: true) }
     }
 
     @discardableResult
     public func hideOverlays() -> Bool {
+        guard isEnabled else { return false }
         let shown = orderedSlots.filter { $0.view.isShown && effectiveMode($0) == .overlay }
         for slot in shown { hide(slot) }
         return !shown.isEmpty
@@ -249,6 +275,7 @@ import SlotChrome
     }
 
     private func show(_ slot: Slot, focus: Bool) {
+        guard isEnabled else { return }
         refresh(slot, creating: true)
         slot.flash?.cancel()   // an explicit show is the user's: a flash under way no longer hides it
         slot.flash = nil
@@ -312,7 +339,7 @@ import SlotChrome
             revealing?.view.setShown(true, animated: false)
             return
         }
-        let shown = orderedSlots.filter { $0.view.isShown || $0 === revealing }
+        let shown = orderedSlots.filter { isEnabled && ($0.view.isShown || $0 === revealing) }
         var sizes: [SlotEdge: (mode: SlotMode, size: CGFloat)] = [:]
         for slot in shown { sizes[slot.edge] = (slot.setting.mode, CGFloat(slot.setting.size)) }
         let layout = SlotLayout.compute(.init(container: container.bounds, slots: sizes,
@@ -465,7 +492,7 @@ import SlotChrome
         updatePagesShown(slot)
     }
     private func updatePagesShown(_ slot: Slot) {
-        for (id, page) in slot.pages { page.visibilityChanged(slot.view.isShown && slot.shownTab == id) }
+        for (id, page) in slot.pages { page.visibilityChanged(isEnabled && slot.view.isShown && slot.shownTab == id) }
     }
     private func wire(_ slot: Slot) {
         let view = slot.view
@@ -705,7 +732,7 @@ import SlotChrome
         // Left, right, middle, back and forward only: a mouse or its driver can leave a higher button down in the HID
         // state for good (button 6 seen stuck system-wide, Mac Mouse Fix off or on, 2026-10-27), and the edges
         // would stay quiet until a reboot.
-        guard !container.isHiddenOrHasHiddenAncestor else { return }
+        guard isEnabled, !container.isHiddenOrHasHiddenAncestor else { return }
         let buttonHeld = NSEvent.pressedMouseButtons & 0b11111 != 0
         let bounds = container.bounds
         let quiet = container.window?.attachedSheet != nil
@@ -772,6 +799,7 @@ import SlotChrome
         autoHideTick()
     }
     private func autoHideTick() {
+        guard isEnabled else { return }
         let now = Self.now
         if NSEvent.pressedMouseButtons & 1 == 0 { windowMoving = false }   // a title-bar drag may send us no mouse-up
         var next: Double?
@@ -806,6 +834,7 @@ import SlotChrome
     /// The window resigned key or the app went to the background: overlay slots go (Zen collapses on deactivate);
     /// with a menu open, once it closes.
     private func resigned() {
+        guard isEnabled else { return }
         if menuOpen { resignedDuringMenu = true; return }
         hideOnResign()
     }
@@ -820,6 +849,7 @@ import SlotChrome
     private func updateCapsule(_ slot: Slot, animated: Bool = true) {
         slot.capsuleCheck?.cancel()
         slot.capsuleCheck = nil
+        guard isEnabled else { return }
         let now = Self.now
         slot.capsuleClock.setBusy(menuOpen || slot.view.capsule.isEditingFilter, now: now)
         let visible = effectiveMode(slot) == .pinned || slot.capsuleClock.isVisible(now: now)
@@ -834,6 +864,7 @@ import SlotChrome
     }
 
     public func flash(_ id: SlotTabID, cause: VideoChangeCause, enabled: Bool) {
+        guard isEnabled else { return }
         guard let slot = orderedSlots.first(where: { $0.shownTab == id }), slot.setting.mode == .overlay else { return }
         let restart = slot.flash != nil && enabled && (cause == .autoadvance || cause == .key)
         guard restart || SlotFlash.shouldFlash(enabled: enabled, slotShown: slot.view.isShown, cause: cause) else { return }

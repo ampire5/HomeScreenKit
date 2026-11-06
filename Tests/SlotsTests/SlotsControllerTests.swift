@@ -14,6 +14,44 @@ import SlotModel
         content.addSubview(image)
         return (w, SlotsController(container: content, above: image))
     }
+    @Test func disablingSlotsReleasesTheBrowserAndRestoresPinnedState() {
+        let (w, host) = host(); defer { w.close() }
+        var visible = false, made = 0, persisted = 0
+        host.register(SlotTabDescriptor(id: a, title: "A") { _ in
+            made += 1
+            return SlotPage(view: NSView(), visibilityChanged: { visible = $0 })
+        })
+        host.configure(SlotConfiguration(tabs: [a], mode: .pinned, shown: true), edge: .right)
+        host.start()
+        host.onPersist = { _, _ in persisted += 1 }
+        let configuration = host.configuration(.right)
+        #expect(visible)
+        host.isEnabled = false
+        #expect(!visible && host.shownPages.isEmpty && !host.isShown(.right))
+        let page = host.page(a, edge: .right)!.view
+        #expect(page.isHiddenOrHasHiddenAncestor)
+        host.show(.left)
+        host.toggle(.right)
+        #expect(!host.hideOverlays())
+        host.refreshLayout()
+        #expect(!host.isShown(.left) && page.isHiddenOrHasHiddenAncestor)
+        #expect(host.configuration(.right) == configuration && persisted == 0)
+        host.isEnabled = true
+        #expect(visible && host.isShown(.right) && made == 1)
+        #expect(host.configuration(.right) == configuration && persisted == 0)
+    }
+
+    @Test func disabledBeforeStartupKeepsPinnedViewsHidden() {
+        let (w, host) = host(); defer { w.close() }
+        host.register(SlotTabDescriptor(id: a, title: "A") { _ in SlotPage(view: NSView()) })
+        host.configure(SlotConfiguration(tabs: [a], mode: .pinned, shown: true), edge: .right)
+        host.isEnabled = false
+        host.start()
+        #expect(host.page(a, edge: .right)?.view.isHiddenOrHasHiddenAncestor == true)
+        host.isEnabled = true
+        #expect(host.page(a, edge: .right)?.view.isHiddenOrHasHiddenAncestor == false)
+    }
+
     @Test func returnDoesNotRebuildAndHideReportsInvisible() {
         let (w, host) = host(); defer { w.close() }
         var made = 0, visible = false
