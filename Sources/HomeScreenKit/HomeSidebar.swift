@@ -429,13 +429,14 @@ private final class SidebarLineView: NSView {
             title.stringValue = row.title
             let text = NSMutableAttributedString(attributedString: title.attributedStringValue)
             let name = row.title as NSString
-            // SF's slash sits against adjacent letters. Give it breathing room without
-            // inserting spaces into the folder's name (including composed Unicode names).
-            for (index, unit) in row.title.utf16.enumerated() where unit == 0x2F {
+            // A fraction slash extends over adjacent letters; some filenames use it in
+            // place of a path separator. Keep the original name, but space its glyph.
+            for (index, unit) in row.title.utf16.enumerated() where unit == 0x2F || unit == 0x2044 {
+                let spacing = unit == 0x2044 ? 3 : 1
                 if index > 0 {
-                    text.addAttribute(.kern, value: 1, range: name.rangeOfComposedCharacterSequence(at: index - 1))
+                    text.addAttribute(.kern, value: spacing, range: name.rangeOfComposedCharacterSequence(at: index - 1))
                 }
-                text.addAttribute(.kern, value: 1, range: NSRange(location: index, length: 1))
+                text.addAttribute(.kern, value: spacing, range: NSRange(location: index, length: 1))
             }
             title.attributedStringValue = text
             count.stringValue = row.count.map(BrowserSummary.number) ?? ""
