@@ -30,6 +30,8 @@ integration. Filmstrip and slot hosts supply their own items and callbacks; they
 
 Flow: source location → `list` stream → browser sorting/filtering/layout → visible cards → source image requests →
 `setImage` delivery. Card reuse and visibility determine picture demand, not the size of the whole collection.
+When Date orders folders, all card styles show the entry's sorting date instead of the contents' date span;
+summary delivery and card reuse preserve that choice. Other sorts retain the contents' dates and histogram.
 A card selection and a hover are distinct events; inspector consumers must follow the intended selection contract.
 
 ## Concurrency and lifetime
@@ -44,6 +46,8 @@ when navigating; sources must likewise stop obsolete reads and watchers. A strea
 cancellation, so publishing must remain generation-bound. Source I/O/thumbnail decoding belongs off the main actor.
 The package's motion/reveal work must stop at rest and honor visibility; do not add perpetual polling to cards.
 Slots keep content ownership distinct from reveal and placement. Reusing hidden pages is preferable to rebuilding.
+The app disables `SlotsController.isEnabled` while a browser covers the player. This suspends presentation,
+edge reveal, page visibility and layout reservations without changing saved tabs, pinning or shown state.
 
 ## Change and verification map
 

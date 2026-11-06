@@ -1799,6 +1799,7 @@ public final class HomeBrowserView: NSView {
                 if wantedIDs.contains(entry.id) { newlyConfigured = true }
             }
             let card = live[i]!
+            (card as? FolderCard)?.showsSortDate = (shownSort ?? sort).key == .date
             card.fileNoun = files.noun
             let section = grid.section(of: i)
             if let photo = card as? PhotoCard {
