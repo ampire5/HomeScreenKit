@@ -67,7 +67,7 @@ public final class HomeScreenView: NSView {
     /// The grid's scroll view: wheel and pinch reach it, and it turns resize gestures into `onResize`.
     var gridScrollView: NSScrollView { scroll }
     private let document = FlippedView()
-    private let hint = NSTextField(labelWithString: "")
+    private let hint = NSTextField(wrappingLabelWithString: "")
     private let message = HomeMessageView()
     private var headings: [NSTextField?] = []
     private var cardsBySection: [[HomeCard]] = []
@@ -95,7 +95,8 @@ public final class HomeScreenView: NSView {
         scroll.autohidesScrollers = true
         scroll.documentView = document
         scroll.onResize = { [weak self] step in self?.onResize?(step) }
-        hint.font = Chrome.Text.font(.title, weight: .regular)
+        hint.font = Chrome.Text.font(.body)
+        hint.alignment = .center
         hint.textColor = .secondaryLabelColor
         hint.translatesAutoresizingMaskIntoConstraints = false
         for view in [bar, scroll, hint, message] { addSubview(view) }
@@ -107,6 +108,7 @@ public final class HomeScreenView: NSView {
             scroll.leadingAnchor.constraint(equalTo: leadingAnchor), scroll.trailingAnchor.constraint(equalTo: trailingAnchor),
             scroll.topAnchor.constraint(equalTo: bar.bottomAnchor), scroll.bottomAnchor.constraint(equalTo: bottomAnchor),
             hint.centerXAnchor.constraint(equalTo: centerXAnchor), hint.centerYAnchor.constraint(equalTo: centerYAnchor),
+            hint.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, constant: -32),
             message.centerXAnchor.constraint(equalTo: centerXAnchor), message.centerYAnchor.constraint(equalTo: centerYAnchor),
             message.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, constant: -32),
         ])

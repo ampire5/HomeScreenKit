@@ -155,7 +155,9 @@ final class PhotoCard: GridCard {
     private var boxHeight: CGFloat { aspect == 1 ? bounds.width : (bounds.width / max(0.1, aspect)).rounded() }
 
     /// Square: the slot's box. Aspect: the image fitted in the box inset by 8 pt (that box while there is none).
-    override var lastOpenedHighlightRect: CGRect { names == .below && showsNames ? bounds : pictureRect }
+    override var lastOpenedHighlightRect: CGRect {
+        style == .square && names == .below && showsNames ? bounds : pictureRect
+    }
     override var lastOpenedHighlightRadius: CGFloat { pictureCornerRadius }
     override var lastOpenedHighlightOutset: CGFloat { 4 }
 

@@ -42,6 +42,20 @@ import Testing
         #expect(card.ring.borderWidth == 2.5)
     }
 
+    @Test func lastOpenedHighlightFollowsAspectImageWithNamesBelow() throws {
+        let card = photo(.aspect, names: .below, size: CGSize(width: 200, height: 220))
+        card.isSelected = true
+        card.isLastOpened = true
+        let highlight = try #require(card.lastOpenedHighlight)
+        for (width, height) in [(400, 100), (100, 400)] {
+            card.image = image(width, height)
+            card.layoutSubtreeIfNeeded()
+            #expect(card.ring.frame == card.pictureRect)
+            #expect(highlight.frame == card.pictureRect.insetBy(dx: -4, dy: -4))
+            #expect(!highlight.isHidden)
+        }
+    }
+
     // MARK: The mockup (photo-cards spec §1)
 
     private func photo(_ style: GridStyle, item: HomeCardItem, size: CGFloat = 200) -> PhotoCard {

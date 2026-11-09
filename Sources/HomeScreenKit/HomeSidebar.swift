@@ -384,6 +384,7 @@ private final class SidebarLineView: NSView {
         layer?.addSublayer(guides)
         light.wantsLayer = true
         light.layer?.cornerRadius = Chrome.Radius.photo
+        light.layer?.cornerCurve = .continuous
         title.lineBreakMode = .byTruncatingTail
         count.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
         count.textColor = .secondaryLabelColor
@@ -393,7 +394,7 @@ private final class SidebarLineView: NSView {
         spinner.isDisplayedWhenStopped = false
         spinner.isHidden = true
         triangle.contentTintColor = .secondaryLabelColor
-        symbol.contentTintColor = .controlAccentColor
+        symbol.contentTintColor = .secondaryLabelColor
         for view in [light, triangle, symbol, title, count, spinner] { addSubview(view) }
         addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect],
                                        owner: self, userInfo: nil))
@@ -463,16 +464,15 @@ private final class SidebarLineView: NSView {
 
     private func paint() {
         if isHeading {
-            title.font = .systemFont(ofSize: 11, weight: .semibold)
-            title.textColor = .tertiaryLabelColor
+            title.font = .systemFont(ofSize: 12, weight: .medium)
+            title.textColor = .secondaryLabelColor
             triangle.image = hovering ? Self.triangle(collapsed ? "chevron.right" : "chevron.down") : nil
             light.isHidden = true
             return
         }
-        // As in Photos: the lit row's name in semibold on a neutral plate, its symbol keeps the accent.
-        title.font = .systemFont(ofSize: 13, weight: lit ? .semibold : .regular)
+        title.font = .systemFont(ofSize: 13, weight: lit ? .medium : .regular)
         title.textColor = .labelColor
-        symbol.contentTintColor = .controlAccentColor
+        symbol.contentTintColor = lit ? .controlAccentColor : .secondaryLabelColor
         light.isHidden = !lit
         light.layer?.backgroundColor = Chrome.resolve(NSColor.labelColor.withAlphaComponent(hasKeys ? 0.14 : 0.09), in: self)
     }
@@ -498,10 +498,10 @@ private final class SidebarLineView: NSView {
     override func layout() {
         super.layout()
         let h = bounds.height, w = bounds.width
-        light.frame = CGRect(x: HomeSidebar.inset, y: 0, width: max(0, w - 2 * HomeSidebar.inset), height: h)
+        light.frame = CGRect(x: HomeSidebar.inset, y: 2, width: max(0, w - 2 * HomeSidebar.inset), height: max(0, h - 4))
         if isHeading {
             // Photos sets a heading low in its line, nearer the rows it heads.
-            title.frame = CGRect(x: 16.5 - Self.fieldInset, y: h - 15 - 4, width: max(0, w - 48), height: 15)
+            title.frame = CGRect(x: 16.5 - Self.fieldInset, y: h - 16 - 4, width: max(0, w - 48), height: 16)
             triangle.frame = CGRect(x: w - 30, y: h - 12 - 5, width: 12, height: 12)
             return
         }

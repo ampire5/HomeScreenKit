@@ -15,7 +15,7 @@ final class GridHeader: NSView {
 
     override init(frame: NSRect) {
         super.init(frame: frame)
-        label.font = Chrome.Text.font(.title)
+        label.font = Chrome.Text.digits(.title, weight: .medium)
         label.textColor = .labelColor
         addSubview(label)
     }

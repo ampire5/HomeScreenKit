@@ -33,6 +33,7 @@ import Testing
         #expect(marked?.ring.isHidden == true)
         #expect(marked?.lastOpenedHighlight?.isHidden == false)
         if let marked {
+            marked.style = .square
             marked.names = .below
             marked.layoutSubtreeIfNeeded()
             #expect(marked.lastOpenedHighlight?.frame.contains(marked.bounds) == true)

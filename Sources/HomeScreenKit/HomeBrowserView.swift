@@ -299,7 +299,7 @@ public final class HomeBrowserView: NSView {
     }
     private let message = HomeMessageView()
     /// A source's empty hint, in the middle.
-    private let hint = NSTextField(labelWithString: "")
+    private let hint = NSTextField(wrappingLabelWithString: "")
     /// The page on screen (a source's `info.page`), kept as a subview while hidden.
     var page: NSView?
     private let toast = ChromeToastView(style: .window)
@@ -362,7 +362,8 @@ public final class HomeBrowserView: NSView {
                                                object: scroll.contentView)
         toast.translatesAutoresizingMaskIntoConstraints = false
         skeleton.translatesAutoresizingMaskIntoConstraints = false
-        hint.font = Chrome.Text.font(.title, weight: .regular)
+        hint.font = Chrome.Text.font(.body)
+        hint.alignment = .center
         hint.textColor = .secondaryLabelColor
         hint.isHidden = true
         hint.translatesAutoresizingMaskIntoConstraints = false
@@ -430,6 +431,7 @@ public final class HomeBrowserView: NSView {
             statusLabel.centerYAnchor.constraint(equalTo: statusRow.centerYAnchor),
             message.centerXAnchor.constraint(equalTo: centerXAnchor), message.centerYAnchor.constraint(equalTo: centerYAnchor),
             hint.centerXAnchor.constraint(equalTo: centerXAnchor), hint.centerYAnchor.constraint(equalTo: centerYAnchor),
+            hint.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, constant: -32),
             message.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, constant: -32),
             toast.centerXAnchor.constraint(equalTo: centerXAnchor),
             toast.bottomAnchor.constraint(equalTo: statusBar.topAnchor, constant: -24),
