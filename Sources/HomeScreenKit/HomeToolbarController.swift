@@ -235,9 +235,13 @@ import HomeScreenModel
 
         override init(frame frameRect: NSRect) {
             super.init(frame: frameRect)
+            wantsLayer = true
+            layer?.cornerRadius = 8
+            layer?.cornerCurve = .continuous
+            updatePlate()
             titleLabel.textColor = .labelColor
-            titleLabel.font = .systemFont(ofSize: 14, weight: .semibold)
-            subtitleLabel.font = .systemFont(ofSize: 12)
+            titleLabel.font = .systemFont(ofSize: 14, weight: .medium)
+            subtitleLabel.font = .monospacedDigitSystemFont(ofSize: 12, weight: .regular)
             subtitleLabel.textColor = .secondaryLabelColor
             for label in [titleLabel, subtitleLabel] {
                 label.lineBreakMode = .byTruncatingTail
@@ -253,24 +257,34 @@ import HomeScreenModel
             stack.translatesAutoresizingMaskIntoConstraints = false
             addSubview(stack)
             NSLayoutConstraint.activate([
-                stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
-                stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
+                stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+                stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
                 stack.centerYAnchor.constraint(equalTo: centerYAnchor),
             ])
         }
 
         required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
+        override func viewDidChangeEffectiveAppearance() {
+            super.viewDidChangeEffectiveAppearance()
+            updatePlate()
+        }
+
+        private func updatePlate() {
+            // The native toolbar lets covers scroll beneath the location text.
+            layer?.backgroundColor = Chrome.resolve(.windowBackgroundColor, in: self)
+        }
+
         /// The whole text's width, with the stack's margins.
         var textWidth: CGFloat {
             let subtitleWidth = subtitleLabel.isHidden ? 0 : subtitleLabel.intrinsicContentSize.width
-            return ceil(max(titleLabel.intrinsicContentSize.width, subtitleWidth)) + 8
+            return ceil(max(titleLabel.intrinsicContentSize.width, subtitleWidth)) + 16
         }
 
         override var intrinsicContentSize: NSSize {
             let titleSize = titleLabel.fittingSize
             let subtitleSize = subtitleLabel.isHidden ? .zero : subtitleLabel.fittingSize
-            return NSSize(width: NSView.noIntrinsicMetric, height: titleSize.height + subtitleSize.height)
+            return NSSize(width: NSView.noIntrinsicMetric, height: titleSize.height + subtitleSize.height + 4)
         }
     }
 

@@ -30,7 +30,7 @@ class GridCard: NSView {
             let halo = CALayer()
             let color = NSColor(srgbRed: 1, green: 0.69, blue: 0.25, alpha: 1).cgColor
             halo.borderColor = color
-            halo.borderWidth = 2.5
+            halo.borderWidth = 1.5
             halo.zPosition = -1
             layer?.addSublayer(halo)
             lastOpenedHighlight = halo

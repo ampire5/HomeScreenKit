@@ -42,7 +42,7 @@ import Testing
                 marked.setFrameSize(CGSize(width: side, height: side + 20))
                 marked.layoutSubtreeIfNeeded()
                 #expect(marked.lastOpenedHighlight?.frame == marked.bounds.insetBy(dx: -4, dy: -4))
-                #expect(marked.lastOpenedHighlight?.borderWidth == 2.5)
+                #expect(marked.lastOpenedHighlight?.borderWidth == 1.5)
             }
         }
         #expect((view.card(for: next) as? PhotoCard)?.ring.isHidden == false)
