@@ -371,7 +371,7 @@ public final class HomeBrowserView: NSView {
         statusBar.blendingMode = .withinWindow
         statusBar.state = .followsWindowActiveState
         statusBar.translatesAutoresizingMaskIntoConstraints = false
-        statusLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        statusLabel.font = .monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
         statusLabel.textColor = .secondaryLabelColor
         statusLabel.lineBreakMode = .byTruncatingMiddle
         statusLabel.maximumNumberOfLines = 1
@@ -930,7 +930,9 @@ public final class HomeBrowserView: NSView {
         if isChecking { line = line.isEmpty ? "Checking…" : "Checking… · " + line }
         toolbar.show(subtitle: line)
         let selected = loading == nil ? BrowserSummary.selection(selectedEntry, fileNoun: files.noun) : ""
-        statusLabel.stringValue = selected.isEmpty ? line : selected
+        let status = selected.isEmpty ? line : selected
+        statusLabel.stringValue = status
+        statusLabel.toolTip = status.isEmpty ? nil : status
         statusRow.isHidden = statusLabel.stringValue.isEmpty
         statusBar.isHidden = statusRow.isHidden && pathRow.isHidden
     }

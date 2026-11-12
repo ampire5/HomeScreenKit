@@ -8,7 +8,7 @@ import SlotChrome
 /// tab, the shown one visible, the others kept hidden) at the card's full height, and the capsule over their top (tabs,
 /// the view's tools, pin / backdrop / hide; `SlotCapsuleView`). An empty slot shows a "+" in its middle. The slot's own layer is all that moves when it shows or hides; the video under it is untouched.
 /// Its frame is set by `SlotsController`. An overlay slot looks and moves as a compact browser sidebar does: a card a
-/// little off the edges with a soft shadow, sliding in and out on the same light spring (Zen's compact sidebar).
+/// little off the edges with a soft shadow, revealing with a light spring and sliding out with a fade.
 @MainActor final class SlotView: NSView {
     /// Overlay slots keep this far from the video's edges (Zen: half its 8 px separation).
     static let overlayInset: CGFloat = 4
@@ -40,6 +40,7 @@ import SlotChrome
 
     /// Shown, or on its way in; false once a hide has begun.
     private(set) var isShown = false
+    private var motionGeneration: UInt64 = 0
     /// The inner edge is being dragged.
     var isResizing: Bool { grip.isDragging }
 
@@ -266,11 +267,17 @@ import SlotChrome
 
     // MARK: Showing and hiding
 
-    /// Slides in from the slot's edge and back out on the same spring (`SlotMotion`: 0.25 s, about 1 % past the mark,
-    /// as Zen's compact sidebar); with Reduce Motion a short fade instead. Only this view's layer animates.
+    /// Reveal with the edge spring; dismiss with a short slide and fade. Only the slot's layer moves.
     func setShown(_ shown: Bool, animated: Bool, completion: (() -> Void)? = nil) {
+        let wasHidden = isHidden
         isShown = shown
+        motionGeneration &+= 1
+        let generation = motionGeneration
         guard let layer else { isHidden = !shown; completion?(); return }
+        let keyPath = edge == .bottom ? "transform.translation.y" : "transform.translation.x"
+        let presentation = !wasHidden ? layer.presentation() : nil
+        let opacity = presentation?.opacity ?? (wasHidden ? 0 : 1)
+        let translation = (presentation?.value(forKeyPath: keyPath) as? NSNumber)?.doubleValue
         layer.removeAnimation(forKey: "slot")
         if shown { isHidden = false }
         guard animated, window != nil else {
@@ -278,41 +285,60 @@ import SlotChrome
             completion?()
             return
         }
-        let animation: CAAnimation
-        if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
-            let fade = CABasicAnimation(keyPath: "opacity")
-            fade.fromValue = shown ? 0 : 1
-            fade.toValue = shown ? 1 : 0
-            fade.duration = SlotMotion.fade
-            animation = fade
-        } else {
-            let keyPath = edge == .bottom ? "transform.translation.y" : "transform.translation.x"
+
+        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        let fade = CABasicAnimation(keyPath: "opacity")
+        fade.fromValue = shown && !reduceMotion && wasHidden ? 1 : opacity
+        fade.toValue = shown ? 1 : 0
+        fade.duration = SlotMotion.fade
+
+        let motion = CAAnimationGroup()
+        var animations: [CAAnimation] = []
+        motion.duration = SlotMotion.fade
+        if !reduceMotion {
             let away: CGFloat = switch edge {
             case .left: -bounds.width
             case .right: bounds.width
             case .bottom: -bounds.height
             }
-            let spring = CASpringAnimation(keyPath: keyPath)
-            spring.mass = SlotMotion.mass
-            spring.stiffness = SlotMotion.stiffness
-            spring.damping = SlotMotion.damping
-            spring.fromValue = shown ? away : 0
-            spring.toValue = shown ? 0 : away
-            spring.duration = spring.settlingDuration
-            animation = spring
+            let slide: CABasicAnimation
+            if shown {
+                let spring = CASpringAnimation(keyPath: keyPath)
+                spring.mass = SlotMotion.mass
+                spring.stiffness = SlotMotion.stiffness
+                spring.damping = SlotMotion.damping
+                spring.duration = SlotMotion.duration
+                spring.fromValue = translation ?? Double(wasHidden ? away : 0)
+                spring.toValue = 0
+                slide = spring
+            } else {
+                slide = CABasicAnimation(keyPath: keyPath)
+                slide.fromValue = translation ?? 0
+                slide.toValue = max(-24, min(24, away))
+                slide.duration = SlotMotion.fade
+                slide.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0.8, 0.2, 1)
+                fade.timingFunction = slide.timingFunction
+            }
+            animations.append(slide)
+            motion.duration = slide.duration
         }
-        animation.fillMode = .forwards
-        animation.isRemovedOnCompletion = false
+        // Keep the final opacity until the completion hides the layer.
+        fade.fillMode = .forwards
+        fade.isRemovedOnCompletion = false
+        animations.append(fade)
+        motion.animations = animations
+        motion.fillMode = .forwards
+        motion.isRemovedOnCompletion = false
         CATransaction.begin()
         CATransaction.setCompletionBlock { [weak self] in
             MainActor.assumeIsolated {
-                guard let self, self.isShown == shown else { return }   // a newer show or hide took over
+                guard let self, self.motionGeneration == generation else { return }
                 if !shown { self.isHidden = true }
                 self.layer?.removeAnimation(forKey: "slot")
                 completion?()
             }
         }
-        layer.add(animation, forKey: "slot")
+        layer.add(motion, forKey: "slot")
         CATransaction.commit()
     }
 

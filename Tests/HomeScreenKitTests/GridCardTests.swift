@@ -42,6 +42,22 @@ import Testing
         #expect(card.ring.borderWidth == 2.5)
     }
 
+    @Test func shortAspectThumbnailKeepsCaptionsInsideThePhoto() {
+        let card = photo(.aspect, names: .photo)
+        card.show(HomeCardItem(id: "panorama", title: "Panorama.jpg", tooltip: "", symbol: "photo", format: "JPEG"))
+        card.image = image(400, 20)
+        card.isHovered = true
+        card.layoutSubtreeIfNeeded()
+        #expect(card.nameLabel.isHidden)
+        #expect(card.strip?.isHidden == true)
+
+        card.style = .square
+        card.layoutSubtreeIfNeeded()
+        #expect(!card.nameLabel.isHidden)
+        #expect(card.strip?.isHidden == false)
+        #expect(card.pictureRect.contains(card.nameLabel.frame))
+    }
+
     @Test func lastOpenedHighlightFollowsAspectImageWithNamesBelow() throws {
         let card = photo(.aspect, names: .below, size: CGSize(width: 200, height: 220))
         card.isSelected = true

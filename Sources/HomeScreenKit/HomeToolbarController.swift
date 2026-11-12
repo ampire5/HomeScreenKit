@@ -159,7 +159,7 @@ import HomeScreenModel
             menu.menu = NSMenu()
             return menu
         case .aspect:
-            return button(id, "rectangle.arrowtriangle.2.outward", label: "Aspect", tip: "Aspect thumbnails",
+            return button(id, "rectangle.arrowtriangle.2.outward", label: "Thumbnail shape", tip: "Show square thumbnails",
                           action: #selector(aspectClicked))
         case .filter:
             let toolbarItem = NSToolbarItem(itemIdentifier: id)
@@ -192,8 +192,8 @@ import HomeScreenModel
             ring.view = progress
             return ring
         case .cards:
-            return group(id, [("square.grid.2x2", "Posters", "as Posters (⌥⌘1)"), ("rectangle.grid.1x2", "Cards", "as Cards (⌥⌘2)"),
-                              ("list.bullet", "List", "as List (⌥⌘3)")], mode: .selectOne,
+            return group(id, [("square.grid.2x2", "Posters", "Folder posters (⌥⌘1)"), ("rectangle.grid.1x2", "Cards", "Folder cards (⌥⌘2)"),
+                              ("list.bullet", "List", "Folder list (⌥⌘3)")], mode: .selectOne,
                          label: "Folders", tip: "Show folders as Posters, Cards or List", action: #selector(cardsClicked(_:)))
         case .inspector:
             return button(id, "sidebar.right", label: "Show Info", tip: "Show Info (⌘I)", action: #selector(inspectorClicked))
@@ -435,10 +435,7 @@ import HomeScreenModel
     /// The thumbnails' shape, represented by the aspect-ratio button.
     func show(style: GridStyle) {
         gridStyle = style
-        let isSquare = style == .square
-        let tip = isSquare ? "Square thumbnails" : "Aspect thumbnails"
-        items[.aspect]?.toolTip = tip
-        items[.aspect]?.image = symbol(isSquare ? "rectangle.arrowtriangle.2.inward" : "rectangle.arrowtriangle.2.outward", tip)
+        updateAspectItem()
     }
 
     var isProgressVisible: Bool { items[.progress]?.isHidden == false }
@@ -642,7 +639,7 @@ import HomeScreenModel
     private static let sortSegmentWidth: CGFloat = 70
 
     private func updateAspectItem() {
-        let tip = gridStyle == .square ? "Square thumbnails" : "Aspect thumbnails"
+        let tip = gridStyle == .square ? "Show original proportions" : "Show square thumbnails"
         items[.aspect]?.toolTip = tip
         items[.aspect]?.image = symbol(gridStyle == .square ? "rectangle.arrowtriangle.2.inward" : "rectangle.arrowtriangle.2.outward", tip)
     }

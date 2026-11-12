@@ -307,8 +307,7 @@ final class PhotoCard: GridCard {
         let moved = strip.map { $0.isHidden == shows } ?? false
         strip?.isHidden = !shows
         CATransaction.commit()
-        // A new mark, or the strip moving the name on the picture, needs a layout.
-        if made || (moved && names == .photo) { needsLayout = true }
+        if made || moved { needsLayout = true }
     }
 
     private func makeDot() {
@@ -393,7 +392,9 @@ final class PhotoCard: GridCard {
         chipLayer?.frame = CGRect(origin: CGPoint(x: rect.minX + Self.markInset, y: rect.minY + Self.markInset),
                                   size: Self.chipSize)
         let stripHeight = Self.stripHeight
-        if let strip, let stripFormat, let stripSize {
+        if let strip {
+            let nameRoom: CGFloat = names == .photo ? 24 : 0
+            strip.isHidden = !showsStrip || rect.height < stripHeight + nameRoom
             strip.frame = CGRect(x: rect.minX, y: rect.maxY - stripHeight, width: rect.width, height: stripHeight)
             let pad = Self.stripPadding
             let line = CGRect(x: pad.width, y: pad.height, width: max(0, rect.width - 2 * pad.width),
@@ -405,14 +406,15 @@ final class PhotoCard: GridCard {
         layoutBadges(in: rect)
         // `auto` on a small tile: the name and its facts as a band over the picture while the pointer is on it.
         let band = names == .auto
-        let named = showsNames && names != .off && (!band || isHovered)
+        let fitsName = names == .below || rect.height >= 24
+        let named = showsNames && fitsName && names != .off && (!band || isHovered)
         nameLabel.isHidden = !named
         shade.isHidden = !(named && (names == .photo || band))
         if band {
-            nameLabel.font = Chrome.Text.font(.label, weight: .semibold)
+            nameLabel.font = Chrome.Text.font(.label, weight: .medium)
             nameLabel.textColor = Chrome.Palette.overMedia.text
             nameLabel.shadow = nil
-            let hasFacts = !factsLabel.stringValue.isEmpty
+            let hasFacts = rect.height >= 44 && !factsLabel.stringValue.isEmpty
             let height = min(rect.height, hasFacts ? 44 : 32)
             shade.frame = CGRect(x: rect.minX, y: rect.maxY - height, width: rect.width, height: height)
             nameLabel.frame = CGRect(x: rect.minX + 6, y: rect.maxY - (hasFacts ? 36 : 20), width: max(0, rect.width - 12), height: 16)
