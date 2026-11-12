@@ -471,6 +471,7 @@ public final class HomeBrowserView: NSView {
         toolbar.onForward = { [weak self] in self?.goForward() }
         toolbar.onUp = { [weak self] in self?.goUp() }
         toolbar.onSortKey = { [weak self] key in self?.sortKeyChosen(key) }
+        toolbar.onRecursive = { [weak self] in self?.toggleSubfolders() }
         toolbar.onCardStyle = { [weak self] style in self?.chooseCardStyle(style) }
         toolbar.onZoom = { [weak self] step in self?.onResize?(step) }
         toolbar.onStyle = { [weak self] style in self?.onStyle?(style) }
@@ -516,11 +517,28 @@ public final class HomeBrowserView: NSView {
 
     // MARK: Moving
 
+    public private(set) var includesSubfolders = false
+
+    private var canIncludeSubfolders: Bool {
+        guard case .folder(let folder) = location else { return false }
+        return source?.supportsRecursiveListing(in: folder) == true
+    }
+
+    private func toggleSubfolders() {
+        guard canIncludeSubfolders else { return }
+        includesSubfolders.toggle()
+        pendingSelection = selectedID
+        pendingAnchor = nil
+        pendingScroll = nil
+        load()
+    }
+
     var fileTabNavigation: FileTabNavigation {
         var state = FileTabNavigation(at: location)
         state.history = history
         state.selection = selection
         state.anchor = anchor
+        state.includesSubfolders = includesSubfolders
         state.history.remember(selection: selection, scroll: pendingScroll ?? scrollOffset)
         return state
     }
@@ -528,6 +546,7 @@ public final class HomeBrowserView: NSView {
     /// A tab switch replaces the navigation state even when both tabs point at the same path.
     func activateFileTab(_ state: FileTabNavigation, selecting: String? = nil) {
         history = state.history
+        includesSubfolders = state.includesSubfolders && canIncludeSubfolders
         hasShown = true
         unavailable = []
         unseen = []
@@ -558,6 +577,7 @@ public final class HomeBrowserView: NSView {
                 navigation.history.go(to: location)
                 navigation.selection = navigation.history.selection(for: location)
                 navigation.anchor = nil
+                navigation.includesSubfolders = false
             }
             if let anchor { navigation.anchor = anchor }
             activateFileTab(navigation, selecting: selecting)
@@ -573,6 +593,7 @@ public final class HomeBrowserView: NSView {
             history = BrowserHistory(start: location)
             hasShown = true
         }
+        includesSubfolders = false
         unavailable = []
         unseen = []
         paired = []
@@ -609,7 +630,13 @@ public final class HomeBrowserView: NSView {
 
     /// The source's listings of the place on screen, as they come, until the next move (`generation`).
     private func subscribe(_ generation: Int) {
-        guard let stream = source?.list(location) else { return }
+        guard let source else { return }
+        let stream: AsyncThrowingStream<BrowserListing, Error>
+        if includesSubfolders, case .folder(let folder) = location {
+            stream = source.listRecursively(in: folder)
+        } else {
+            stream = source.list(location)
+        }
         isListing = true
         listTask = Task { @MainActor [weak self] in
             do {
@@ -713,6 +740,7 @@ public final class HomeBrowserView: NSView {
     public func goUp() {
         guard case .folder(let url) = location else { return }
         rememberPlace()
+        includesSubfolders = false
         pendingSelection = history.up(parent: source?.parent(of: url) ?? .places)
         pendingScroll = nil
         load()
@@ -720,6 +748,7 @@ public final class HomeBrowserView: NSView {
 
     /// The place's remembered selection and scroll, once its entries come.
     private func restorePlace() {
+        includesSubfolders = false
         pendingSelection = history.selection(for: location)
         pendingScroll = history.scroll(for: location)
         load()
@@ -796,7 +825,7 @@ public final class HomeBrowserView: NSView {
         onMoved?(location)
         // A place visited earlier: its kept listing now, in this turn, after the move was told (its completeness is
         // told to the sidebar after it), not after the stream's hops.
-        if page == nil, self.generation == generation, let kept = source?.lastListing(for: location), kept.complete {
+        if !includesSubfolders, page == nil, self.generation == generation, let kept = source?.lastListing(for: location), kept.complete {
             apply(kept)
         }
     }
@@ -925,17 +954,18 @@ public final class HomeBrowserView: NSView {
         var noun: String?
         var groupsByDate: Bool
         var fileNoun = "photo"
+        var preservesOrder = false
     }
 
     private var arrangeInfo: ArrangeInfo {
         ArrangeInfo(noun: info?.noun, groupsByDate: info?.groupsByDate == true && shownSort?.key == .date,
-                    fileNoun: files.noun)
+                    fileNoun: files.noun, preservesOrder: info?.preservesOrder == true)
     }
 
     /// Off the main actor for a big listing: nothing here touches the view.
     nonisolated static func arrange(_ listing: BrowserListing, sort: BrowserSort, filter: BrowserFilter,
                                     info: ArrangeInfo = ArrangeInfo(noun: nil, groupsByDate: false)) -> Arranged {
-        let ordered = filter.apply(sort.order(listing.entries))
+        let ordered = filter.apply(info.preservesOrder ? listing.entries : sort.order(listing.entries))
         let containers = ordered.firstIndex { $0.isFile } ?? ordered.count
         let summary = BrowserSummary.footer(entries: listing.entries, filtered: filter.isActive ? ordered.count : nil,
                                             complete: listing.complete, more: listing.more, noun: info.noun,
@@ -1523,7 +1553,8 @@ public final class HomeBrowserView: NSView {
         updatePathBar()
         toolbar.show(sort: sort, keys: sortKeys)
         toolbar.show(pageFilters: info?.pageFilters ?? [], selected: info?.pageFilters.isEmpty == false ? 0 : nil)
-        toolbar.show(filter: filter.kind, visible: info == nil && location != .places)
+        toolbar.show(filter: filter.kind, visible: info == nil && location != .places && !includesSubfolders)
+        toolbar.showRecursive(available: canIncludeSubfolders, active: includesSubfolders)
         toolbar.show(controls: page == nil)
         showCardSwitch()
     }
@@ -1888,7 +1919,10 @@ public final class HomeBrowserView: NSView {
                 photo.showsFactsLine = files.factsLine
                 photo.showsNames = grid.showsNames(inSection: section)
             } else if let collection = card as? CollectionCard {
-                collection.names = names
+                let isFavorite = location == .source(HomeFavorites.sourceID)
+                collection.names = isFavorite ? .below : names
+                collection.showsNameAsCover = isFavorite
+                collection.coverHeight = grid.pictureFrame(of: i).height
             } else if let file = card as? FileCard {
                 file.aspect = files.aspect
                 if file.metrics != grid.metrics { file.metrics = grid.metrics }
@@ -1925,6 +1959,7 @@ public final class HomeBrowserView: NSView {
         let entry = entries[i]
         let style = shownCardStyle(width: gridWidth)
         guard !entry.isFile else { return style == .list ? .row : style == .cards ? .file : .photo }
+        if location == .source(HomeFavorites.sourceID) { return .collection }
         guard entry.kind == .folder || entry.kind == .archive else { return .collection }
         switch style {
         case .posters: return .poster

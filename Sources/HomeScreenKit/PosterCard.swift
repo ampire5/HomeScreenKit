@@ -3,7 +3,7 @@ import HomeChrome
 import HomeScreenModel
 
 /// A folder or an archive as a poster (mockup E «Плакат»): one card, as wide as the cover, radius 12 with a 0.5 pt
-/// ring. At its top the square cover (an archive's `ZIP` chip at its top left); under it a 3 pt seam, the progress
+/// ring. At its top the cover (an archive's `ZIP` chip at its top left); under it a 3 pt seam, the progress
 /// track filled as far as the folder was viewed; then the band (`GridMetrics.posterBand`, which the grid reserves
 /// exactly), by width:
 /// - under 200 pt: the name, and at the line's end `+12` and ✓;
@@ -30,10 +30,12 @@ final class PosterCard: FolderCard {
 
     var band: PosterBand { metrics.posterBand(width: bounds.width) }
 
-    override var pictureFrame: CGRect { CGRect(x: 0, y: 0, width: bounds.width, height: bounds.width) }
+    override var pictureFrame: CGRect {
+        CGRect(x: 0, y: 0, width: bounds.width, height: max(0, bounds.height - band.height - metrics.seam))
+    }
     override var nameLine: CGRect {
         let w = bounds.width
-        return CGRect(x: Self.side, y: w + metrics.seam + band.top, width: max(0, w - 2 * Self.side), height: band.nameLine)
+        return CGRect(x: Self.side, y: pictureFrame.maxY + metrics.seam + band.top, width: max(0, w - 2 * Self.side), height: band.nameLine)
     }
 
     /// Waiting: the placeholder over the whole cover, its top corners round; a line in each facts line of the band
@@ -96,13 +98,13 @@ final class PosterCard: FolderCard {
         let chip = coverChip.fittingSize
         coverChip.frame = CGRect(x: 8, y: 8, width: chip.width, height: chip.height)
         let alert: CGFloat = 34
-        coverAlert.frame = CGRect(x: ((w - alert) / 2).rounded(), y: (w * 92 / 232).rounded(), width: alert, height: alert)
+        coverAlert.frame = CGRect(x: ((w - alert) / 2).rounded(), y: ((pictureFrame.height - alert) / 2).rounded(), width: alert, height: alert)
         // The seam: the track the whole width, the fill as far as viewed.
-        progressTrack.frame = CGRect(x: 0, y: w, width: w, height: metrics.seam)
+        progressTrack.frame = CGRect(x: 0, y: pictureFrame.maxY, width: w, height: metrics.seam)
         progressTrack.isHidden = isWaitingForFacts
         progressBar.isHidden = isWaitingForFacts || shownProgress == nil
         let fraction = min(1, max(0, shownProgress ?? 0))
-        progressBar.frame = CGRect(x: 0, y: w, width: (w * fraction).rounded(), height: metrics.seam)
+        progressBar.frame = CGRect(x: 0, y: pictureFrame.maxY, width: (w * fraction).rounded(), height: metrics.seam)
         // Line 1: the name, ⧉ and RTL after it; `+12` and ✓ at the end.
         nameLabel.font = CardFont.text(band.nameSize, .medium)
         let line1 = nameLine

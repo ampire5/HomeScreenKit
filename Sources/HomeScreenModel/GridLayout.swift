@@ -29,7 +29,7 @@ public enum CardStyle: String, CaseIterable, Sendable {
     case posters, cards, list
 }
 
-/// One run of the grid: the folders and archives (collections, fewer and wider) or the photos, with an optional heading.
+/// One run of the grid: the folders and archives (collections) or the photos, with an optional heading.
 public struct GridSection: Equatable, Sendable {
     public enum Kind: Sendable {
         case collections, photos
@@ -54,7 +54,7 @@ public struct GridMetrics: Equatable, Sendable {
     public var collectionGap: CGFloat = 16
     public var collectionEdge: CGFloat = 20
     /// A collection slot wants this much of the photo target.
-    public var collectionScale: CGFloat = 1.6
+    public var collectionScale: CGFloat = 1
     /// Above the first section: the view sets it to the toolbar's height.
     public var top: CGFloat = 0
     public var headerHeight: CGFloat = 36
@@ -231,7 +231,9 @@ public struct GridLayout: Equatable, Sendable {
             } else {
                 switch used {
                 case .posters:
-                    slotHeight = slot + Self.bandHeight(width: slot, metrics: metrics)
+                    cover = fileAspect == 1 ? slot : (slot / max(0.1, fileAspect)).rounded()
+                    coverWidth = slot
+                    slotHeight = cover + Self.bandHeight(width: slot, metrics: metrics)
                 case .cards:
                     gap = metrics.cardGap
                     columns = max(1, Int(((width - 2 * edge + gap) / (metrics.cardWidth + gap)).rounded(.down)))

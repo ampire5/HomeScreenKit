@@ -2,7 +2,7 @@ import AppKit
 
 /// The items of the browser's `NSToolbar`, with the order a narrow window hides them in.
 enum HomeToolbarItem: CaseIterable {
-    case title, home, history, path, aspect, filter, sort, zoom, progress, cards, search, inspector
+    case title, home, history, path, aspect, filter, sort, zoom, progress, cards, recursive, search, inspector
 
     var identifier: NSToolbarItem.Identifier {
         switch self {
@@ -16,6 +16,7 @@ enum HomeToolbarItem: CaseIterable {
         case .zoom: .init("home.zoom")
         case .progress: .init("home.progress")
         case .cards: .init("home.cards")
+        case .recursive: .init("home.recursive")
         case .search: .init("home.search")
         case .inspector: .init("home.inspector")
         }
@@ -25,6 +26,7 @@ enum HomeToolbarItem: CaseIterable {
         switch self {
         case .title: 1000
         case .cards: -250
+        case .recursive: -80
         case .aspect: -100
         case .sort: -90
         case .filter: 900
@@ -43,5 +45,5 @@ enum HomeToolbarItem: CaseIterable {
     static let browserOrder: [NSToolbarItem.Identifier] =
         [.flexibleSpace, .toggleSidebar, .sidebarTrackingSeparator] + [HomeToolbarItem.home, .history, .path, .title].map(\.identifier)
         + [.flexibleSpace, HomeToolbarItem.filter.identifier, .flexibleSpace]
-        + [HomeToolbarItem.sort, .aspect, .progress, .zoom, .cards, .search, .inspector].map(\.identifier)
+        + [HomeToolbarItem.sort, .aspect, .progress, .zoom, .cards, .recursive, .search, .inspector].map(\.identifier)
 }

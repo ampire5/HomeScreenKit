@@ -242,6 +242,15 @@ import Testing
         #expect(grid.indices(in: CGRect(x: 0, y: 0, width: 900, height: 2000), margin: 0) == 0..<23)
     }
 
+    @Test func folderPostersFollowTheVideoTileSize() {
+        let grid = GridLayout(sections: [folders(10), photos(10)], width: 960, target: 220,
+                              names: .off, fileAspect: 16.0 / 9)
+        let folder = grid.pictureFrame(of: 0)
+        let video = grid.pictureFrame(of: 10)
+        #expect(grid.columns(inSection: 0) == grid.columns(inSection: 1))
+        #expect(abs(folder.height - video.height) < 5)
+    }
+
     /// A video app's files (`FileStyle.videos`): 16:9 slots, the picture the slot's width, the name line under it.
     @Test func filesTakeTheirAspect() {
         let grid = GridLayout(sections: [photos(10)], width: 960, target: 220, names: .below, fileAspect: 16.0 / 9)

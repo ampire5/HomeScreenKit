@@ -115,6 +115,27 @@ import Testing
         override var isFlipped: Bool { true }
     }
 
+    @Test(.enabled(if: folder != nil)) func favoriteVolumeLabels() throws {
+        let sample = Self.samples[0]
+        let titles = ["Footage", "Footage", "Location scouting and production notes"]
+        let volumes: [String?] = ["Archive", "Macintosh HD", nil]
+        for dark in [false, true] {
+            try Self.write("favorites", size: CGSize(width: 738, height: 206), dark: dark) { host in
+                for index in titles.indices {
+                    let card = CollectionCard(item: HomeCardItem(id: String(index), title: titles[index],
+                                                                 subtitle: volumes[index], tooltip: titles[index],
+                                                                 symbol: "folder"))
+                    card.names = .below
+                    card.showsNameAsCover = true
+                    card.coverHeight = 125
+                    card.frame = CGRect(x: 20 + index * 238, y: 20, width: 222, height: 176)
+                    if index == 0 { card.image = Self.picture(sample.colors[0], hill: sample.colors[3]) }
+                    host.addSubview(card)
+                }
+            }
+        }
+    }
+
     @Test(.enabled(if: folder != nil)) func posters() throws {
         let savedNow = FolderCard.now
         defer { FolderCard.now = savedNow }

@@ -10,6 +10,8 @@ public struct HomeSourceInfo {
     public var sortKeys: [BrowserSort.Key]
     /// Sorted by date, the cards fall into Today, Yesterday, This Week and Earlier.
     public var groupsByDate: Bool
+    /// The source provides its display order.
+    public var preservesOrder: Bool
     /// What the footer counts (`3 sessions`).
     public var noun: String
     /// Shown in the middle while the list is empty.
@@ -20,10 +22,11 @@ public struct HomeSourceInfo {
     public var pageFilters: [String]
 
     public init(title: String, sortKeys: [BrowserSort.Key] = [], groupsByDate: Bool = false, noun: String = "item",
-                emptyHint: String = "", page: NSView? = nil, pageFilters: [String] = []) {
+                emptyHint: String = "", page: NSView? = nil, pageFilters: [String] = [], preservesOrder: Bool = false) {
         self.title = title
         self.sortKeys = sortKeys
         self.groupsByDate = groupsByDate
+        self.preservesOrder = preservesOrder
         self.noun = noun
         self.emptyHint = emptyHint
         self.page = page
@@ -40,6 +43,9 @@ public struct HomeSourceInfo {
     /// A location's listings, as they come: the places, a folder, or a list source; the browser stops iterating when it
     /// leaves the location.
     func list(_ location: BrowserLocation) -> AsyncThrowingStream<BrowserListing, Error>
+    /// The flattened files in a folder, when the host supports recursive browsing.
+    func supportsRecursiveListing(in folder: URL) -> Bool
+    func listRecursively(in folder: URL) -> AsyncThrowingStream<BrowserListing, Error>
     /// The listing of `location` the source kept from an earlier visit (complete), at once: the browser draws it in the
     /// same turn as the move, before `list`'s stream has delivered anything (that stream's first copy of it changes
     /// nothing). Nil when none is kept (the default).
@@ -102,6 +108,10 @@ public struct HomeSourceInfo {
 }
 
 public extension HomeSource {
+    func supportsRecursiveListing(in folder: URL) -> Bool { false }
+    func listRecursively(in folder: URL) -> AsyncThrowingStream<BrowserListing, Error> {
+        AsyncThrowingStream { $0.finish() }
+    }
     func lastListing(for location: BrowserLocation) -> BrowserListing? { nil }
     func sidebarMenu(for row: HomeSidebarRow) -> [HomeMenuItem] { [] }
     func performSidebar(_ item: String, on row: HomeSidebarRow) {}

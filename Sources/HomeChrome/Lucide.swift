@@ -102,6 +102,7 @@ public enum Lucide {
         "internaldrive": "hard-drive",
         "link": "link",
         "list.bullet": "list",
+        "list.bullet.indent": "align-left",
         "lock": "lock",
         "magnifyingglass": "search",
         "minus": "minus",

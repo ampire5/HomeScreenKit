@@ -22,6 +22,73 @@ import Testing
 
     private var mixed: [BrowserEntry] { (0..<3).map { BrowserFixtures.folder("f\($0)") } + BrowserFixtures.files(20) }
 
+    @Test func subfolderToggleUsesTheFlatListingAndResetsOnNavigation() async throws {
+        let source = FakeHomeSource()
+        let child = x.appendingPathComponent("child")
+        let folder = BrowserEntry(url: child, name: "child", kind: .folder)
+        let file = BrowserEntry(url: child.appendingPathComponent("nested.jpg"), name: "nested.jpg", kind: .file)
+        source.recursiveFiles[x] = [file]
+        source.kept[.folder(x)] = BrowserListing(entries: [folder], complete: true)
+        let view = try await shown(source, [folder])
+
+        #expect(!view.includesSubfolders)
+        view.toolbar.onRecursive?()
+        await settle { view.entries == [file] }
+        #expect(view.includesSubfolders)
+        #expect(view.entries == [file])
+
+        view.toolbar.onRecursive?()
+        await settle { view.entries == [folder] }
+        #expect(!view.includesSubfolders)
+        #expect(view.entries == [folder])
+
+        view.toolbar.onRecursive?()
+        view.show(.folder(child), selecting: nil)
+        #expect(!view.includesSubfolders)
+        source.yield(child, [file])
+        await settle { view.entries == [file] }
+        #expect(view.entries == [file])
+    }
+
+    @Test func favoritesShowDiskDetailsInSavedOrder() async throws {
+        let source = FakeHomeSource()
+        let id = HomeFavorites.sourceID
+        source.infos[id] = HomeSourceInfo(title: "Favorites", noun: "folder", preservesOrder: true)
+        let rows = [
+            HomeSidebarRow(id: "first", title: "Footage", symbol: "folder", location: .folder(x), locationHint: "Archive"),
+            HomeSidebarRow(id: "second", title: "Footage", symbol: "folder",
+                           location: .folder(URL(fileURLWithPath: "/Volumes/A/Footage")), locationHint: "Media"),
+        ]
+        let entries = HomeFavorites.entries(from: rows)
+        let view = HomeBrowserView(source: source)
+        view.files = .videos
+        view.frame = CGRect(x: 0, y: 0, width: 960, height: 600)
+        view.show(.source(id), selecting: nil)
+        source.yieldSource(id, entries)
+        await settle { view.entries == entries }
+        view.layoutSubtreeIfNeeded()
+        let card = try #require(view.card(for: entries[0].id) as? CollectionCard)
+        #expect(view.entries == entries)
+        #expect(card.subtitleLabel.stringValue == "Archive")
+        #expect(card.pictureFrame.height < card.pictureFrame.width)
+        #expect(card.subtitleLabel.frame.minY >= card.pictureFrame.maxY)
+        #expect(!card.isShowingGlassTile)
+        #expect(entries.allSatisfy { $0.kind == .folder })
+        #expect(!card.isShowingSymbol)
+        #expect(card.titleLabel.isHidden)
+        #expect(!card.coverTitle.isHidden)
+        #expect(card.coverTitle.stringValue == "Footage")
+        #expect(abs(card.coverTitle.frame.midY - card.pictureFrame.midY) <= 1)
+
+        let cover = CardSnapshots.picture(0x3E6E8E)
+        view.setImage(cover, for: entries[0].id)
+        view.layoutSubtreeIfNeeded()
+        #expect(card.image === cover)
+        #expect(!card.titleLabel.isHidden)
+        #expect(card.coverTitle.isHidden)
+        #expect(card.subtitleLabel.stringValue == "Archive")
+    }
+
     @Test func lastOpenedSurvivesHoverSelection() async throws {
         let view = try await shown(FakeHomeSource(), BrowserFixtures.files(5))
         let first = view.entries[0].id, next = view.entries[1].id

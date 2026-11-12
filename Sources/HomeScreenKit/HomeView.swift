@@ -16,6 +16,8 @@ public final class HomeView: NSView {
 
     /// The toolbar's sidebar button: the app flips `isSidebarVisible` and keeps it.
     public var onSidebarToggle: (() -> Void)?
+    /// Hosts with native window tabs can open a sidebar folder there.
+    public var onOpenSidebarFolderInNewTab: ((URL) -> Void)?
     /// The toolbar's house: the app shows its start page.
     public var onHome: (() -> Void)?
     /// A file dropped on Home. Nil leaves drops to what is under it (Home registers only while it has a handler).
@@ -383,13 +385,20 @@ public final class HomeView: NSView {
         sidebarView.menuItems = { [weak self] row in
             guard let self else { return [] }
             var items = self.source?.sidebarMenu(for: row) ?? []
-            if self.fileTabsEnabled, row.expandable, case .folder = row.location { items.append(HomeFileTab.openMenuItem) }
+            if self.fileTabsEnabled || self.onOpenSidebarFolderInNewTab != nil,
+               row.expandable, !row.isDimmed, case .folder = row.location {
+                items.insert(HomeFileTab.openMenuItem, at: 0)
+            }
             return items
         }
         sidebarView.onMenu = { [weak self] item, row in
             guard let self else { return }
-            if item == HomeFileTab.openMenuID { self.openFileTab(at: row.location) }
-            else { self.source?.performSidebar(item, on: row) }
+            if item == HomeFileTab.openMenuID, case .folder(let folder) = row.location {
+                if self.fileTabsEnabled { self.openFileTab(at: row.location) }
+                else { self.onOpenSidebarFolderInNewTab?(folder) }
+            } else {
+                self.source?.performSidebar(item, on: row)
+            }
         }
         sidebarView.onMoveFavorite = { [weak self] folder, other in self?.source?.moveFavoriteFolder(folder, before: other) }
         sidebarView.onEndKeys = { [weak self] in self?.browser.takeFocus() }
@@ -408,7 +417,12 @@ public final class HomeView: NSView {
         sidebarReload?.cancel()
         sidebarReload = Task { @MainActor [weak self] in
             guard let sections = await self?.source?.sidebar(), !Task.isCancelled, let self else { return }
+            let oldFavorites = self.tree.sections.first { $0.id == HomeSidebarSection.favoritesID }
             self.tree.setSections(sections)
+            let favorites = sections.first { $0.id == HomeSidebarSection.favoritesID }
+            if self.browser.location == .source(HomeFavorites.sourceID), oldFavorites != favorites {
+                self.browser.reload()
+            }
             let location = self.browser.location
             let unknown = self.tree.follow(location)
             self.showTree()
@@ -439,7 +453,7 @@ public final class HomeView: NSView {
     /// The folder's own listing is in: its entries are its node's children (the browser's listing is the one that
     /// counts, no listing of its own); then the path's other folders still unlisted, top first, one at a time.
     private func listingComplete(_ location: BrowserLocation, entries: [BrowserEntry]) {
-        if case .folder(let folder) = location {
+        if !browser.includesSubfolders, case .folder(let folder) = location {
             tree.setChildren(entries, of: folder)
             showTree()
         }

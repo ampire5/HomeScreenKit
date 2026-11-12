@@ -325,6 +325,40 @@ import Testing
         #expect(source.sidebarPerformed.map(\.0) == ["reveal"] && source.sidebarPerformed.map(\.1) == ["/Volumes/T"])
     }
 
+    @Test func sidebarCanOpenAnIndependentFileTab() throws {
+        let source = FakeHomeSource()
+        let view = HomeView(source: source)
+        view.fileTabsEnabled = true
+        let original = try #require(view.selectedFileTabID)
+        let path = url("/Volumes/T/Footage")
+        let folder = HomeSidebarRow(id: path.path, title: "Footage", symbol: "folder",
+                                    location: .folder(path), expandable: true)
+        let command = try #require(view.sidebarView.menuItems?(folder).first)
+        #expect(command.title == "Open in New Tab")
+        view.sidebarView.onMenu?(command.id, folder)
+        #expect(view.selectedFileTabID != original)
+        #expect(view.browser.location == .folder(path))
+        #expect(view.selectFileTab(original))
+        #expect(view.browser.location == .places)
+    }
+
+    @Test func sidebarDelegatesToTheNativeTabHost() throws {
+        let source = FakeHomeSource()
+        let view = HomeView(source: source)
+        var opened: URL?
+        view.onOpenSidebarFolderInNewTab = { opened = $0 }
+        let path = url("/Volumes/T/Footage")
+        var folder = HomeSidebarRow(id: path.path, title: "Footage", symbol: "folder",
+                                    location: .folder(path), expandable: true)
+        let command = try #require(view.sidebarView.menuItems?(folder).first)
+        #expect(command.title == "Open in New Tab")
+        view.sidebarView.onMenu?(command.id, folder)
+        #expect(opened == path)
+        #expect(view.browser.location == .places)
+        folder.isDimmed = true
+        #expect(view.sidebarView.menuItems?(folder).contains(command) == false)
+    }
+
     /// The browser's complete listing of the folder on screen is its node's children in the tree at once: opened, it
     /// shows them without a `folders(in:)` of its own.
     @Test func listingCompleteFillsTheFolderItself() async {

@@ -30,6 +30,17 @@ import HomeScreenModel
     var onStyle: ((GridStyle) -> Void)?
     /// A segment of the posters / cards / list switch: the view saves the choice and re-tiles.
     var onCardStyle: ((CardStyle) -> Void)?
+    var onRecursive: (() -> Void)?
+    @objc private func recursiveClicked(_ sender: NSToolbarItemGroup) { onRecursive?() }
+
+    func showRecursive(available: Bool, active: Bool) {
+        guard let group = items[.recursive] as? NSToolbarItemGroup else { return }
+        group.isHidden = !available
+        group.setSelected(active, at: 0)
+        group.toolTip = active ? "Show this folder only" : "Include subfolders"
+        group.subitems.first?.toolTip = group.toolTip
+    }
+
     var onFilterText: ((String) -> Void)?
     /// Esc in the name field: it is cleared and the keys go back to the grid.
     var onFilterEnd: (() -> Void)?
@@ -121,6 +132,7 @@ import HomeScreenModel
         // The search item keeps its own priority, 1001 (set to anything else, it stays): it folds into the magnifier long
         // before it goes. The sidebar toggle is AppKit's standard item.
         for (item, toolbarItem) in items where item != .search { toolbarItem.visibilityPriority = .init(item.priority) }
+        items[.recursive]?.isHidden = true
         items[.inspector]?.isHidden = true
         items[.cards]?.isHidden = true
         items[.progress]?.isHidden = true
@@ -161,6 +173,10 @@ import HomeScreenModel
         case .aspect:
             return button(id, "rectangle.arrowtriangle.2.outward", label: "Thumbnail shape", tip: "Show square thumbnails",
                           action: #selector(aspectClicked))
+        case .recursive:
+            return group(id, [("list.bullet.indent", "Include subfolders", "Include subfolders")],
+                         mode: .selectAny, label: "Include subfolders", tip: "Include subfolders",
+                         action: #selector(recursiveClicked(_:)))
         case .filter:
             let toolbarItem = NSToolbarItem(itemIdentifier: id)
             toolbarItem.label = "Filter"

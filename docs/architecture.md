@@ -28,13 +28,21 @@ choices. The browser owns selection, local navigation/history, visible cards, la
 It delegates actual filesystem/media operations to the source. `HomeView` composes browser/sidebar and inspector
 integration. Filmstrip and slot hosts supply their own items and callbacks; they do not create an app media cache.
 
-Hosts provide Favorites as an ordered sidebar section and own add, remove, reorder and persistence. HomeScreenKit
-handles branch selection, drag and menu reordering, and discards replies from superseded sidebar reloads. Favorites
-and Places can show the same path as distinct sidebar branches.
+Hosts supply a Favorites source and an ordered sidebar section from the same saved folders. HomeScreenKit
+handles branch selection, drag and menu reordering, and discards replies from superseded sidebar reloads.
+When the section changes while the Favorites source is open, HomeView reloads its cards. HomeFavorites
+formats duplicate names using mounted volume roots, with a path fallback for offline volumes. The source's
+cards request the hosts' folder covers and use a centered folder name while a cover is unavailable.
+
+A folder can opt into HomeSource's recursive listing. HomeBrowserView owns the toolbar toggle and cancels the
+current stream when the mode changes. It skips the direct listing cache and leaves sidebar children to the direct
+folder source. The hosts persist successful walks in their SQLite catalogs using relative-path snapshots.
+The mode starts off for new navigation and sessions. File View tabs retain it in memory.
 
 With `HomeView.fileTabsEnabled`, `HomeFileTabs` keeps the navigation, selection and scroll for each folder tab
 while the same `HomeBrowserView` renders the selected tab or the current app source. A tab switch uses the
-browser's listing cancellation and generation guards. The host owns the lifetime of the versioned
+browser's listing cancellation and generation guards. The sidebar's Open in New Tab command uses these tabs
+or asks the host to open a native window tab. The host owns the lifetime of the versioned
 `FileTabSession` snapshot and associates media opens with a tab ID when it wants to return to that tab.
 
 Flow: source location → `list` stream → browser sorting/filtering/layout → visible cards → source image requests →

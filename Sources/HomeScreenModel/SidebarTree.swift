@@ -12,9 +12,10 @@ public struct HomeSidebarRow: Equatable, Sendable {
     public var isDimmed: Bool
     /// Photos in the folder, when the app knows it.
     public var count: Int?
+    public var locationHint: String?
 
     public init(id: String, title: String, symbol: String, location: BrowserLocation, expandable: Bool = false,
-                isDimmed: Bool = false, count: Int? = nil) {
+                isDimmed: Bool = false, count: Int? = nil, locationHint: String? = nil) {
         self.id = id
         self.title = title
         self.symbol = symbol
@@ -22,6 +23,7 @@ public struct HomeSidebarRow: Equatable, Sendable {
         self.expandable = expandable
         self.isDimmed = isDimmed
         self.count = count
+        self.locationHint = locationHint
     }
 }
 

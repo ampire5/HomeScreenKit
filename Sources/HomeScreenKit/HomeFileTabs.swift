@@ -5,6 +5,7 @@ struct FileTabNavigation {
     var history: BrowserHistory
     var selection: String?
     var anchor: BrowserAnchor?
+    var includesSubfolders = false
 
     init(at location: BrowserLocation) {
         history = BrowserHistory(start: location)

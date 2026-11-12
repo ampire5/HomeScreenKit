@@ -512,6 +512,7 @@ private final class SidebarLineView: NSView {
     /// again at the next commit, a title set again is laid out again).
     private var shown: (line: SidebarTree.Line, lit: Bool, spinning: Bool)?
     private var depth = 0
+    private var locationHint: String?
     var compactIndent = true {
         didSet { if compactIndent != oldValue { needsLayout = true } }
     }
@@ -571,6 +572,8 @@ private final class SidebarLineView: NSView {
             collapsed = folded
             depth = 0
             title.stringValue = text
+            locationHint = nil
+            toolTip = nil
             count.stringValue = ""
             symbol.image = nil
             alphaValue = 1
@@ -591,7 +594,13 @@ private final class SidebarLineView: NSView {
                 text.addAttribute(.kern, value: spacing, range: NSRange(location: index, length: 1))
             }
             title.attributedStringValue = text
-            count.stringValue = row.count.map(BrowserSummary.number) ?? ""
+            locationHint = row.locationHint
+            toolTip = row.locationHint.map { "\(row.title) — \($0)" }
+            count.font = row.locationHint == nil
+                ? .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+                : .systemFont(ofSize: 11)
+            count.lineBreakMode = .byTruncatingTail
+            count.stringValue = row.locationHint ?? row.count.map(BrowserSummary.number) ?? ""
             symbol.image = Self.symbol(row.symbol)
             triangle.image = row.expandable ? Self.triangle(expanded ? "chevron.down" : "chevron.right") : nil
             alphaValue = row.isDimmed ? 0.45 : 1
@@ -658,11 +667,15 @@ private final class SidebarLineView: NSView {
         layoutGuides()
         triangle.frame = CGRect(x: x, y: (h - 12) / 2, width: 12, height: 12)
         symbol.frame = CGRect(x: x + 16, y: (h - 20) / 2, width: 20, height: 20)
-        let countWidth: CGFloat = count.stringValue.isEmpty ? 0 : 40
+        let textX = x + 44 - Self.fieldInset
         let right = w - HomeSidebar.inset - 8
+        let countWidth: CGFloat = if locationHint != nil {
+            min(count.intrinsicContentSize.width, max(0, (right - textX) / 2))
+        } else {
+            count.stringValue.isEmpty ? 0 : 40
+        }
         count.frame = CGRect(x: right - countWidth, y: (h - 15) / 2, width: countWidth, height: 15)
         spinner.frame = CGRect(x: right - 16, y: (h - 16) / 2, width: 16, height: 16)
-        let textX = x + 44 - Self.fieldInset
         title.frame = CGRect(x: textX, y: (h - 17) / 2, width: max(0, right - countWidth - textX - 4), height: 17)
     }
 

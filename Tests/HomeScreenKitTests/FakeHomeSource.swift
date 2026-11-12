@@ -25,6 +25,15 @@ import AppKit
     private(set) var listedSources: [String] = []
     private(set) var setSourceSorts: [(BrowserSort, String)] = []
 
+    var recursiveFiles: [URL: [BrowserEntry]] = [:]
+    func supportsRecursiveListing(in folder: URL) -> Bool { recursiveFiles[folder] != nil }
+    func listRecursively(in folder: URL) -> AsyncThrowingStream<BrowserListing, Error> {
+        AsyncThrowingStream {
+            $0.yield(BrowserListing(entries: recursiveFiles[folder] ?? [], complete: true))
+            $0.finish()
+        }
+    }
+
     func places() async -> [BrowserEntry] { placesList }
 
     /// What `lastListing(for:)` gives by location: the listing kept from an earlier visit.
