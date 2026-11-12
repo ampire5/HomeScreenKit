@@ -16,7 +16,7 @@ import HomeScreenModel
 /// it and a warning line in place of the facts.
 final class PosterCard: FolderCard {
     static let radius: CGFloat = 12
-    static let side: CGFloat = 10
+    static let side: CGFloat = 12
     /// The warning glyph over the cover: 34 pt, 92 pt down a 232 pt cover (the mockup's place, scaled).
     let coverAlert = GlyphView(nil, color: Chrome.Palette.card.label, lineWidth: 1.2)
 
@@ -104,7 +104,7 @@ final class PosterCard: FolderCard {
         let fraction = min(1, max(0, shownProgress ?? 0))
         progressBar.frame = CGRect(x: 0, y: w, width: (w * fraction).rounded(), height: metrics.seam)
         // Line 1: the name, ⧉ and RTL after it; `+12` and ✓ at the end.
-        nameLabel.font = CardFont.text(band.nameSize, .semibold)
+        nameLabel.font = CardFont.text(band.nameSize, .medium)
         let line1 = nameLine
         let s = summary
         layoutNameLine(line1, after: [(twoPagesIcon, CGSize(width: 13, height: 13), s?.twoPages ?? false),

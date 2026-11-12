@@ -1,17 +1,17 @@
 import AppKit
+import HomeChrome
 import HomeScreenModel
 
 /// A badge on a picture as the Media UI Iconography style guide draws it (B «Типографика», I «badge»): the value as
-/// text on the HUD scrim (black at 55 %), 10 pt semibold with 0.04 em tracking, 16 pt tall, 4 pt padding, radius 3.
+/// text on the HUD scrim (black at 55 %), 10 pt medium, 16 pt tall, 4 pt padding, radius 4.
 /// Its colour says nothing: `HLG` looks like `UHD`, as the guide asks (the owner, 2026-10-27, after trying a colour
 /// for each kind). Takes no clicks.
 final class MediaBadge: NSView {
     static let height: CGFloat = 16
     private static let padding: CGFloat = 4
-    private static let font = NSFont.systemFont(ofSize: 10, weight: .semibold)
+    private static let font = NSFont.systemFont(ofSize: 10, weight: .medium)
     private static let attributes: [NSAttributedString.Key: Any] = [
         .font: font, .foregroundColor: NSColor(srgbRed: 0xE6 / 255, green: 0xE8 / 255, blue: 0xEB / 255, alpha: 1),
-        .kern: 0.4,
     ]
 
     private let text = CATextLayer()
@@ -21,8 +21,8 @@ final class MediaBadge: NSView {
     override init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
-        layer?.backgroundColor = NSColor(white: 0, alpha: 0.55).cgColor
-        layer?.cornerRadius = 3
+        layer?.backgroundColor = Chrome.Palette.overMedia.glassTint.withAlphaComponent(0.82).cgColor
+        layer?.cornerRadius = 4
         layer?.cornerCurve = .continuous
         text.contentsScale = 2
         text.alignmentMode = .left

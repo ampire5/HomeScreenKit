@@ -42,7 +42,7 @@ import Testing
         #expect(c.progressTrack.frame == CGRect(x: 0, y: 232, width: 232, height: 3))
         #expect(c.progressBar.frame == CGRect(x: 0, y: 232, width: (232 * 0.62).rounded(), height: 3))
         // the band: 10 pt from the sides, the name 7 pt under the seam
-        #expect(c.nameLabel.frame.minX == 10 && c.nameLabel.frame.minY == 235 + 7)
+        #expect(c.nameLabel.frame.minX == 12 && c.nameLabel.frame.minY == 235 + 7)
         #expect(c.nameLabel.font.pointSize == 13)
         for view in [c.nameLabel, c.insideLabel, c.yearsLabel, c.newPill] as [NSView] {
             #expect(!view.isHidden)
@@ -50,8 +50,8 @@ import Testing
             #expect(view.frame.minX >= 10 && view.frame.maxX <= 222)
         }
         // "+12" at the name line's end, the years at the facts line's end
-        #expect(c.newPill.frame.maxX == 222 && abs(c.newPill.frame.midY - c.nameLabel.frame.midY) <= 1)
-        #expect(c.yearsLabel.frame.maxX == 222 && c.yearsLabel.stringValue == "2024")
+        #expect(c.newPill.frame.maxX == 220 && abs(c.newPill.frame.midY - c.nameLabel.frame.midY) <= 1)
+        #expect(c.yearsLabel.frame.maxX == 220 && c.yearsLabel.stringValue == "2024")
         // The facts stay whole (owner, 2026-10-23): the bars go when they would cut the text.
         #expect(c.insideLabel.stringValue == "248 photos · 3 folders · 1.9 GB")
         #expect(c.insideLabel.textWidth <= c.insideLabel.frame.width)
@@ -68,7 +68,7 @@ import Testing
         #expect(c.insideLabel.stringValue == "96 pages · 1.2 GB")
         #expect(!c.histogram.isHidden)
         #expect(c.insideLabel.frame.maxX + 8 == c.histogram.frame.minX)
-        #expect(c.histogram.frame.maxX + 8 == c.yearsLabel.frame.minX && c.yearsLabel.frame.maxX == 222)
+        #expect(c.histogram.frame.maxX + 8 == c.yearsLabel.frame.minX && c.yearsLabel.frame.maxX == 220)
         #expect(c.histogram.barWidth == 2.5 && c.histogram.barGap == 1.5 && c.histogram.frame.height == 12)
     }
 
@@ -97,7 +97,7 @@ import Testing
         #expect(c.insideLabel.stringValue == "248 photos · 3 folders (412) · 1.9 GB")
         #expect(c.insideLabel.font.pointSize == 12)
         #expect(c.viewedLabel.stringValue == "Jun – Aug 2024 · 153 / 248" && !c.viewedLabel.isHidden)
-        #expect(c.histogram.barWidth == 4 && c.histogram.frame.height == 14 && c.histogram.frame.minX == 10)
+        #expect(c.histogram.barWidth == 4 && c.histogram.frame.height == 14 && c.histogram.frame.minX == 12)
         #expect(c.viewedLabel.frame.minX == c.histogram.frame.maxX + 8)
         #expect(c.viewedLabel.frame.minY > c.insideLabel.frame.maxY && c.yearsLabel.isHidden)
         #expect(c.viewedLabel.frame.maxY + 8 == c.bounds.height)
@@ -113,7 +113,7 @@ import Testing
         #expect(!c.twoPagesIcon.isHidden && !c.rtlLabel.isHidden && !c.checkIcon.isHidden && c.newPill.isHidden)
         #expect(c.twoPagesIcon.frame.minX == c.nameLabel.frame.maxX + 6)
         #expect(c.rtlLabel.frame.minX == c.twoPagesIcon.frame.maxX + 6)
-        #expect(c.checkIcon.frame.maxX == 222)
+        #expect(c.checkIcon.frame.maxX == 220)
         // the archive's chip at the cover's top left; its count is pages when it is read as a book
         #expect(!c.coverChip.isHidden && c.coverChip.frame.origin == CGPoint(x: 8, y: 8))
         #expect(c.insideLabel.stringValue.hasPrefix("248 pages"))
@@ -128,7 +128,7 @@ import Testing
         let c = card(s, width: 120)
         #expect(c.rtlLabel.isHidden && !c.newPill.isHidden)
         #expect(c.nameLabel.frame.maxX + 6 <= c.newPill.frame.minX)
-        #expect(c.newPill.frame.maxX == 110)
+        #expect(c.newPill.frame.maxX == 108)
     }
 
     /// An unavailable folder: the cover faint with a glyph on it, a warning line in place of the facts, the band
@@ -233,8 +233,8 @@ import Testing
         #expect(k.cover.frame.height == 312)   // a radius taller: only the top corners show round
         #expect(k.cover.cornerRadius == 12)
         let lines = k.lines.filter { !$0.isHidden }
-        #expect(lines.map(\.frame.width) == [(280 * 0.7).rounded(), (280 * 0.45).rounded()])
-        #expect(lines.allSatisfy { $0.frame.height == 10 && $0.cornerRadius == 4 && $0.frame.minX == 10 })
+        #expect(lines.map(\.frame.width) == [(276 * 0.7).rounded(), (276 * 0.45).rounded()])
+        #expect(lines.allSatisfy { $0.frame.height == 10 && $0.cornerRadius == 4 && $0.frame.minX == 12 })
         #expect(c.progressTrack.isHidden && c.progressBar.isHidden)
         #expect(c.insideLabel.isHidden && c.viewedLabel.isHidden && c.yearsLabel.isHidden)
         #expect(waiting(width: 232).skeleton!.lines.filter { !$0.isHidden }.count == 1)   // a two-line band: one line
@@ -323,7 +323,7 @@ import Testing
         #expect(gray(c.skeleton?.cover.backgroundColor) > 0xE4 / 255.0)
         c.appearance = NSAppearance(named: .darkAqua)
         c.layoutSubtreeIfNeeded()
-        #expect(gray(c.skeleton?.cover.backgroundColor) > 0x44 / 255.0 + 0.01)
-        #expect(gray(c.skeleton?.lines[0].backgroundColor) > 0x3D / 255.0 + 0.01)
+        #expect(gray(c.skeleton?.cover.backgroundColor) > 0x30 / 255.0 + 0.01)
+        #expect(gray(c.skeleton?.lines[0].backgroundColor) > 0x2D / 255.0 + 0.01)
     }
 }

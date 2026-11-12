@@ -52,8 +52,8 @@ public struct SlotTool {
     public static let margin: CGFloat = 6
     private static let buttonSize = CGSize(width: 28, height: 24)
     private static let pad: CGFloat = 2
-    private static let primary = NSColor(srgbRed: 0xf2 / 255, green: 0xf2 / 255, blue: 0xf7 / 255, alpha: 1)
-    private static let secondary = NSColor(srgbRed: 0x9a / 255, green: 0x9a / 255, blue: 0xa2 / 255, alpha: 1)
+    private static let primary = Chrome.Palette.overMedia.text
+    private static let secondary = Chrome.Palette.overMedia.secondaryText
 
     /// Which way the hide chevron points.
     public var edge: SlotEdge { didSet { if edge != oldValue { updateSlotButtons() } } }
@@ -102,31 +102,31 @@ public struct SlotTool {
         super.init(frame: NSRect(x: 0, y: 0, width: 200, height: Self.height))
         wantsLayer = true
         appearance = NSAppearance(named: .darkAqua)
-        layer?.cornerRadius = Self.height / 2
+        layer?.cornerRadius = 10
         layer?.cornerCurve = .continuous
         layer?.masksToBounds = true
         layer?.borderWidth = 1
-        layer?.borderColor = NSColor(white: 1, alpha: 0.14).cgColor
+        layer?.borderColor = Chrome.Palette.overMedia.rim.cgColor
         blur.material = .hudWindow
         blur.blendingMode = .withinWindow
         blur.state = .active
         veil.wantsLayer = true
-        veil.layer?.backgroundColor = NSColor(white: 0, alpha: 0.35).cgColor
+        veil.layer?.backgroundColor = Chrome.Palette.overMedia.glassTint.cgColor
         addSubview(blur)
         addSubview(veil)
         for divider in dividers {
             divider.wantsLayer = true
-            divider.layer?.backgroundColor = NSColor(white: 1, alpha: 0.18).cgColor
+            divider.layer?.backgroundColor = Chrome.Palette.overMedia.separator.cgColor
             addSubview(divider)
         }
-        configure(plusButton, symbol: "plus", tip: "Add a View")
+        configure(plusButton, symbol: "plus", tip: "Add tab")
         plusButton.onClick = { [weak self] in
             guard let self else { return }
             onPlus?(plusButton)
         }
-        configure(pinButton, symbol: "pin", tip: "Pin / Float")
+        configure(pinButton, symbol: "pin", tip: "Pin or float")
         pinButton.onClick = { [weak self] in self?.onPin?() }
-        configure(backdropButton, symbol: "circle.lefthalf.filled", tip: "Next Backdrop")
+        configure(backdropButton, symbol: "circle.lefthalf.filled", tip: "Change backdrop")
         backdropButton.onClick = { [weak self] in self?.onBackdrop?() }
         configure(hideButton, symbol: "chevron.right", tip: "Hide")
         hideButton.onClick = { [weak self] in self?.onHide?() }
@@ -427,11 +427,11 @@ public struct SlotTool {
     override func mouseExited(with event: NSEvent) { hovered = false }
 
     private func updateLook() {
-        let fill: CGFloat = selectedLook ? 0.2 : hovered ? 0.1 : 0
+        let fill: CGFloat = selectedLook ? 0.16 : hovered ? 0.08 : 0
         layer?.backgroundColor = NSColor(white: 1, alpha: fill).cgColor
         alphaValue = selectedLook || hovered || tabID == nil || !isTab ? 1 : 0.7
         layer?.borderWidth = letterBox ? 1 : 0
-        layer?.borderColor = NSColor(white: 1, alpha: 0.4).cgColor
+        layer?.borderColor = NSColor(white: 1, alpha: 0.16).cgColor
     }
 
     /// Tabs are drawn at 70 % until selected; tools and the slot's buttons are not tabs.

@@ -26,7 +26,7 @@ final class ChipView: NSView {
         super.init(frame: .zero)
         wantsLayer = true
         layer?.backgroundColor = fill.cgColor
-        layer?.cornerRadius = 3
+        layer?.cornerRadius = 4
         layer?.cornerCurve = .continuous
         label.font = font
         label.textColor = NSColor(srgbRed: 0xE6 / 255, green: 0xE8 / 255, blue: 0xEB / 255, alpha: 1)

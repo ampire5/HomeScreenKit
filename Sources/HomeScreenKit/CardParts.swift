@@ -261,21 +261,21 @@ final class HistogramView: NSView {
 }
 
 extension TextChip.Style {
-    /// The `+12` pill: 10.5 pt bold white on the pill blue, fully rounded, 1 × 6 padding (the list's: 10 pt, 0 × 5).
+    /// The new-item count uses tabular figures and the same ink as other facts.
     static func newPill(size: CGFloat = 10.5, padX: CGFloat = 6, padY: CGFloat = 1) -> TextChip.Style {
-        TextChip.Style(font: CardFont.text(size, .bold), padX: padX, padY: padY, radius: nil,
+        TextChip.Style(font: CardFont.text(max(11, size), .medium), padX: min(4, padX), padY: padY, radius: 4,
                        fill: Chrome.Palette.card.pill, border: nil, text: Chrome.Palette.card.pillText)
     }
 
     /// `RTL` (or the list's `ZIP`): bold secondary text in a 1 pt separator border, radius 4, 0 × 3 padding.
     static func outlined(size: CGFloat) -> TextChip.Style {
-        TextChip.Style(font: CardFont.text(size, .bold), padX: 3, padY: 0, radius: 4, fill: nil,
+        TextChip.Style(font: CardFont.text(size, .medium), padX: 4, padY: 0, radius: 4, fill: nil,
                        border: Chrome.Palette.card.separator, text: Chrome.Palette.card.secondary)
     }
 
-    /// `ZIP` over the cover: bold white on a dark veil, letter-spaced .04 em.
+    /// `ZIP` over the cover: medium weight on a dark veil.
     static func overCover(size: CGFloat, padX: CGFloat, padY: CGFloat, radius: CGFloat, veil: CGFloat) -> TextChip.Style {
-        TextChip.Style(font: NSFont.systemFont(ofSize: size, weight: .bold), kern: 0.04 * size, padX: padX, padY: padY,
+        TextChip.Style(font: NSFont.systemFont(ofSize: size, weight: .medium), padX: padX, padY: padY,
                        radius: radius, fill: Chrome.Palette.card.coverChip.withAlphaComponent(veil), border: nil,
                        text: Chrome.Palette.card.coverChipText)
     }

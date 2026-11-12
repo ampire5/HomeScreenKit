@@ -90,7 +90,7 @@ import SlotChrome
         plusButton.imageScaling = .scaleNone
         plusButton.contentTintColor = .labelColor
         plusButton.wantsLayer = true
-        plusButton.layer?.cornerRadius = Self.plusSize / 2
+        plusButton.layer?.cornerRadius = 8
         plusButton.layer?.backgroundColor = NSColor(white: 1, alpha: 0.12).cgColor
         plusButton.target = self
         plusButton.action = #selector(plusPressed)
@@ -219,7 +219,7 @@ import SlotChrome
         panel.layer?.cornerRadius = overlay ? Self.overlayCornerRadius : 0
         panel.layer?.backgroundColor = look == .dark ? Self.darkColor.cgColor : NSColor.clear.cgColor
         panel.layer?.borderWidth = overlay ? 1 : 0
-        panel.layer?.borderColor = NSColor(white: 1, alpha: 0.15).cgColor
+        panel.layer?.borderColor = Chrome.Palette.overMedia.rim.cgColor
         blur.isHidden = look != .glass
         veil.isHidden = look == .dark
         veil.layer?.backgroundColor = NSColor(white: 0, alpha: look == .glass ? 0.3 : 0.35).cgColor

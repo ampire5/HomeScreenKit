@@ -3,8 +3,8 @@ import HomeChrome
 import HomeScreenModel
 
 /// A photo in the grid (photo-cards spec 2026-10-26). Square: the picture fills the slot's square, cropped. Aspect:
-/// the whole picture sits in the square inset by 8 pt. Either way everything is drawn on the picture: radius 8, the
-/// selection a 2.5 pt ring inside it with a dark hairline inside the ring, a dot at the top right for a photo not
+/// the whole picture sits in the square inset by 8 pt. Either way everything is drawn on the picture: radius up to 8, the
+/// selection a 2 pt ring inside it with a dark hairline inside the ring, a dot at the top right for a photo not
 /// viewed yet, a ⧉ chip at the top left for a page of a pair, and on hover a strip along the bottom with the format
 /// and the size. The dot, the chip and the strip are made the first time they show. The name goes on the picture,
 /// under the square, or nowhere. The slot's picture box is `aspect` wide over tall (a square for photos); with
@@ -48,14 +48,14 @@ final class PhotoCard: GridCard {
     private let track = CALayer()
     private let fill = CALayer()
     /// A video's length (or `0:04 / 23:03`) at the picture's bottom right: mono 11 on the scrim (style guide F1).
-    let lengthChip = ChipView(font: .monospacedDigitSystemFont(ofSize: 11, weight: .medium), fill: NSColor(white: 0, alpha: 0.55))
+    let lengthChip = ChipView(font: .monospacedDigitSystemFont(ofSize: 11, weight: .medium), fill: Chrome.Palette.overMedia.glassTint.withAlphaComponent(0.82))
     /// The badges at the picture's top left (`FileFactsText.badges`: `RAW`, `24 MP`; `UHD`, `HLG`), made the first
     /// time they show; on slots from `badgesFrom`.
     private var badgeLabels: [MediaBadge] = []
     private static let badgesFrom: CGFloat = 120
 
     private static let aspectInset: CGFloat = 8
-    private static let ringWidth: CGFloat = 2.5
+    private static let ringWidth: CGFloat = 2
     /// The dot: 8 pt in a 1.5 pt white ring, 6 pt in from the picture's top right (the chip: from its top left).
     private static let dot: CGFloat = 8, dotRing: CGFloat = 1.5, markInset: CGFloat = 6
     /// The chip: a 12 pt glyph, padding 2 × 3, radius 5.
@@ -104,7 +104,7 @@ final class PhotoCard: GridCard {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         picture.backgroundColor = Chrome.resolve(Chrome.Palette.window.fill, in: self)
-        fill.backgroundColor = Chrome.Palette.card.accent.cgColor   // the progress fill, the same blue in both appearances
+        fill.backgroundColor = Chrome.resolve(Chrome.Palette.card.accent, in: self)
         ring.borderColor = Chrome.resolve(Chrome.Palette.window.accent, in: self)
         dotLayer?.sublayers?.first?.backgroundColor = Chrome.resolve(Chrome.Palette.window.accent, in: self)
         CATransaction.commit()
@@ -134,20 +134,20 @@ final class PhotoCard: GridCard {
     }
 
 
-    /// The track along the picture's bottom edge (3 pt, only with a progress) and the chip 6 pt in from its bottom
-    /// right corner, above the track (only with a line, and on a picture wide enough for it).
-    private func layoutFacts(in rect: CGRect) {
+    /// The progress seam and the timecode share the lower edge. Lift the timecode clear of an on-image caption.
+    private func layoutFacts(in rect: CGRect, captionTop: CGFloat?) {
         let progress = showsFacts ? item.progress : nil
         track.isHidden = progress == nil
         if let progress {
-            track.frame = CGRect(x: rect.minX, y: rect.maxY - 3, width: rect.width, height: 3)
-            fill.frame = CGRect(x: 0, y: 0, width: (rect.width * min(1, max(0, progress))).rounded(), height: 3)
+            track.frame = CGRect(x: rect.minX, y: rect.maxY - 2, width: rect.width, height: 2)
+            fill.frame = CGRect(x: 0, y: 0, width: (rect.width * min(1, max(0, progress))).rounded(), height: 2)
         }
         let line = showsFacts ? lengthText : ""
         let size = lengthChip.intrinsicContentSize
-        lengthChip.isHidden = line.isEmpty || size.width > rect.width - 12
-        lengthChip.frame = CGRect(x: rect.maxX - Self.markInset - size.width,
-                                  y: rect.maxY - (progress == nil ? Self.markInset : 9) - size.height,
+        let bottom = captionTop.map { $0 - 4 } ?? (rect.maxY - 8)
+        let y = bottom - size.height
+        lengthChip.isHidden = line.isEmpty || size.width > rect.width - 16 || y < rect.minY + 8
+        lengthChip.frame = CGRect(x: rect.maxX - 8 - size.width, y: y,
                                   width: size.width, height: size.height)
     }
 
@@ -162,7 +162,7 @@ final class PhotoCard: GridCard {
     override var lastOpenedHighlightOutset: CGFloat { 4 }
 
     /// Small tiles keep restrained corners; every contour follows the same radius.
-    var pictureCornerRadius: CGFloat { min(6, min(pictureRect.width, pictureRect.height) * 0.06) }
+    var pictureCornerRadius: CGFloat { min(8, min(pictureRect.width, pictureRect.height) * 0.08) }
 
     var pictureRect: CGRect {
         let side = bounds.width
@@ -424,10 +424,7 @@ final class PhotoCard: GridCard {
         } else if names == .photo {
             nameLabel.font = Chrome.Text.font(.label, weight: .medium)
             nameLabel.textColor = Chrome.Palette.overMedia.text
-            let shadow = NSShadow()
-            shadow.shadowColor = Chrome.Palette.overMedia.mediaShadow
-            shadow.shadowBlurRadius = 2
-            nameLabel.shadow = shadow
+            nameLabel.shadow = nil
             // Above the strip while it shows.
             let bottom = rect.maxY - (strip?.isHidden == false ? stripHeight : 0)
             let band = min(rect.height, 32)
@@ -446,7 +443,7 @@ final class PhotoCard: GridCard {
             factsLabel.textColor = Chrome.Palette.window.secondaryLabel
             factsLabel.frame = CGRect(x: x, y: boxHeight + 3 + 16, width: width, height: 14)
         }
-        layoutFacts(in: rect)
+        layoutFacts(in: rect, captionTop: shade.isHidden ? nil : nameLabel.frame.minY)
         // Overlays share the picture's silhouette, including its lower corners.
         clip(shade, to: rect, radius: radius)
         clip(track, to: rect, radius: radius)

@@ -8,19 +8,18 @@ import HomeScreenModel
 /// A row whose folders take long to list shows a small spinner where its count goes.
 final class HomeSidebar: NSView {
     /// The column the sidebar takes by default.
-    static let width: CGFloat = 236
+    static let width: CGFloat = 240
     /// How narrow and how wide it can be kept; shown, it is at most a third of the window (`HomeView.widestSidebar`).
     public static let widthRange: ClosedRange<CGFloat> = 180...1600
     /// The widest it may show in any window, however narrow.
     static let widestAlways: CGFloat = 400
-    static let inset: CGFloat = 10
-    // Photos' sidebar (macOS 26, the owner's reference of 2026-10-27): 32 pt lines for rows and headings alike, a
-    // 20 pt symbol, 13 pt names, the light a neutral plate 10 pt in from the sides.
+    static let inset: CGFloat = 12
+    // 32 pt rows and headings, with a shared symbol column and a neutral selection plate.
     static let rowHeight: CGFloat = 32
     static let headingHeight: CGFloat = 32
-    static let indent: CGFloat = 14
+    static let indent: CGFloat = 12
     /// Compact indent: the step past the first three levels.
-    static let deepIndent: CGFloat = 6
+    static let deepIndent: CGFloat = 8
 
     /// A row's indent at `depth`: compact, the levels past the third step less (and show guides), so deep trees fit.
     static func offset(depth: Int, compact: Bool) -> CGFloat {
@@ -474,7 +473,7 @@ private final class SidebarLineView: NSView {
         title.textColor = .labelColor
         symbol.contentTintColor = lit ? .controlAccentColor : .secondaryLabelColor
         light.isHidden = !lit
-        light.layer?.backgroundColor = Chrome.resolve(NSColor.labelColor.withAlphaComponent(hasKeys ? 0.14 : 0.09), in: self)
+        light.layer?.backgroundColor = Chrome.resolve(NSColor.labelColor.withAlphaComponent(hasKeys ? 0.12 : 0.08), in: self)
     }
 
     override func viewDidChangeEffectiveAppearance() {
@@ -489,10 +488,8 @@ private final class SidebarLineView: NSView {
                                    width: 12, height: 12)
     }
 
-    /// Where a top-level row's triangle starts; its symbol's column 22 pt wide 14.5 pt after it, the name's text 42 pt
-    /// after it (Photos, measured on its screenshot 2026-10-27: chevron centred at 19, symbol at 37.5, name's text at 55,
-    /// a heading's at 16.5). A text field draws its text 2 pt in from its frame: the frames below are 2 pt to the left.
-    static let lead: CGFloat = 13
+    /// The disclosure, icon and name use fixed columns. A text field draws its text 2 pt inside its frame.
+    static let lead: CGFloat = 12
     private static let fieldInset: CGFloat = 2
 
     override func layout() {
@@ -501,19 +498,19 @@ private final class SidebarLineView: NSView {
         light.frame = CGRect(x: HomeSidebar.inset, y: 2, width: max(0, w - 2 * HomeSidebar.inset), height: max(0, h - 4))
         if isHeading {
             // Photos sets a heading low in its line, nearer the rows it heads.
-            title.frame = CGRect(x: 16.5 - Self.fieldInset, y: h - 16 - 4, width: max(0, w - 48), height: 16)
+            title.frame = CGRect(x: 16 - Self.fieldInset, y: h - 16 - 4, width: max(0, w - 48), height: 16)
             triangle.frame = CGRect(x: w - 30, y: h - 12 - 5, width: 12, height: 12)
             return
         }
         let x = Self.lead + HomeSidebar.offset(depth: depth, compact: compactIndent)
         layoutGuides()
         triangle.frame = CGRect(x: x, y: (h - 12) / 2, width: 12, height: 12)
-        symbol.frame = CGRect(x: x + 14.5, y: (h - 22) / 2, width: 22, height: 22)
+        symbol.frame = CGRect(x: x + 16, y: (h - 20) / 2, width: 20, height: 20)
         let countWidth: CGFloat = count.stringValue.isEmpty ? 0 : 40
-        let right = w - HomeSidebar.inset - 10
+        let right = w - HomeSidebar.inset - 8
         count.frame = CGRect(x: right - countWidth, y: (h - 15) / 2, width: countWidth, height: 15)
         spinner.frame = CGRect(x: right - 16, y: (h - 16) / 2, width: 16, height: 16)
-        let textX = x + 42 - Self.fieldInset
+        let textX = x + 44 - Self.fieldInset
         title.frame = CGRect(x: textX, y: (h - 17) / 2, width: max(0, right - countWidth - textX - 4), height: 17)
     }
 

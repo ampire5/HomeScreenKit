@@ -24,7 +24,7 @@ import Testing
     @Test func squareRingInsideSlot() {
         let card = photo(.square)
         #expect(card.ring.frame == card.bounds)
-        #expect(card.ring.borderWidth == 2.5)
+        #expect(card.ring.borderWidth == 2)
         #expect(card.pictureRect == card.bounds)
     }
 
@@ -39,7 +39,7 @@ import Testing
         #expect(abs(card.pictureRect.height - expected.height) < 0.01)
         #expect(card.pictureRect.minX == 8 && card.pictureRect.width == 184)
         #expect(card.ring.frame == card.pictureRect)
-        #expect(card.ring.borderWidth == 2.5)
+        #expect(card.ring.borderWidth == 2)
     }
 
     @Test func shortAspectThumbnailKeepsCaptionsInsideThePhoto() {
@@ -56,6 +56,25 @@ import Testing
         #expect(!card.nameLabel.isHidden)
         #expect(card.strip?.isHidden == false)
         #expect(card.pictureRect.contains(card.nameLabel.frame))
+    }
+
+    @Test func videoTimecodeClearsTheHoverCaption() {
+        let card = photo(.square, names: .auto)
+        card.showsFacts = true
+        card.show(HomeCardItem(id: "clip", title: "Test clip.mp4", subtitle: "0:24",
+                               tooltip: "", symbol: "film", progress: 0.5))
+        card.layoutSubtreeIfNeeded()
+        let restingY = card.lengthChip.frame.minY
+        #expect(!card.lengthChip.isHidden && card.nameLabel.isHidden)
+
+        card.isHovered = true
+        card.layoutSubtreeIfNeeded()
+        #expect(!card.lengthChip.isHidden && !card.nameLabel.isHidden)
+        #expect(card.lengthChip.frame.maxY <= card.nameLabel.frame.minY - 4)
+
+        card.isHovered = false
+        card.layoutSubtreeIfNeeded()
+        #expect(card.lengthChip.frame.minY == restingY)
     }
 
     @Test func lastOpenedHighlightFollowsAspectImageWithNamesBelow() throws {
@@ -85,11 +104,11 @@ import Testing
     @Test func photoCornersStayRestrainedAtEveryScale() {
         for style in [GridStyle.square, .aspect] {
             let card = photo(style)
-            #expect(card.pictureLayer.cornerRadius == 6)
-            #expect(card.ring.cornerRadius == 6)
+            #expect(card.pictureLayer.cornerRadius == 8)
+            #expect(card.ring.cornerRadius == 8)
         }
         let small = photo(.square, size: CGSize(width: 40, height: 40))
-        #expect(small.pictureLayer.cornerRadius == 2.4)
+        #expect(small.pictureLayer.cornerRadius == 3.2)
         #expect(small.ring.cornerRadius == small.pictureLayer.cornerRadius)
         let thin = photo(.aspect)
         thin.image = image(300, 20)
@@ -102,8 +121,8 @@ import Testing
         for style in [GridStyle.square, .aspect] {
             let card = photo(style)
             #expect(card.ring.frame == card.pictureRect)
-            #expect(card.ring.borderWidth == 2.5)
-            #expect(card.hairline.frame == card.ring.bounds.insetBy(dx: 2.5, dy: 2.5))
+            #expect(card.ring.borderWidth == 2)
+            #expect(card.hairline.frame == card.ring.bounds.insetBy(dx: 2, dy: 2))
         }
     }
 

@@ -37,10 +37,10 @@ import Testing
 
     @Test func overMediaValues() {
         typealias P = Chrome.Palette.overMedia
-        expectSRGB(P.glassTint, 22 / 255, 24 / 255, 29 / 255, 0.62)
-        expectSRGB(P.glassTintLight, 22 / 255, 24 / 255, 29 / 255, 0.55)
-        expectSRGB(P.rim, 1, 1, 1, 0.14)
-        expectSRGB(P.separator, 1, 1, 1, 0.18)
+        expectSRGB(P.glassTint, 20 / 255, 20 / 255, 22 / 255, 0.62)
+        expectSRGB(P.glassTintLight, 20 / 255, 20 / 255, 22 / 255, 0.55)
+        expectSRGB(P.rim, 1, 1, 1, 0.10)
+        expectSRGB(P.separator, 1, 1, 1, 0.12)
         expectSRGB(P.text, 1, 1, 1, 0.92)
         expectSRGB(P.secondaryText, 1, 1, 1, 0.7)
         expectSRGB(P.tertiaryText, 1, 1, 1, 0.5)

@@ -4,10 +4,10 @@ extension Chrome {
     public enum Palette {
         /// Always-dark colours for chrome drawn over photos and video, whatever the system appearance.
         public enum overMedia {
-            public static let glassTint = NSColor(srgbRed: 22 / 255, green: 24 / 255, blue: 29 / 255, alpha: 0.62)
-            public static let glassTintLight = NSColor(srgbRed: 22 / 255, green: 24 / 255, blue: 29 / 255, alpha: 0.55)
-            public static let rim = NSColor(white: 1, alpha: 0.14)
-            public static let separator = NSColor(white: 1, alpha: 0.18)
+            public static let glassTint = NSColor(srgbRed: 20 / 255, green: 20 / 255, blue: 22 / 255, alpha: 0.62)
+            public static let glassTintLight = NSColor(srgbRed: 20 / 255, green: 20 / 255, blue: 22 / 255, alpha: 0.55)
+            public static let rim = NSColor(white: 1, alpha: 0.10)
+            public static let separator = NSColor(white: 1, alpha: 0.12)
             public static let text = NSColor(white: 1, alpha: 0.92)
             public static let secondaryText = NSColor(white: 1, alpha: 0.7)
             public static let tertiaryText = NSColor(white: 1, alpha: 0.5)

@@ -37,15 +37,15 @@ import Testing
         let view = sidebar(t)
         #expect(view.titles == ["Recent", "Places", "T", "a", "b", "c", "d", "e"])
         let x = view.titleFrames.map(\.minX)
-        #expect(x[4] - x[3] == 14)
-        #expect(x[5] - x[4] == 14)
-        #expect(x[6] - x[5] == 6)
-        #expect(x[7] - x[6] == 6)
+        #expect(x[4] - x[3] == 12)
+        #expect(x[5] - x[4] == 12)
+        #expect(x[6] - x[5] == 8)
+        #expect(x[7] - x[6] == 8)
         #expect(view.guideCounts[2...7] == [0, 1, 2, 3, 4, 5])
         view.compactIndent = false
         view.layoutSubtreeIfNeeded()
         let even = view.titleFrames.map(\.minX)
-        #expect(even[7] - even[6] == 14)
+        #expect(even[7] - even[6] == 12)
         #expect(view.guideCounts.allSatisfy { $0 == 0 })
     }
 
@@ -72,7 +72,7 @@ import Testing
     @Test func drawsLines() {
         let view = sidebar(tree)
         #expect(view.titles == ["Recent", "Places", "T", "a"])
-        #expect(view.titleFrames[3].minX - view.titleFrames[2].minX == 14)
+        #expect(view.titleFrames[3].minX - view.titleFrames[2].minX == 12)
         #expect(view.lineFrames[0].height == 32)   // Photos' 32 pt lines
         #expect(view.lineFrames[1].height == 32)
         #expect(view.countTexts[3] == "12")
