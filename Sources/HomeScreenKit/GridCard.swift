@@ -9,6 +9,7 @@ class GridCard: NSView {
     var onHover: (() -> Void)?
     /// A context-menu request is an explicit choice, independent of pointer-following selection.
     var onContextMenu: (() -> Void)?
+    var menuItems: (() -> [HomeMenuItem])?
     var onMenu: ((String) -> Void)?
     var isSelected = false { didSet { selectionChanged() } }
     /// What the files are called in the card's facts (`FileStyle.noun`), set by the browser.
@@ -116,19 +117,15 @@ class GridCard: NSView {
     }
 
     override func menu(for event: NSEvent) -> NSMenu? {
-        guard !item.menu.isEmpty else { return nil }
+        let items = menuItems?() ?? item.menu
+        guard !items.isEmpty else { return nil }
+        let action = onMenu
         (onContextMenu ?? onHover)?()
         let menu = NSMenu()
-        for (i, entry) in item.menu.enumerated() {
-            let menuItem = menu.addItem(withTitle: entry.title, action: #selector(menuChose(_:)), keyEquivalent: "")
-            menuItem.target = self
-            menuItem.tag = i
+        for entry in items {
+            HomeMenuAction.add(entry.title, to: menu) { action?(entry.id) }
         }
         return menu
-    }
-
-    @objc private func menuChose(_ sender: NSMenuItem) {
-        if item.menu.indices.contains(sender.tag) { onMenu?(item.menu[sender.tag].id) }
     }
 
     /// A bottom band from clear to black 0.55, under names drawn on a picture.

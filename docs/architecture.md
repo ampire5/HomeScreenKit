@@ -28,6 +28,15 @@ choices. The browser owns selection, local navigation/history, visible cards, la
 It delegates actual filesystem/media operations to the source. `HomeView` composes browser/sidebar and inspector
 integration. Filmstrip and slot hosts supply their own items and callbacks; they do not create an app media cache.
 
+Hosts provide Favorites as an ordered sidebar section and own add, remove, reorder and persistence. HomeScreenKit
+handles branch selection, drag and menu reordering, and discards replies from superseded sidebar reloads. Favorites
+and Places can show the same path as distinct sidebar branches.
+
+With `HomeView.fileTabsEnabled`, `HomeFileTabs` keeps the navigation, selection and scroll for each folder tab
+while the same `HomeBrowserView` renders the selected tab or the current app source. A tab switch uses the
+browser's listing cancellation and generation guards. The host owns the lifetime of the versioned
+`FileTabSession` snapshot and associates media opens with a tab ID when it wants to return to that tab.
+
 Flow: source location → `list` stream → browser sorting/filtering/layout → visible cards → source image requests →
 `setImage` delivery. Card reuse and visibility determine picture demand, not the size of the whole collection.
 When Date orders folders, all card styles show the entry's sorting date instead of the contents' date span;

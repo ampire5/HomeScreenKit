@@ -75,6 +75,10 @@ public final class HomeBrowserView: NSView {
     var onListingComplete: ((BrowserLocation, [BrowserEntry]) -> Void)?
     /// After every move, for `HomeView` (the sidebar follows).
     var onMoved: ((BrowserLocation) -> Void)?
+    var onLeaveFileTab: (() -> Void)?
+    var onEnterFileTab: (() -> FileTabNavigation?)?
+    var onBackToFileTab: (() -> Void)?
+    var onOpenFileTab: ((URL) -> Void)?
     /// A mouse's other buttons (down: true) for the app to route (Loupe's button layout, a Logitech mouse's own
     /// events); true when taken. Nil: the back and forward buttons (3, 4) are Back and Forward here.
     public var onOtherMouse: ((NSEvent, Bool) -> Bool)?
@@ -82,6 +86,10 @@ public final class HomeBrowserView: NSView {
     // MARK: Read by the app
 
     public var location: BrowserLocation { history.current }
+    var isAtAppSource: Bool {
+        if case .source = location { return true }
+        return false
+    }
     /// The last places or folder shown: where the app's "Folders" goes back to.
     public private(set) var lastBrowsed = BrowserLocation.places
 
@@ -248,7 +256,25 @@ public final class HomeBrowserView: NSView {
     static let defaultTopInset: CGFloat = 52
 
     /// What the toolbar and the title bar take at the view's top: the safe area's, once the window has a toolbar.
-    var topInset: CGFloat { window?.toolbar != nil ? safeAreaInsets.top : Self.defaultTopInset }
+    private var toolbarInset: CGFloat { window?.toolbar != nil ? safeAreaInsets.top : Self.defaultTopInset }
+    var topInset: CGFloat { toolbarInset + (fileTabStripTop == nil ? 0 : FileTabStrip.height) }
+    private var fileTabStripTop: NSLayoutConstraint?
+
+    func installFileTabStrip(_ strip: FileTabStrip?) {
+        fileTabStripTop = nil
+        if let strip {
+            strip.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(strip, positioned: .above, relativeTo: nil)
+            let top = strip.topAnchor.constraint(equalTo: topAnchor, constant: toolbarInset)
+            fileTabStripTop = top
+            NSLayoutConstraint.activate([
+                top, strip.leadingAnchor.constraint(equalTo: leadingAnchor),
+                strip.trailingAnchor.constraint(equalTo: trailingAnchor),
+                strip.heightAnchor.constraint(equalToConstant: FileTabStrip.height),
+            ])
+        }
+        updateTopInset()
+    }
 
     /// The toolbar for the window of the app to show while Home is on screen (`window.toolbar = browser.nsToolbar`).
     public var nsToolbar: NSToolbar { toolbar.nsToolbar }
@@ -266,6 +292,7 @@ public final class HomeBrowserView: NSView {
     private var pageTop: NSLayoutConstraint?
 
     private func updateTopInset() {
+        if let top = fileTabStripTop, top.constant != toolbarInset { top.constant = toolbarInset }
         let inset = topInset
         let pageInsetChanged = pageTop.map { $0.constant != inset } ?? false
         guard loadingBottom.constant != inset || skeletonTop.constant != inset || pageInsetChanged else { return }
@@ -489,6 +516,32 @@ public final class HomeBrowserView: NSView {
 
     // MARK: Moving
 
+    var fileTabNavigation: FileTabNavigation {
+        var state = FileTabNavigation(at: location)
+        state.history = history
+        state.selection = selection
+        state.anchor = anchor
+        state.history.remember(selection: selection, scroll: pendingScroll ?? scrollOffset)
+        return state
+    }
+
+    /// A tab switch replaces the navigation state even when both tabs point at the same path.
+    func activateFileTab(_ state: FileTabNavigation, selecting: String? = nil) {
+        history = state.history
+        hasShown = true
+        unavailable = []
+        unseen = []
+        paired = []
+        facts = [:]
+        let keepAnchor = selecting == nil || selecting == state.selection
+        pendingSelection = selecting ?? state.selection
+        pendingAnchor = keepAnchor ? state.anchor : nil
+        pendingScroll = keepAnchor && state.anchor == nil ? state.history.scroll(for: location) ?? 0 : nil
+        restoredScroll = pendingAnchor != nil
+        if lastLoaded == location { lastLoaded = nil }
+        load()
+    }
+
     /// Opens `location` and selects `selecting` there (nil: what was selected there last time). The folder already on
     /// screen with its complete listing (the viewer going back to it) keeps its cards and pictures: `selecting` is
     /// selected at once and the folder is listed again behind them (`refresh`). `anchor`: a session's scroll, in place
@@ -497,7 +550,23 @@ public final class HomeBrowserView: NSView {
         if hasShown, location == self.location, hasComplete, page == nil, !isShowingMessage {
             return refresh(selecting: selecting)
         }
-        if hasShown {
+        if isAtAppSource, case .source = location {
+            rememberPlace()
+            history.go(to: location)
+        } else if isAtAppSource, var navigation = onEnterFileTab?() {
+            if navigation.history.current != location {
+                navigation.history.go(to: location)
+                navigation.selection = navigation.history.selection(for: location)
+                navigation.anchor = nil
+            }
+            if let anchor { navigation.anchor = anchor }
+            activateFileTab(navigation, selecting: selecting)
+            return
+        } else if case .source = location, let onLeaveFileTab {
+            onLeaveFileTab()
+            history = BrowserHistory(start: location)
+            hasShown = true
+        } else if hasShown {
             rememberPlace()
             history.go(to: location)
         } else {
@@ -626,6 +695,10 @@ public final class HomeBrowserView: NSView {
 
     /// Back, Forward and Up (⌘[ / ⌘] / ⌘↑, the bar's buttons; the app routes a mouse's side buttons here).
     public func goBack() {
+        if isAtAppSource, !history.canGoBack, let onBackToFileTab {
+            onBackToFileTab()
+            return
+        }
         rememberPlace()
         guard history.back() else { return }
         restorePlace()
@@ -1784,7 +1857,7 @@ public final class HomeBrowserView: NSView {
         for i in range {
             let entry = entries[i]
             if let card = live[i] {
-                let item = item(for: entry)   // a count, a date, dimming or a menu changed: the picture stays
+                let item = item(for: entry)   // a count, a date or dimming changed: the picture stays
                 if card.item != item { card.show(item) }
             } else {
                 let card: GridCard
@@ -1953,6 +2026,15 @@ public final class HomeBrowserView: NSView {
             self?.dropRestore()
             self?.select(id: id, scrolls: false)
         }
+        card.menuItems = { [weak self] in
+            guard let self, let index = self.indexByID[id] else { return [] }
+            let entry = self.entries[index]
+            var items = self.source?.menu(for: entry, in: self.location) ?? []
+            if self.onOpenFileTab != nil, entry.kind == .folder || entry.kind == .place {
+                items.append(HomeFileTab.openMenuItem)
+            }
+            return items
+        }
         card.onMenu = { [weak self] item in self?.menuChosen(item, id) }
     }
 
@@ -1961,6 +2043,10 @@ public final class HomeBrowserView: NSView {
 
     private func menuChosen(_ item: String, _ id: String) {
         guard let entry = indexByID[id].map({ entries[$0] }) else { return }
+        if item == HomeFileTab.openMenuID, let onOpenFileTab {
+            onOpenFileTab(entry.url)
+            return
+        }
         source?.perform(item, on: entry, in: location)
     }
 
@@ -1995,7 +2081,7 @@ public final class HomeBrowserView: NSView {
                             isDimmed: entry.isDimmed || isUnavailable(entry)
                                 || (summary?.problem == .offline && entry.kind != .folder
                                                                         && entry.kind != .archive),
-                            menu: source?.menu(for: entry, in: location) ?? [], glassSymbol: entry.kind == .place,
+                            glassSymbol: entry.kind == .place,
                             summary: summary, count: entry.count,
                             format: entry.isFile && !entry.url.pathExtension.isEmpty ? entry.url.pathExtension.uppercased() : nil,
                             date: entry.date, bytes: entry.size, facts: entry.facts ?? facts[entry.id],

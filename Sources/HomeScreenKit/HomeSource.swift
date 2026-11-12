@@ -64,6 +64,8 @@ public struct HomeSourceInfo {
     func sidebarMenu(for row: HomeSidebarRow) -> [HomeMenuItem]
     /// An item of `sidebarMenu(for:)` chosen on `row`.
     func performSidebar(_ item: String, on row: HomeSidebarRow)
+    /// Move a top-level favorite before another, or to the end when the destination is nil.
+    func moveFavoriteFolder(_ folder: URL, before other: URL?)
     /// A file or a collection opened (a folder or an archive is entered by the browser itself).
     func open(_ entry: BrowserEntry, in location: BrowserLocation, sort: BrowserSort, how: HomeClick)
     func rename(_ entry: BrowserEntry, to name: String) async throws -> BrowserEntry
@@ -103,6 +105,7 @@ public extension HomeSource {
     func lastListing(for location: BrowserLocation) -> BrowserListing? { nil }
     func sidebarMenu(for row: HomeSidebarRow) -> [HomeMenuItem] { [] }
     func performSidebar(_ item: String, on row: HomeSidebarRow) {}
+    func moveFavoriteFolder(_ folder: URL, before other: URL?) {}
     func cardStyle(for location: BrowserLocation) -> CardStyle { .posters }
     func setCardStyle(_ style: CardStyle, for location: BrowserLocation) {}
     func wantImages(_ ids: [String], visible: Int, width: CGFloat) { wantImages(ids, width: width) }

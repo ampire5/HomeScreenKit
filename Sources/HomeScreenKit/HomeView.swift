@@ -9,6 +9,10 @@ import HomeScreenModel
 public final class HomeView: NSView {
     public let browser: HomeBrowserView
     let sidebarView = HomeSidebar()
+    var fileTabStrip: FileTabStrip?
+    var fileTabs: [HomeFileTab] = []
+    var fileTabIndex = 0
+    var lastFileFolder: URL?
 
     /// The toolbar's sidebar button: the app flips `isSidebarVisible` and keeps it.
     public var onSidebarToggle: (() -> Void)?
@@ -66,6 +70,7 @@ public final class HomeView: NSView {
         didSet {
             guard isParked != oldValue else { return }
             if isParked {
+                captureFileTab(whileParking: true)
                 sidebarItem.isCollapsed = true
                 inspectorItem?.isCollapsed = true
             } else {
@@ -304,6 +309,8 @@ public final class HomeView: NSView {
 
     private weak var source: HomeSource?
     private var tree = SidebarTree(sections: [])
+    private var sidebarReload: Task<Void, Never>?
+    private var chosenSidebarRoot: SidebarTree.Root?
     /// Bumped on every move: the path's folders still to come for an older one are not asked. New sections keep them
     /// (they keep what is open under the roots still there).
     private var generation = 0
@@ -358,7 +365,12 @@ public final class HomeView: NSView {
         browser.toolbar.onHome = { [weak self] in self?.onHome?() }
         browser.onMoved = { [weak self] location in self?.moved(to: location) }
         browser.onListingComplete = { [weak self] location, entries in self?.listingComplete(location, entries: entries) }
-        sidebarView.onOpen = { [weak self] location in self?.browser.show(location, selecting: nil) }
+        sidebarView.onChooseRoot = { [weak self] root in self?.chosenSidebarRoot = root }
+        sidebarView.onOpen = { [weak self] location in
+            guard let self else { return }
+            self.browser.show(location, selecting: nil)
+            if self.chosenSidebarRoot != nil { self.moved(to: location) }
+        }
         sidebarView.onExpand = { [weak self] folder in self?.expand(folder) }
         sidebarView.onCollapse = { [weak self] folder in
             self?.tree.collapse(folder)
@@ -368,8 +380,18 @@ public final class HomeView: NSView {
             self?.tree.toggleSection(id)
             self?.showTree()
         }
-        sidebarView.menuItems = { [weak self] row in self?.source?.sidebarMenu(for: row) ?? [] }
-        sidebarView.onMenu = { [weak self] item, row in self?.source?.performSidebar(item, on: row) }
+        sidebarView.menuItems = { [weak self] row in
+            guard let self else { return [] }
+            var items = self.source?.sidebarMenu(for: row) ?? []
+            if self.fileTabsEnabled, row.expandable, case .folder = row.location { items.append(HomeFileTab.openMenuItem) }
+            return items
+        }
+        sidebarView.onMenu = { [weak self] item, row in
+            guard let self else { return }
+            if item == HomeFileTab.openMenuID { self.openFileTab(at: row.location) }
+            else { self.source?.performSidebar(item, on: row) }
+        }
+        sidebarView.onMoveFavorite = { [weak self] folder, other in self?.source?.moveFavoriteFolder(folder, before: other) }
         sidebarView.onEndKeys = { [weak self] in self?.browser.takeFocus() }
         sidebarView.onClickKeys = { [weak self] in self?.browser.takeFocus() }
         reloadSidebar()
@@ -383,8 +405,9 @@ public final class HomeView: NSView {
 
     /// The sidebar's sections again (a volume came or went, a pin): what was opened stays.
     public func reloadSidebar() {
-        Task { @MainActor [weak self] in
-            guard let sections = await self?.source?.sidebar(), let self else { return }
+        sidebarReload?.cancel()
+        sidebarReload = Task { @MainActor [weak self] in
+            guard let sections = await self?.source?.sidebar(), !Task.isCancelled, let self else { return }
             self.tree.setSections(sections)
             let location = self.browser.location
             let unknown = self.tree.follow(location)
@@ -404,10 +427,12 @@ public final class HomeView: NSView {
     // MARK: Following
 
     private func moved(to location: BrowserLocation) {
+        fileTabLocationChanged()
         generation += 1
         followTask?.cancel()
         isFollowing = false
-        pending = (location, tree.follow(location))
+        pending = (location, tree.follow(location, preferredRoot: chosenSidebarRoot))
+        chosenSidebarRoot = nil
         showTree()
     }
 

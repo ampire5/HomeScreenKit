@@ -135,13 +135,17 @@ import Testing
         #expect(view.selectedID == view.entries[1].id)
     }
 
-    @Test func rightClickMenuFromSource() async {
+    @Test func rightClickMenuReadsTheCurrentSourceItems() async throws {
         let source = FakeHomeSource()
         let view = await shown(source, [BrowserFixtures.file("a.jpg")])
-        let card = view.card(for: view.entries[0].id)!
-        #expect(card.item.menu.map(\.title) == ["Show in Finder"])
-        card.onMenu?("reveal")
-        #expect(source.performed.first?.0 == "reveal")
+        let card = try #require(view.card(for: view.entries[0].id))
+        let event = try #require(NSEvent.mouseEvent(with: .rightMouseDown, location: .zero, modifierFlags: [],
+            timestamp: 0, windowNumber: 0, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+        #expect(card.menu(for: event)?.items.map(\.title) == ["Show in Finder"])
+        source.menuItems = [HomeMenuItem(id: "remove-favorite", title: "Remove from Favorites")]
+        let item = try #require(card.menu(for: event)?.item(withTitle: "Remove from Favorites"))
+        _ = NSApp.sendAction(try #require(item.action), to: item.target, from: item)
+        #expect(source.performed.first?.0 == "remove-favorite")
         #expect(source.performed.first?.1 == view.entries[0].id)
     }
 

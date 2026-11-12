@@ -87,6 +87,45 @@ import Testing
         #expect(opened == [.source("recent"), .folder(url("/Volumes/T/a"))])
     }
 
+    @Test func favoriteAndPlaceWithSamePathHaveDistinctSelection() {
+        let location = BrowserLocation.folder(url("/Volumes/T"))
+        let row = HomeSidebarRow(id: "T", title: "T", symbol: "folder", location: location, expandable: true)
+        let favorites = HomeSidebarSection.favorites([row])
+        let places = HomeSidebarSection(id: "places", title: "Places", rows: [row])
+        var tree = SidebarTree(sections: [favorites, places])
+        let favorite = tree.root(at: 1)
+        let place = tree.root(at: 3)
+        #expect(favorite != place)
+        _ = tree.follow(location, preferredRoot: favorite)
+        #expect(tree.currentLine == 1)
+        _ = tree.follow(location, preferredRoot: place)
+        #expect(tree.currentLine == 3)
+        tree.setSections([favorites])
+        _ = tree.follow(location)
+        #expect(tree.currentLine == 1)
+    }
+
+    @Test func moveDownTargetsAfterNextFavoriteAndLeavesChildrenAlone() throws {
+        let folders = ["B", "A", "C"].map { url("/Volumes/T/" + $0) }
+        var tree = SidebarTree(sections: [.favorites(folders.map {
+            HomeSidebarRow(id: $0.path, title: $0.lastPathComponent, symbol: "folder",
+                           location: .folder($0), expandable: true)
+        })])
+        _ = tree.expand(folders[0])
+        tree.setChildren([BrowserEntry(url: url("/Volumes/T/B/child"), name: "child", kind: .folder)], of: folders[0])
+        let view = sidebar(tree)
+        #expect(view.titles == ["Favorites", "B", "child", "A", "C"])
+        #expect(view.menu(forLine: 2) == nil)
+        var moved: URL?
+        var before: URL?
+        view.onMoveFavorite = { moved = $0; before = $1 }
+        let item = try #require(view.menu(forLine: 1)?.item(withTitle: "Move Down"))
+        let action = try #require(item.action)
+        _ = NSApp.sendAction(action, to: item.target, from: item)
+        #expect(moved == folders[0])
+        #expect(before == folders[2])
+    }
+
     @Test func disclosureExpandsAndCollapses() {
         var t = tree
         let view = sidebar(t)

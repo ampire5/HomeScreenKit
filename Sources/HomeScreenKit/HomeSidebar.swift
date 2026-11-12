@@ -34,6 +34,8 @@ final class HomeSidebar: NSView {
     private static let top: CGFloat = 4
 
     var onOpen: ((BrowserLocation) -> Void)?
+    var onChooseRoot: ((SidebarTree.Root?) -> Void)?
+    var onMoveFavorite: ((URL, URL?) -> Void)?
     var onExpand: ((URL) -> Void)?
     var onCollapse: ((URL) -> Void)?
     var onToggleSection: ((String) -> Void)?
@@ -71,27 +73,39 @@ final class HomeSidebar: NSView {
         }
     }
     /// The lit row by its id: lines move as folders open and replies fill in.
-    private var selectedID: String?
+    private struct RowIdentity: Equatable {
+        let id: String
+        let root: SidebarTree.Root?
+    }
+    private var selectedID: RowIdentity?
     /// The current row's id as last followed.
-    private var followedID: String?
+    private var followedID: RowIdentity?
     /// The browser moved and the user has not opened or closed a folder since: the current row is kept in view as
     /// the rows above it fill in.
     private var followsCurrent = false
 
-    private func rowID(at line: Int) -> String? {
+    private func rowID(at line: Int) -> RowIdentity? {
         let lines = tree.lines
         guard lines.indices.contains(line), case .row(let row, _, _, _) = lines[line] else { return nil }
-        return row.id
+        return RowIdentity(id: row.id, root: tree.root(at: line))
     }
 
-    private func line(of id: String) -> Int? {
-        tree.lines.firstIndex { if case .row(let row, _, _, _) = $0 { row.id == id } else { false } }
+    private func line(of id: RowIdentity) -> Int? {
+        let lines = tree.lines
+        return lines.indices.first { index in
+            guard case .row(let row, _, _, _) = lines[index], row.id == id.id else { return false }
+            return tree.root(at: index) == id.root
+        }
     }
     private var revealsSelected = false
 
     private let scroll = NSScrollView()
     private let document = FlippedView()
     private var lineViews: [SidebarLineView] = []
+    private static let favoriteDragType = NSPasteboard.PasteboardType("org.homescreenkit.favorite-folder")
+    private var favoritePress: (event: NSEvent, folder: URL, line: Int)?
+    private var draggedFavorite: URL?
+    private let dropIndicator = NSBox()
     /// The lit row: the current one, or where the arrows moved.
     private var selected: Int?
     /// Folders listing for longer than `slowAfter`, by path.
@@ -105,6 +119,12 @@ final class HomeSidebar: NSView {
         scroll.autohidesScrollers = true
         scroll.documentView = document
         addSubview(scroll)   // on the material the split view's sidebar item gives
+        registerForDraggedTypes([Self.favoriteDragType])
+        dropIndicator.boxType = .custom
+        dropIndicator.borderType = .noBorder
+        dropIndicator.fillColor = .controlAccentColor
+        dropIndicator.isHidden = true
+        document.addSubview(dropIndicator)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
@@ -221,6 +241,7 @@ final class HomeSidebar: NSView {
     // MARK: Mouse
 
     override func mouseDown(with event: NSEvent) {
+        favoritePress = nil
         let point = document.convert(event.locationInWindow, from: nil)
         guard let view = lineViews.first(where: { $0.frame.contains(point) }) else { return }
         // As in Finder, a click leaves the keys with the browser (letters pick a name there); Tab brings them here.
@@ -228,9 +249,105 @@ final class HomeSidebar: NSView {
         let x = point.x - view.frame.minX
         if view.disclosureFrame.insetBy(dx: -4, dy: -4).contains(CGPoint(x: x, y: view.bounds.midY)) {
             clickDisclosure(line: view.tag)
+        } else if let folder = favorite(at: view.tag) {
+            favoritePress = (event, folder, view.tag)
         } else {
             click(line: view.tag)
         }
+    }
+
+    private var favoriteFolders: [URL] {
+        tree.sections.first { $0.id == HomeSidebarSection.favoritesID }?.rows.compactMap {
+            if case .folder(let folder) = $0.location { return folder }
+            return nil
+        } ?? []
+    }
+
+    private func favorite(at line: Int) -> URL? {
+        let lines = tree.lines
+        guard lines.indices.contains(line), case .row(let row, 0, _, _) = lines[line],
+              tree.root(at: line)?.sectionID == HomeSidebarSection.favoritesID,
+              case .folder(let folder) = row.location else { return nil }
+        return folder
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard let press = favoritePress, favoriteFolders.count > 1 else { return }
+        let from = press.event.locationInWindow, to = event.locationInWindow
+        guard hypot(from.x - to.x, from.y - to.y) >= 4, lineViews.indices.contains(press.line),
+              favorite(at: press.line) == press.folder else { return }
+        favoritePress = nil
+        draggedFavorite = press.folder
+        let data = NSPasteboardItem()
+        data.setString("favorite", forType: Self.favoriteDragType)
+        let item = NSDraggingItem(pasteboardWriter: data)
+        let row = lineViews[press.line]
+        let image = NSImage(size: row.bounds.size, flipped: true) { rect in
+            NSColor.windowBackgroundColor.withAlphaComponent(0.9).setFill()
+            NSBezierPath(roundedRect: rect, xRadius: 5, yRadius: 5).fill()
+            let title = press.folder.path == "/" ? "/" : press.folder.lastPathComponent
+            (title as NSString).draw(at: CGPoint(x: 12, y: 8), withAttributes: [
+                .font: NSFont.systemFont(ofSize: NSFont.systemFontSize),
+                .foregroundColor: NSColor.labelColor,
+            ])
+            return true
+        }
+        item.setDraggingFrame(convert(row.frame, from: document), contents: image)
+        beginDraggingSession(with: [item], event: event, source: self)
+    }
+
+    private func favoriteDrop(at point: CGPoint) -> (before: URL?, y: CGFloat)? {
+        let lines = tree.lines
+        guard let heading = lines.firstIndex(where: {
+            if case .heading(let id, _, false) = $0 { return id == HomeSidebarSection.favoritesID }
+            return false
+        }), lineViews.indices.contains(heading) else { return nil }
+        let end = lines[(heading + 1)...].firstIndex { if case .heading = $0 { return true }; return false } ?? lines.count
+        guard end > heading + 1, lineViews.indices.contains(end - 1),
+              point.y >= lineViews[heading].frame.minY,
+              point.y <= lineViews[end - 1].frame.maxY else { return nil }
+        for line in (heading + 1)..<end {
+            guard case .row(let row, 0, _, _) = lines[line], case .folder(let folder) = row.location else { continue }
+            let frame = lineViews[line].frame
+            if point.y < frame.midY { return (folder, frame.minY) }
+        }
+        return (nil, lineViews[end - 1].frame.maxY)
+    }
+
+    override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation { draggingUpdated(sender) }
+
+    override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        guard sender.draggingSource as? HomeSidebar === self, draggedFavorite != nil,
+              let target = favoriteDrop(at: document.convert(sender.draggingLocation, from: nil)) else {
+            dropIndicator.isHidden = true
+            return []
+        }
+        dropIndicator.frame = CGRect(x: Self.inset, y: target.y - 1,
+                                     width: max(0, document.bounds.width - 2 * Self.inset), height: 2)
+        if dropIndicator.isHidden {
+            document.addSubview(dropIndicator, positioned: .above, relativeTo: nil)
+            dropIndicator.isHidden = false
+        }
+        return .move
+    }
+
+    override func draggingExited(_ sender: (any NSDraggingInfo)?) { dropIndicator.isHidden = true }
+
+    override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        defer { dropIndicator.isHidden = true }
+        guard sender.draggingSource as? HomeSidebar === self, let folder = draggedFavorite,
+              let target = favoriteDrop(at: document.convert(sender.draggingLocation, from: nil)) else { return false }
+        if folder != target.before { onMoveFavorite?(folder, target.before) }
+        return true
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        guard let press = favoritePress else { return }
+        favoritePress = nil
+        let point = document.convert(event.locationInWindow, from: nil)
+        guard lineViews.indices.contains(press.line), lineViews[press.line].frame.contains(point),
+              favorite(at: press.line) == press.folder else { return }
+        click(line: press.line)
     }
 
     override func menu(for event: NSEvent) -> NSMenu? {
@@ -242,17 +359,22 @@ final class HomeSidebar: NSView {
     /// The context menu of a row (the app's items for it); nil for a heading or a row without items.
     func menu(forLine line: Int) -> NSMenu? {
         let lines = tree.lines
-        guard lines.indices.contains(line), case .row(let row, _, _, _) = lines[line],
-              let items = menuItems?(row), !items.isEmpty else { return nil }
+        guard lines.indices.contains(line), case .row(let row, _, _, _) = lines[line] else { return nil }
         let menu = NSMenu()
-        for item in items {
-            let menuItem = menu.addItem(withTitle: item.title, action: #selector(SidebarMenuTarget.chose(_:)),
-                                        keyEquivalent: "")
-            let target = SidebarMenuTarget { [weak self] in self?.onMenu?(item.id, row) }
-            menuItem.target = target
-            menuItem.representedObject = target   // a menu item holds its target weakly
+        for item in menuItems?(row) ?? [] {
+            HomeMenuAction.add(item.title, to: menu) { [weak self] in self?.onMenu?(item.id, row) }
         }
-        return menu
+        let folders = favoriteFolders
+        if let folder = favorite(at: line), let index = folders.firstIndex(of: folder) {
+            if index > 0 {
+                HomeMenuAction.add("Move Up", to: menu) { [weak self] in self?.onMoveFavorite?(folder, folders[index - 1]) }
+            }
+            if index + 1 < folders.count {
+                let next = folders.indices.contains(index + 2) ? folders[index + 2] : nil
+                HomeMenuAction.add("Move Down", to: menu) { [weak self] in self?.onMoveFavorite?(folder, next) }
+            }
+        }
+        return menu.items.isEmpty ? nil : menu
     }
 
     /// A click on a line: a heading folds its section, a row opens.
@@ -265,8 +387,10 @@ final class HomeSidebar: NSView {
             onToggleSection?(section)
         case .row(let row, _, _, _):
             selected = line
-            selectedID = row.id
+            selectedID = rowID(at: line)
             rebuild()
+            guard !row.isDimmed || tree.root(at: line)?.sectionID != HomeSidebarSection.favoritesID else { return }
+            onChooseRoot?(tree.root(at: line))
             onOpen?(row.location)
         }
     }
@@ -287,6 +411,9 @@ final class HomeSidebar: NSView {
 
     func handleKey(_ event: NSEvent) -> Bool {
         let flags = event.modifierFlags.intersection([.command, .shift, .option, .control])
+        if flags == .control, event.keyCode == 36, let line = selected ?? tree.currentLine {
+            return showMenu(at: line)
+        }
         guard flags.isEmpty else { return false }
         if event.keyCode == 48 {
             onEndKeys?()
@@ -308,9 +435,16 @@ final class HomeSidebar: NSView {
         case .collapse(let url):
             followsCurrent = false
             onCollapse?(url)
-        case .open(let location): onOpen?(location)
+        case .open: click(line: from)
         case .none: break
         }
+        return true
+    }
+
+    private func showMenu(at line: Int) -> Bool {
+        guard lineViews.indices.contains(line), let menu = menu(forLine: line) else { return false }
+        let frame = lineViews[line].frame
+        menu.popUp(positioning: nil, at: CGPoint(x: Self.inset, y: frame.midY), in: document)
         return true
     }
 
@@ -337,11 +471,29 @@ final class HomeSidebar: NSView {
     func isSpinning(line: Int) -> Bool { lineViews.indices.contains(line) && !lineViews[line].spinner.isHidden }
 }
 
-/// A sidebar menu item's action: the item and its row, kept by the item.
-private final class SidebarMenuTarget: NSObject {
+extension HomeSidebar: NSDraggingSource {
+    func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
+        context == .withinApplication ? .move : []
+    }
+
+    func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
+        draggedFavorite = nil
+        dropIndicator.isHidden = true
+    }
+}
+
+/// Keep a menu's action alive and tied to the item chosen when the menu was opened.
+@MainActor final class HomeMenuAction: NSObject {
     private let action: () -> Void
-    init(_ action: @escaping () -> Void) { self.action = action }
+    private init(_ action: @escaping () -> Void) { self.action = action }
     @objc func chose(_ sender: NSMenuItem) { action() }
+
+    static func add(_ title: String, to menu: NSMenu, action: @escaping () -> Void) {
+        let item = menu.addItem(withTitle: title, action: #selector(chose(_:)), keyEquivalent: "")
+        let target = Self(action)
+        item.target = target
+        item.representedObject = target  // NSMenuItem holds its target weakly.
+    }
 }
 
 /// One line of the sidebar: a heading (small, grey, with a fold chevron on hover) or a row (triangle, symbol, title,

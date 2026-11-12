@@ -27,6 +27,7 @@ public struct HomeSidebarRow: Equatable, Sendable {
 
 /// A run of sidebar rows under a heading that folds them away; a nil title has no heading.
 public struct HomeSidebarSection: Equatable, Sendable {
+    public static let favoritesID = "favorites"
     public var id: String
     public var title: String?
     public var rows: [HomeSidebarRow]
@@ -36,6 +37,10 @@ public struct HomeSidebarSection: Equatable, Sendable {
         self.title = title
         self.rows = rows
     }
+
+    public static func favorites(_ rows: [HomeSidebarRow]) -> Self {
+        Self(id: favoritesID, title: "Favorites", rows: rows)
+    }
 }
 
 /// The sidebar as data: the app's sections, the folded headings, the folders opened as a tree
@@ -43,6 +48,12 @@ public struct HomeSidebarSection: Equatable, Sendable {
 /// at once, from the path's own components, so the row lights before any listing; which ancestors still need their
 /// subfolders listed is handed back for the view to ask, after the folder's own listing.
 public struct SidebarTree: Sendable {
+    /// The same folder can occur under Places and Favorites.
+    public struct Root: Equatable, Sendable {
+        public let sectionID: String
+        fileprivate let path: String
+    }
+
     public enum Line: Equatable, Sendable {
         case heading(section: String, title: String, collapsed: Bool)
         case row(HomeSidebarRow, depth: Int, expanded: Bool, loading: Bool)
@@ -92,17 +103,23 @@ public struct SidebarTree: Sendable {
     private var loading: Set<String> = []
     private var current: BrowserLocation?
     /// The root the current folder was followed under (a folder can be under a volume and under a pin in it).
-    private var currentRoot: String?
+    private var currentRoot: Root?
     /// Where the tree under `root` starts again (`Options.rerootDepth`).
-    private var reroot: (root: String, at: String)?
+    private var reroot: (root: Root, at: String)?
 
     public init(sections: [HomeSidebarSection]) {
-        self.sections = sections
+        self.sections = []
+        setSections(sections)
     }
 
     // MARK: Lines
 
     public var lines: [Line] { build().lines }
+
+    public func root(at line: Int) -> Root? {
+        let roots = build().roots
+        return roots.indices.contains(line) ? roots[line] : nil
+    }
 
     public var currentLine: Int? {
         guard let current else { return nil }
@@ -114,10 +131,10 @@ public struct SidebarTree: Sendable {
     }
 
     /// The lines, and for each row line the path of its root (nil for headings and non-folder rows).
-    private func build() -> (lines: [Line], roots: [String?]) {
-        var lines: [Line] = [], roots: [String?] = []
+    private func build() -> (lines: [Line], roots: [Root?]) {
+        var lines: [Line] = [], roots: [Root?] = []
         let currentPath = current.flatMap(Self.path)
-        func add(_ first: HomeSidebarRow, depth: Int, root: String?) {
+        func add(_ first: HomeSidebarRow, depth: Int, root: Root?) {
             var row = first
             var path = Self.path(row.location)
             if options.compactChains, depth > 0 {
@@ -135,7 +152,7 @@ public struct SidebarTree: Sendable {
             lines.append(.row(row, depth: depth, expanded: open, loading: path.map { loading.contains($0) } == true))
             roots.append(root)
             guard open, let path else { return }
-            if depth == 0, let reroot, reroot.root == path {
+            if depth == 0, let reroot, reroot.root == root {
                 // The folders left out on one row, then the tree from where it starts again.
                 let left = Self.components(of: reroot.at, under: path).dropLast()
                 let parent = (reroot.at as NSString).deletingLastPathComponent
@@ -159,7 +176,10 @@ public struct SidebarTree: Sendable {
                 roots.append(nil)
             }
             guard !folded else { continue }
-            for row in section.rows { add(row, depth: 0, root: Self.path(row.location)) }
+            for row in section.rows {
+                let root = Self.path(row.location).map { Root(sectionID: section.id, path: $0) }
+                add(row, depth: 0, root: root)
+            }
         }
         return (lines, roots)
     }
@@ -174,18 +194,22 @@ public struct SidebarTree: Sendable {
 
     /// New sections (a volume came or went, a pin): what was opened under roots still there stays.
     public mutating func setSections(_ new: [HomeSidebarSection]) {
-        sections = new
+        sections = new.filter { $0.id != HomeSidebarSection.favoritesID || !$0.rows.isEmpty }
+        if !sections.contains(where: { $0.id == HomeSidebarSection.favoritesID }) {
+            collapsed.remove(HomeSidebarSection.favoritesID)
+        }
         let roots = new.flatMap(\.rows).compactMap { Self.path($0.location) }
         func kept(_ path: String) -> Bool { roots.contains { Self.isUnder(path, $0) } }
         expanded = expanded.filter(kept)
         known = known.filter(kept)
         loading = loading.filter(kept)
         children = children.filter { kept($0.key) }
-        if let root = currentRoot, !roots.contains(root) {
+        let branches = folderRoots()
+        if let root = currentRoot, !branches.contains(root) {
             current = nil
             currentRoot = nil
         }
-        if let reroot, !roots.contains(reroot.root) { self.reroot = nil }
+        if let reroot, !branches.contains(reroot.root) { self.reroot = nil }
     }
 
     public mutating func toggleSection(_ id: String) {
@@ -229,21 +253,25 @@ public struct SidebarTree: Sendable {
         if isLoading { loading.insert(Self.path(folder)) } else { loading.remove(Self.path(folder)) }
     }
 
-    /// The browser moved to `location`: its row lights. A folder under a root opens the path to it (the longest root
-    /// wins); the ancestors whose subfolders are still unknown come back, top first, and the folder itself last when
+    /// The browser moved to `location`: its row lights. Open the path under the selected branch if it still contains
+    /// the location, otherwise under the longest matching root. Unknown ancestors come back top first, and the folder itself last when
     /// it is open and unlisted (back from a subfolder before its listing came: the path's row alone under it).
-    public mutating func follow(_ location: BrowserLocation) -> [URL] {
+    public mutating func follow(_ location: BrowserLocation, preferredRoot: Root? = nil) -> [URL] {
+        let preferredRoot = preferredRoot ?? currentRoot
         current = location
         currentRoot = nil
         guard case .folder(let url) = location else { return [] }
         let target = Self.path(url)
-        let roots = sections.flatMap { section in section.rows.compactMap { row in Self.path(row.location).map { (section.id, $0) } } }
-        guard let (section, root) = roots.filter({ Self.isUnder(target, $0.1) }).max(by: { $0.1.count < $1.1.count }) else {
+        let candidates = folderRoots().filter { Self.isUnder(target, $0.path) }
+        let preferred = preferredRoot.flatMap { candidates.contains($0) ? $0 : nil }
+        guard let branch = preferred ?? candidates.max(by: { $0.path.count < $1.path.count }) else {
             current = nil
             return []
         }
-        currentRoot = root
-        collapsed.remove(section)
+        currentRoot = branch
+        if reroot?.root != branch { reroot = nil }
+        collapsed.remove(branch.sectionID)
+        let root = branch.path
         let itself = expanded.contains(target) && !known.contains(target) ? [URL(fileURLWithPath: target, isDirectory: true)] : []
         guard target != root else { return itself }
         let names = Self.components(of: target, under: root)
@@ -264,17 +292,24 @@ public struct SidebarTree: Sendable {
         return unknown + itself
     }
 
+    private func folderRoots() -> [Root] {
+        sections.flatMap { section in
+            section.rows.compactMap { row in Self.path(row.location).map { Root(sectionID: section.id, path: $0) } }
+        }
+    }
+
     /// The tree starts again when the current folder is `rerootDepth` levels down or deeper, so that it lands on the
     /// second level or halfway, whichever is deeper; it stays put while the current folder moves within reach under it.
     private mutating func updateReroot() {
         let limit = options.rerootDepth
-        guard limit >= 3, case .folder(let url)? = current, let root = currentRoot else {
+        guard limit >= 3, case .folder(let url)? = current, let branch = currentRoot else {
             if options.rerootDepth < 3 || current == nil { reroot = nil }
             return
         }
+        let root = branch.path
         let target = Self.path(url)
         let names = Self.components(of: target, under: root)
-        if let reroot, reroot.root == root, Self.isUnder(target, reroot.at) {
+        if let reroot, reroot.root == branch, Self.isUnder(target, reroot.at) {
             let start = Self.components(of: reroot.at, under: root).count
             if names.count - start + 1 < limit { return }
         }
@@ -288,7 +323,7 @@ public struct SidebarTree: Sendable {
             return
         }
         let at = names.prefix(start).reduce(root) { $0 == "/" ? "/" + $1 : $0 + "/" + $1 }
-        reroot = (root, at)
+        reroot = (branch, at)
     }
 
     /// The row is the current folder or one of its ancestors.
