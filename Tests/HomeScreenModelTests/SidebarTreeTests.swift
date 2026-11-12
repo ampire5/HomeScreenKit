@@ -50,6 +50,26 @@ import Testing
         #expect(tree.currentLine == nil)
     }
 
+    @Test func placesSortsVolumesByNameAndKeepsTheHomeAndFavoritesOrder() {
+        func volume(_ name: String, path: String? = nil) -> HomeSidebarRow {
+            var row = row(name, path ?? "/Volumes/" + name)
+            row.symbol = "externaldrive"
+            return row
+        }
+        let home = row("Home", "/Users/example")
+        let two = volume("Disk 2")
+        let ten = volume("Disk 10")
+        let share = volume("Disk 1", path: "/Users/example/Mounts/Share")
+        let favorites = HomeSidebarSection.favorites([ten, two])
+        var places = HomeSidebarSection(id: "places", title: "Places", rows: [home, ten, two])
+        var tree = SidebarTree(sections: [favorites, places])
+        #expect(shape(tree) == ["# Favorites", "Disk 10", "Disk 2", "# Places", "Home", "Disk 2", "Disk 10"])
+
+        places.rows.append(share)
+        tree.setSections([favorites, places])
+        #expect(shape(tree) == ["# Favorites", "Disk 10", "Disk 2", "# Places", "Home", "Disk 1", "Disk 2", "Disk 10"])
+    }
+
     @Test func expandAsksOnceThenShowsChildren() {
         var t = tree
         let asked = t.expand(url("/Volumes/T"))

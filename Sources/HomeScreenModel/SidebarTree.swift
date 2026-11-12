@@ -194,7 +194,10 @@ public struct SidebarTree: Sendable {
 
     /// New sections (a volume came or went, a pin): what was opened under roots still there stays.
     public mutating func setSections(_ new: [HomeSidebarSection]) {
-        sections = new.filter { $0.id != HomeSidebarSection.favoritesID || !$0.rows.isEmpty }
+        sections = new.filter { $0.id != HomeSidebarSection.favoritesID || !$0.rows.isEmpty }.map { section in
+            guard section.id == "places" else { return section }
+            return Self.sortVolumes(in: section)
+        }
         if !sections.contains(where: { $0.id == HomeSidebarSection.favoritesID }) {
             collapsed.remove(HomeSidebarSection.favoritesID)
         }
@@ -210,6 +213,19 @@ public struct SidebarTree: Sendable {
             currentRoot = nil
         }
         if let reroot, !branches.contains(reroot.root) { self.reroot = nil }
+    }
+
+    /// Hosts mark mounted volumes with the external-drive symbol, including shares mounted outside /Volumes.
+    /// Sort their displayed names in Finder order while keeping the home folder and other roots in their slots.
+    private static func sortVolumes(in section: HomeSidebarSection) -> HomeSidebarSection {
+        let indices = section.rows.indices.filter { section.rows[$0].symbol == "externaldrive" }
+        let volumes = indices.map { section.rows[$0] }.sorted { a, b in
+            let comparison = a.title.localizedStandardCompare(b.title)
+            return comparison == .orderedSame ? a.id < b.id : comparison == .orderedAscending
+        }
+        var result = section
+        for (index, volume) in zip(indices, volumes) { result.rows[index] = volume }
+        return result
     }
 
     public mutating func toggleSection(_ id: String) {
