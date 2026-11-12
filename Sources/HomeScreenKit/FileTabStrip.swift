@@ -67,7 +67,8 @@ final class FileTabStrip: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         NSColor.windowBackgroundColor.setFill()
-        dirtyRect.fill()
+        // AppKit may invalidate outside an unclipped view's bounds.
+        dirtyRect.intersection(bounds).fill()
     }
 
     override func viewDidChangeEffectiveAppearance() {

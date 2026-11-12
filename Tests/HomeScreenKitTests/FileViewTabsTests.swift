@@ -3,6 +3,27 @@ import Testing
 @testable import HomeScreenKit
 
 @MainActor @Suite struct FileViewTabsTests {
+    @Test func tabStripBackgroundDoesNotPaintOverBrowserOutsideItsBounds() throws {
+        let strip = FileTabStrip()
+        strip.frame.size = NSSize(width: 80, height: FileTabStrip.height)
+        let canvasHeight = Int(FileTabStrip.height) * 3
+        let bitmap = try #require(NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: 80, pixelsHigh: canvasHeight, bitsPerSample: 8,
+            samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
+            bytesPerRow: 0, bitsPerPixel: 0
+        ))
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
+        // With clipping disabled AppKit may invalidate a region larger than the tab strip.
+        strip.draw(NSRect(x: 0, y: 0, width: 80, height: CGFloat(canvasHeight)))
+        NSGraphicsContext.restoreGraphicsState()
+
+        let middle = try #require(bitmap.colorAt(x: 40, y: canvasHeight / 2))
+        #expect(middle.alphaComponent == 0)
+        let ends = [canvasHeight / 6, canvasHeight * 5 / 6].compactMap { bitmap.colorAt(x: 40, y: $0) }
+        #expect(ends.contains { $0.alphaComponent > 0.99 })
+    }
+
     @Test func stripControlsAddReorderAndCloseTabs() throws {
         let source = FakeHomeSource()
         let home = HomeView(source: source)
