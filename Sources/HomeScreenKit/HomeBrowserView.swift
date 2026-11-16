@@ -2232,7 +2232,7 @@ public final class HomeBrowserView: NSView {
 
     private func unreadableChanged(_ urls: Set<URL>) {
         for (i, card) in live where entries.indices.contains(i) && card.item.id == entries[i].id
-            && urls.contains(entries[i].url.standardizedFileURL) {
+            && urls.contains(entries[i].url.quicklyStandardized) {
             card.show(item(for: entries[i]))
         }
     }

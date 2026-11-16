@@ -45,6 +45,10 @@ browser's listing cancellation and generation guards. The sidebar's Open in New 
 or asks the host to open a native window tab. The host owns the lifetime of the versioned
 `FileTabSession` snapshot and associates media opens with a tab ID when it wants to return to that tab.
 
+The sidebar keeps the complete logical tree for navigation and reuses row views within the visible range.
+Scroll geometry uses the uniform row height and does not depend on offscreen views. File URLs already in
+standard form bypass Foundation's reachability checks when comparing browser locations or looking up unreadable files.
+
 Flow: source location → `list` stream → browser sorting/filtering/layout → visible cards → source image requests →
 `setImage` delivery. Card reuse and visibility determine picture demand, not the size of the whole collection.
 When Date orders folders, all card styles show the entry's sorting date instead of the contents' date span;

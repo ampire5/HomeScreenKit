@@ -12,7 +12,7 @@ public enum BrowserLocation: Hashable, Sendable {
     private var key: String? {
         switch self {
         case .places: nil
-        case .folder(let url): url.standardizedFileURL.path
+        case .folder(let url): url.quicklyStandardized.path
         case .source(let id): "source:" + id
         }
     }

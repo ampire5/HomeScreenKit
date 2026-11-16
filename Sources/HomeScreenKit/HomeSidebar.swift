@@ -16,7 +16,6 @@ final class HomeSidebar: NSView {
     static let inset: CGFloat = 12
     // 32 pt rows and headings, with a shared symbol column and a neutral selection plate.
     static let rowHeight: CGFloat = 32
-    static let headingHeight: CGFloat = 32
     static let indent: CGFloat = 12
     /// Compact indent: the step past the first three levels.
     static let deepIndent: CGFloat = 8
@@ -55,6 +54,7 @@ final class HomeSidebar: NSView {
 
     var tree = SidebarTree(sections: []) {
         didSet {
+            lines = tree.lines
             let current = tree.currentLine
             let currentID = current.flatMap(rowID)
             if currentID != followedID {
@@ -85,13 +85,11 @@ final class HomeSidebar: NSView {
     private var followsCurrent = false
 
     private func rowID(at line: Int) -> RowIdentity? {
-        let lines = tree.lines
         guard lines.indices.contains(line), case .row(let row, _, _, _) = lines[line] else { return nil }
         return RowIdentity(id: row.id, root: tree.root(at: line))
     }
 
     private func line(of id: RowIdentity) -> Int? {
-        let lines = tree.lines
         return lines.indices.first { index in
             guard case .row(let row, _, _, _) = lines[index], row.id == id.id else { return false }
             return tree.root(at: index) == id.root
@@ -101,7 +99,9 @@ final class HomeSidebar: NSView {
 
     private let scroll = NSScrollView()
     private let document = FlippedView()
-    private var lineViews: [SidebarLineView] = []
+    private var lines: [SidebarTree.Line] = []
+    private var lineViews: [Int: SidebarLineView] = [:]
+    private var laidOutRows: Range<Int> = 0..<0
     private static let favoriteDragType = NSPasteboard.PasteboardType("org.homescreenkit.favorite-folder")
     private var favoritePress: (event: NSEvent, folder: URL, line: Int)?
     private var draggedFavorite: URL?
@@ -118,6 +118,9 @@ final class HomeSidebar: NSView {
         scroll.hasVerticalScroller = true
         scroll.autohidesScrollers = true
         scroll.documentView = document
+        scroll.contentView.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(self, selector: #selector(scrolled),
+                                               name: NSView.boundsDidChangeNotification, object: scroll.contentView)
         addSubview(scroll)   // on the material the split view's sidebar item gives
         registerForDraggedTypes([Self.favoriteDragType])
         dropIndicator.boxType = .custom
@@ -149,34 +152,75 @@ final class HomeSidebar: NSView {
     }
 
     override func becomeFirstResponder() -> Bool {
-        lineViews.forEach { $0.hasKeys = true }
+        lineViews.values.forEach { $0.hasKeys = true }
         return true
     }
 
     override func resignFirstResponder() -> Bool {
-        lineViews.forEach { $0.hasKeys = false }
+        lineViews.values.forEach { $0.hasKeys = false }
         return true
     }
 
     // MARK: Lines
 
     private func rebuild() {
-        let lines = tree.lines
-        while lineViews.count < lines.count {
-            let view = SidebarLineView()
-            document.addSubview(view)
-            lineViews.append(view)
-        }
-        while lineViews.count > lines.count { lineViews.removeLast().removeFromSuperview() }
         watchLoading(lines)
-        let keys = window?.firstResponder === self
-        for (i, (view, line)) in zip(lineViews, lines).enumerated() {
-            view.compactIndent = compactIndent
-            view.show(line, lit: i == selected, spinning: path(of: line).map(slow.contains) == true)
-            view.hasKeys = keys
-            view.tag = i
-        }
+        updateVisibleRows()
         needsLayout = true
+    }
+
+    private func frame(of line: Int) -> CGRect {
+        CGRect(x: 0, y: Self.top + CGFloat(line) * Self.rowHeight,
+               width: document.bounds.width, height: Self.rowHeight)
+    }
+
+    private func row(at point: CGPoint) -> SidebarLineView? {
+        guard point.y >= Self.top, document.bounds.contains(point) else { return nil }
+        let line = Int((point.y - Self.top) / Self.rowHeight)
+        return lineViews[line]
+    }
+
+    @objc private func scrolled() {
+        updateVisibleRows()
+    }
+
+    /// Keep one row outside each edge to cover partially visible rows during scrolling.
+    private func updateVisibleRows() {
+        let visible = scroll.documentVisibleRect
+        let first = min(lines.count, max(0, Int(floor((visible.minY - Self.top) / Self.rowHeight)) - 1))
+        let end = max(first, min(lines.count, Int(ceil((visible.maxY - Self.top) / Self.rowHeight)) + 1))
+        let range = first..<end
+        var reusable: [SidebarLineView] = []
+        if laidOutRows != range {
+            for line in laidOutRows where !range.contains(line) {
+                if let view = lineViews.removeValue(forKey: line) {
+                    view.prepareForReuse()
+                    reusable.append(view)
+                }
+            }
+            laidOutRows = range
+        }
+        let keys = window?.firstResponder === self
+        for line in range {
+            let view = lineViews[line] ?? reusable.popLast() ?? SidebarLineView()
+            if view.superview == nil { document.addSubview(view, positioned: .below, relativeTo: dropIndicator) }
+            lineViews[line] = view
+            view.tag = line
+            view.compactIndent = compactIndent
+            view.hasKeys = keys
+            let item = lines[line]
+            let spinning: Bool
+            if case .row(_, _, _, true) = item, let path = path(of: item) {
+                spinning = slow.contains(path)
+            } else {
+                spinning = false
+            }
+            view.show(item, lit: line == selected, spinning: spinning)
+            let frame = frame(of: line)
+            if view.frame.size != frame.size { view.needsLayout = true }
+            if view.frame != frame { view.frame = frame }
+        }
+        for view in reusable { view.removeFromSuperview() }
     }
 
     /// Spinners only for rows that keep listing past `slowAfter`.
@@ -197,37 +241,30 @@ final class HomeSidebar: NSView {
                 guard let self, !Task.isCancelled else { return }
                 self.slowTimers[path] = nil
                 self.slow.insert(path)
-                self.rebuild()
+                self.updateVisibleRows()
             }
         }
     }
 
     private func path(of line: SidebarTree.Line) -> String? {
         guard case .row(let row, _, _, _) = line, case .folder(let url) = row.location else { return nil }
-        return url.standardizedFileURL.path
+        return url.quicklyStandardized.path
     }
 
     override func layout() {
         super.layout()
         scroll.frame = CGRect(x: 0, y: contentTopInset, width: bounds.width, height: max(0, bounds.height - contentTopInset))
         // The height first: a legacy scroller shows or hides for it and takes its width before the rows are laid out.
-        let height = lineViews.reduce(2 * Self.top) { $0 + ($1.isHeading ? Self.headingHeight : Self.rowHeight) }
-        document.frame.size.height = max(height, fillHeight)
+        let height = max(2 * Self.top + CGFloat(lines.count) * Self.rowHeight, fillHeight)
+        if document.frame.height != height { document.frame.size.height = height }
         scroll.tile()
-        var y = Self.top
         let width = max(0, scroll.contentSize.width)
-        for view in lineViews {
-            let h = view.isHeading ? Self.headingHeight : Self.rowHeight
-            let frame = CGRect(x: 0, y: y, width: width, height: h)
-            if view.frame.size != frame.size { view.needsLayout = true }
-            view.frame = frame
-            y += h
-        }
-        document.frame = CGRect(x: 0, y: 0, width: width, height: max(height, fillHeight))
-        if revealsSelected, let selected, lineViews.indices.contains(selected) {
+        if document.frame.width != width { document.frame.size.width = width }
+        if revealsSelected, let selected, lines.indices.contains(selected) {
             revealsSelected = false
-            document.scrollToVisible(lineViews[selected].frame.insetBy(dx: 0, dy: -Self.rowHeight))
+            document.scrollToVisible(frame(of: selected).insetBy(dx: 0, dy: -Self.rowHeight))
         }
+        updateVisibleRows()
     }
 
     /// The height that fills the view and no more: the scroll view's less the inset AppKit gives it under the title
@@ -243,7 +280,7 @@ final class HomeSidebar: NSView {
     override func mouseDown(with event: NSEvent) {
         favoritePress = nil
         let point = document.convert(event.locationInWindow, from: nil)
-        guard let view = lineViews.first(where: { $0.frame.contains(point) }) else { return }
+        guard let view = row(at: point) else { return }
         // As in Finder, a click leaves the keys with the browser (letters pick a name there); Tab brings them here.
         onClickKeys?()
         let x = point.x - view.frame.minX
@@ -264,7 +301,6 @@ final class HomeSidebar: NSView {
     }
 
     private func favorite(at line: Int) -> URL? {
-        let lines = tree.lines
         guard lines.indices.contains(line), case .row(let row, 0, _, _) = lines[line],
               tree.root(at: line)?.sectionID == HomeSidebarSection.favoritesID,
               case .folder(let folder) = row.location else { return nil }
@@ -274,14 +310,13 @@ final class HomeSidebar: NSView {
     override func mouseDragged(with event: NSEvent) {
         guard let press = favoritePress, favoriteFolders.count > 1 else { return }
         let from = press.event.locationInWindow, to = event.locationInWindow
-        guard hypot(from.x - to.x, from.y - to.y) >= 4, lineViews.indices.contains(press.line),
+        guard hypot(from.x - to.x, from.y - to.y) >= 4, let row = lineViews[press.line],
               favorite(at: press.line) == press.folder else { return }
         favoritePress = nil
         draggedFavorite = press.folder
         let data = NSPasteboardItem()
         data.setString("favorite", forType: Self.favoriteDragType)
         let item = NSDraggingItem(pasteboardWriter: data)
-        let row = lineViews[press.line]
         let image = NSImage(size: row.bounds.size, flipped: true) { rect in
             NSColor.windowBackgroundColor.withAlphaComponent(0.9).setFill()
             NSBezierPath(roundedRect: rect, xRadius: 5, yRadius: 5).fill()
@@ -297,21 +332,20 @@ final class HomeSidebar: NSView {
     }
 
     private func favoriteDrop(at point: CGPoint) -> (before: URL?, y: CGFloat)? {
-        let lines = tree.lines
         guard let heading = lines.firstIndex(where: {
             if case .heading(let id, _, false) = $0 { return id == HomeSidebarSection.favoritesID }
             return false
-        }), lineViews.indices.contains(heading) else { return nil }
+        }), lines.indices.contains(heading) else { return nil }
         let end = lines[(heading + 1)...].firstIndex { if case .heading = $0 { return true }; return false } ?? lines.count
-        guard end > heading + 1, lineViews.indices.contains(end - 1),
-              point.y >= lineViews[heading].frame.minY,
-              point.y <= lineViews[end - 1].frame.maxY else { return nil }
+        guard end > heading + 1,
+              point.y >= frame(of: heading).minY,
+              point.y <= frame(of: end - 1).maxY else { return nil }
         for line in (heading + 1)..<end {
             guard case .row(let row, 0, _, _) = lines[line], case .folder(let folder) = row.location else { continue }
-            let frame = lineViews[line].frame
+            let frame = frame(of: line)
             if point.y < frame.midY { return (folder, frame.minY) }
         }
-        return (nil, lineViews[end - 1].frame.maxY)
+        return (nil, frame(of: end - 1).maxY)
     }
 
     override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation { draggingUpdated(sender) }
@@ -345,20 +379,19 @@ final class HomeSidebar: NSView {
         guard let press = favoritePress else { return }
         favoritePress = nil
         let point = document.convert(event.locationInWindow, from: nil)
-        guard lineViews.indices.contains(press.line), lineViews[press.line].frame.contains(point),
+        guard row(at: point)?.tag == press.line,
               favorite(at: press.line) == press.folder else { return }
         click(line: press.line)
     }
 
     override func menu(for event: NSEvent) -> NSMenu? {
         let point = document.convert(event.locationInWindow, from: nil)
-        guard let view = lineViews.first(where: { $0.frame.contains(point) }) else { return nil }
+        guard let view = row(at: point) else { return nil }
         return menu(forLine: view.tag)
     }
 
     /// The context menu of a row (the app's items for it); nil for a heading or a row without items.
     func menu(forLine line: Int) -> NSMenu? {
-        let lines = tree.lines
         guard lines.indices.contains(line), case .row(let row, _, _, _) = lines[line] else { return nil }
         let menu = NSMenu()
         for item in menuItems?(row) ?? [] {
@@ -379,7 +412,6 @@ final class HomeSidebar: NSView {
 
     /// A click on a line: a heading folds its section, a row opens.
     func click(line: Int) {
-        let lines = tree.lines
         guard lines.indices.contains(line) else { return }
         switch lines[line] {
         case .heading(let section, _, _):
@@ -396,7 +428,6 @@ final class HomeSidebar: NSView {
     }
 
     func clickDisclosure(line: Int) {
-        let lines = tree.lines
         guard lines.indices.contains(line), case .row(let row, _, let expanded, _) = lines[line], row.expandable,
               case .folder(let url) = row.location else { return }
         followsCurrent = false
@@ -421,7 +452,6 @@ final class HomeSidebar: NSView {
         }
         let keys: [UInt16: SidebarTree.Key] = [126: .up, 125: .down, 123: .left, 124: .right, 36: .open, 76: .open]
         guard let key = keys[event.keyCode] else { return false }
-        let lines = tree.lines
         guard let from = selected ?? tree.currentLine else {
             // Nothing lit yet: the first row.
             if let first = lines.firstIndex(where: { if case .row = $0 { true } else { false } }) { light(first) }
@@ -442,8 +472,9 @@ final class HomeSidebar: NSView {
     }
 
     private func showMenu(at line: Int) -> Bool {
-        guard lineViews.indices.contains(line), let menu = menu(forLine: line) else { return false }
-        let frame = lineViews[line].frame
+        guard let menu = menu(forLine: line) else { return false }
+        document.scrollToVisible(frame(of: line))
+        let frame = frame(of: line)
         menu.popUp(positioning: nil, at: CGPoint(x: Self.inset, y: frame.midY), in: document)
         return true
     }
@@ -452,23 +483,31 @@ final class HomeSidebar: NSView {
         selected = line
         selectedID = rowID(at: line)
         rebuild()
-        if lineViews.indices.contains(line) { document.scrollToVisible(lineViews[line].frame) }
+        document.scrollToVisible(frame(of: line))
     }
 
     // MARK: For tests
 
-    var titles: [String] { lineViews.map(\.title.stringValue) }
-    var visibleLineRect: CGRect { scroll.contentView.documentVisibleRect }
-    var lineFrames: [CGRect] { lineViews.map(\.frame) }
-    var titleFrames: [CGRect] { lineViews.map(\.title.frame) }
-    var guideCounts: [Int] { lineViews.map(\.guideCount) }
+    var titles: [String] {
+        lines.map { line in
+            switch line {
+            case .heading(_, let title, _): title
+            case .row(let row, _, _, _): row.title
+            }
+        }
+    }
+    private var visibleRows: [SidebarLineView] { laidOutRows.compactMap { lineViews[$0] } }
+    var visibleLineRect: CGRect { scroll.documentVisibleRect }
+    var lineFrames: [CGRect] { lines.indices.map(frame(of:)) }
+    var titleFrames: [CGRect] { visibleRows.map(\.title.frame) }
+    var guideCounts: [Int] { visibleRows.map(\.guideCount) }
     var scrollWidth: CGFloat { scroll.frame.width }
-    var rowTitleWidths: [CGFloat] { lineViews.filter { !$0.isHeading }.map(\.title.frame.width) }
-    var countTexts: [String] { lineViews.map(\.count.stringValue) }
-    var lineRedraws: Int { lineViews.reduce(0) { $0 + $1.redraws } }
-    var titleBreakModes: [NSLineBreakMode] { lineViews.map(\.title.lineBreakMode) }
+    var rowTitleWidths: [CGFloat] { visibleRows.filter { !$0.isHeading }.map(\.title.frame.width) }
+    var countTexts: [String] { visibleRows.map(\.count.stringValue) }
+    var lineRedraws: Int { visibleRows.reduce(0) { $0 + $1.redraws } }
+    var titleBreakModes: [NSLineBreakMode] { visibleRows.map(\.title.lineBreakMode) }
     var highlightedLine: Int? { selected }
-    func isSpinning(line: Int) -> Bool { lineViews.indices.contains(line) && !lineViews[line].spinner.isHidden }
+    func isSpinning(line: Int) -> Bool { lineViews[line]?.spinner.isHidden == false }
 }
 
 extension HomeSidebar: NSDraggingSource {
@@ -560,6 +599,13 @@ private final class SidebarLineView: NSView {
 
     override func mouseEntered(with event: NSEvent) { hovering = true; paint() }
     override func mouseExited(with event: NSEvent) { hovering = false; paint() }
+
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        shown = nil
+        hovering = false
+        showSpinner(false)
+    }
 
     func show(_ line: SidebarTree.Line, lit: Bool, spinning: Bool) {
         if let shown, shown.line == line, shown.lit == lit, shown.spinning == spinning { return }
@@ -658,6 +704,7 @@ private final class SidebarLineView: NSView {
         let h = bounds.height, w = bounds.width
         light.frame = CGRect(x: HomeSidebar.inset, y: 2, width: max(0, w - 2 * HomeSidebar.inset), height: max(0, h - 4))
         if isHeading {
+            guides.path = nil
             // Photos sets a heading low in its line, nearer the rows it heads.
             title.frame = CGRect(x: 16 - Self.fieldInset, y: h - 16 - 4, width: max(0, w - 48), height: 16)
             triangle.frame = CGRect(x: w - 30, y: h - 12 - 5, width: 12, height: 12)

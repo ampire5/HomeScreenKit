@@ -29,6 +29,23 @@ import Testing
         return view
     }
 
+    @Test func scrollingALargeSidebarKeepsOnlyViewportRowsAttached() throws {
+        let rows = (0..<2_500).map { i in
+            HomeSidebarRow(id: "row-\(i)", title: "Folder \(i)", symbol: "folder", location: .source("row-\(i)"))
+        }
+        let view = sidebar(SidebarTree(sections: [.init(id: "folders", title: nil, rows: rows)]))
+        let scroll = try #require(view.subviews.first as? NSScrollView)
+        let document = try #require(scroll.documentView)
+        let maximumRows = Int(ceil(scroll.contentSize.height / HomeSidebar.rowHeight)) + 4
+        #expect(document.subviews.count <= maximumRows)
+        scroll.contentView.scroll(to: CGPoint(x: 0, y: 2_400 * HomeSidebar.rowHeight))
+        scroll.reflectScrolledClipView(scroll.contentView)
+        view.layoutSubtreeIfNeeded()
+        let visible = scroll.documentVisibleRect
+        #expect(document.subviews.count <= maximumRows)
+        #expect(document.subviews.contains { $0.tag == 2_401 && visible.intersects($0.frame) })
+    }
+
     /// Compact indent: the levels past the third step 6 pt, with a guide per level above the row; even: 14 pt, none.
     @Test func compactIndentStepsLessDeepDown() {
         var t = tree

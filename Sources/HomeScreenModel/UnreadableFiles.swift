@@ -33,7 +33,7 @@ import Foundation
 
     /// `url` cannot be read by the decoders, as it was at `date` and `size` (nil when not known).
     public func mark(_ url: URL, date: Date?, size: Int64?) {
-        let url = url.standardizedFileURL, version = Version(date: date, size: size)
+        let url = url.quicklyStandardized, version = Version(date: date, size: size)
         guard marked[url] != version else { return }
         marked[url] = version
         changed([url])
@@ -41,14 +41,14 @@ import Foundation
 
     /// `url` was read after all.
     public func clear(_ url: URL) {
-        let url = url.standardizedFileURL
+        let url = url.quicklyStandardized
         guard marked.removeValue(forKey: url) != nil else { return }
         changed([url])
     }
 
     /// Marked, and not changed since: a date or size known on both sides must be the same.
     public func contains(_ url: URL, date: Date?, size: Int64?) -> Bool {
-        guard let version = marked[url.standardizedFileURL] else { return false }
+        guard !marked.isEmpty, let version = marked[url.quicklyStandardized] else { return false }
         if let a = version.date, let b = date, a != b { return false }
         if let a = version.size, let b = size, a != b { return false }
         return true

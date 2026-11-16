@@ -385,7 +385,7 @@ public struct SidebarTree: Sendable {
 
     // MARK: Paths
 
-    static func path(_ url: URL) -> String { url.standardizedFileURL.path }
+    static func path(_ url: URL) -> String { url.quicklyStandardized.path }
 
     static func path(_ location: BrowserLocation) -> String? {
         if case .folder(let url) = location { return path(url) }
