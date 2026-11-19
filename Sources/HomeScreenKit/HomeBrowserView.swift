@@ -112,7 +112,7 @@ public final class HomeBrowserView: NSView {
         let visible = scroll.contentView.documentVisibleRect
         let shown = live.keys.sorted().filter { grid.frame(of: $0).intersects(visible) }
         guard let i = shown.first(where: { grid.frame(of: $0).minY >= top }) ?? shown.first else { return nil }
-        return BrowserAnchor(id: entries[i].id, offset: Double(grid.frame(of: i).minY - top), index: i)
+        return BrowserAnchor(id: entries[i].id, offset: Double(grid.frame(of: i).minY - top + savedAnchorInset), index: i)
     }
 
     /// The cards laid out now (in view and a screen either side), in order; a card's facts set while it is not among
@@ -259,12 +259,20 @@ public final class HomeBrowserView: NSView {
     private var toolbarInset: CGFloat { window?.toolbar != nil ? safeAreaInsets.top : Self.defaultTopInset }
     var topInset: CGFloat { toolbarInset + (fileTabStripTop == nil ? 0 : FileTabStrip.height) }
     private var fileTabStripTop: NSLayoutConstraint?
+    private lazy var scrollTop = scroll.topAnchor.constraint(equalTo: topAnchor)
+    private var showsFileTabStrip: Bool { fileTabStripTop != nil }
+    /// With tabs, the scroll view starts below the strip. Without tabs, reserve space inside the document for the
+    /// floating toolbar. These are document coordinates, independent of the browser content's top inset.
+    var gridTop: CGFloat { showsFileTabStrip ? 8 : topInset }
+    var gridOverlayTop: CGFloat { showsFileTabStrip ? 0 : topInset }
+    /// Session offsets written by older builds include the chrome above the document.
+    private var savedAnchorInset: CGFloat { topInset - gridTop }
 
     func installFileTabStrip(_ strip: FileTabStrip?) {
         fileTabStripTop = nil
         if let strip {
             strip.translatesAutoresizingMaskIntoConstraints = false
-            addSubview(strip, positioned: .above, relativeTo: nil)
+            addSubview(strip, positioned: .below, relativeTo: loading)
             let top = strip.topAnchor.constraint(equalTo: topAnchor, constant: toolbarInset)
             fileTabStripTop = top
             NSLayoutConstraint.activate([
@@ -273,6 +281,7 @@ public final class HomeBrowserView: NSView {
                 strip.heightAnchor.constraint(equalToConstant: FileTabStrip.height),
             ])
         }
+        scroll.automaticallyAdjustsContentInsets = !showsFileTabStrip
         updateTopInset()
     }
 
@@ -294,6 +303,8 @@ public final class HomeBrowserView: NSView {
     private func updateTopInset() {
         if let top = fileTabStripTop, top.constant != toolbarInset { top.constant = toolbarInset }
         let inset = topInset
+        let scrollInset = showsFileTabStrip ? inset : 0
+        if scrollTop.constant != scrollInset { scrollTop.constant = scrollInset }
         let pageInsetChanged = pageTop.map { $0.constant != inset } ?? false
         guard loadingBottom.constant != inset || skeletonTop.constant != inset || pageInsetChanged else { return }
         loadingBottom.constant = inset
@@ -425,14 +436,14 @@ public final class HomeBrowserView: NSView {
         rows.translatesAutoresizingMaskIntoConstraints = false
         statusBar.addSubview(rows)
         document.addSubview(footer)
-        // The grid runs under the toolbar, as in Photos; the skeleton starts below it.
+        // Without a tab strip, the grid runs under the toolbar, as in Photos.
         loading.translatesAutoresizingMaskIntoConstraints = false
         for view in [scroll, skeleton, hint, loading, message, toast, statusBar] { addSubview(view) }
         NSLayoutConstraint.activate([
             loading.leadingAnchor.constraint(equalTo: leadingAnchor), loading.trailingAnchor.constraint(equalTo: trailingAnchor),
             loading.heightAnchor.constraint(equalToConstant: 2), loadingBottom, skeletonTop,
             scroll.leadingAnchor.constraint(equalTo: leadingAnchor), scroll.trailingAnchor.constraint(equalTo: trailingAnchor),
-            scroll.topAnchor.constraint(equalTo: topAnchor), scroll.bottomAnchor.constraint(equalTo: bottomAnchor),
+            scrollTop, scroll.bottomAnchor.constraint(equalTo: bottomAnchor),
             skeleton.leadingAnchor.constraint(equalTo: scroll.leadingAnchor),
             skeleton.trailingAnchor.constraint(equalTo: scroll.trailingAnchor),
             skeleton.bottomAnchor.constraint(equalTo: scroll.bottomAnchor),
@@ -1004,7 +1015,7 @@ public final class HomeBrowserView: NSView {
             // The entry, or once the names are all there, the one at its index; none, the top.
             pendingAnchor = nil
             if let i = saved.target(count: entries.count, index: { indexByID[$0] }) {
-                scrollGrid(to: grid.frame(of: i).minY - CGFloat(saved.offset))
+                scrollGrid(to: grid.frame(of: i).minY + savedAnchorInset - CGFloat(saved.offset))
             }
         }
         updateSubtitle()
@@ -1648,10 +1659,10 @@ public final class HomeBrowserView: NSView {
         selectedID = id
         for card in live.values { card.isSelected = card.item.id == id }
         if scrolls, let i = indexByID[id] {
-            // Clear of the toolbar over the grid's top.
             let frame = grid.frame(of: i)
-            document.scrollToVisible(CGRect(x: frame.minX, y: frame.minY - topInset - 8, width: frame.width,
-                                            height: frame.height + topInset + 16))
+            let clearance = gridOverlayTop + (listHeader?.isHidden == false ? ListHeader.height : 0)
+            document.scrollToVisible(CGRect(x: frame.minX, y: frame.minY - clearance - 8, width: frame.width,
+                                            height: frame.height + clearance + 16))
         }
         updateSubtitle()
     }
@@ -1848,7 +1859,7 @@ public final class HomeBrowserView: NSView {
         gridWidth = width
         sections = makeSections()
         var metrics = self.metrics
-        metrics.top = topInset
+        metrics.top = gridTop
         // The list has its column heads under the toolbar, above the first row.
         let shownStyle = shownCardStyle(width: width)
         let showsListHeader = shownStyle == .list && !entries.isEmpty && isShowingEntries

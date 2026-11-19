@@ -325,6 +325,32 @@ import Testing
         #expect(source.sidebarPerformed.map(\.0) == ["reveal"] && source.sidebarPerformed.map(\.1) == ["/Volumes/T"])
     }
 
+    @Test func fileTabsKeepScrolledCardsBelowTheStrip() async throws {
+        let source = source()
+        let folder = url("/Volumes/T/Footage")
+        source.kept[.folder(folder)] = BrowserListing(entries: (0..<100).map { index in
+            let name = "Clip \(index)"
+            return BrowserEntry(url: folder.appendingPathComponent(name), name: name, kind: .file)
+        }, complete: true)
+        let (view, window) = await make(source)
+        window.styleMask.insert(.fullSizeContentView)
+        window.toolbar = view.browser.nsToolbar
+        window.setContentSize(NSSize(width: 1200, height: 800))
+        view.fileTabsEnabled = true
+        view.browser.show(.folder(folder), selecting: nil)
+        await settle { !view.browser.liveIDs.isEmpty }
+        view.layoutSubtreeIfNeeded()
+
+        let strip = try #require(view.fileTabStrip)
+        view.browser.scrollGrid(to: 240)
+        #expect(view.browser.scrollOffset == 240)
+        #expect(abs(view.browser.scroll.frame.maxY - strip.frame.minY) < 1)
+
+        view.fileTabsEnabled = false
+        view.layoutSubtreeIfNeeded()
+        #expect(abs(view.browser.scroll.frame.maxY - view.browser.bounds.maxY) < 1)
+    }
+
     @Test func sidebarCanOpenAnIndependentFileTab() throws {
         let source = FakeHomeSource()
         let view = HomeView(source: source)

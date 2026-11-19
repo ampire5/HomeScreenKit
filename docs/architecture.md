@@ -26,7 +26,10 @@ exercises the package with synthetic data.
 hold it weakly. A source produces streamed listings, pictures, menus, open/rename/trash actions and persisted sort
 choices. The browser owns selection, local navigation/history, visible cards, layout and its listing subscription.
 It delegates actual filesystem/media operations to the source. `HomeView` composes browser/sidebar and inspector
-integration. Filmstrip and slot hosts supply their own items and callbacks; they do not create an app media cache.
+integration. A host can supply a retained AppKit page in `HomeSourceInfo.page`, including a hosted SwiftUI view.
+The browser hides the page on navigation and shows the same view on return. A page with ongoing work can use
+AppKit visibility callbacks to pause and resume it. Search configuration and result actions belong to the host.
+Filmstrip and slot hosts supply their own items and callbacks; they do not create an app media cache.
 
 Hosts supply a Favorites source and an ordered sidebar section from the same saved folders. HomeScreenKit
 handles branch selection, drag and menu reordering, and discards replies from superseded sidebar reloads.
@@ -44,6 +47,8 @@ while the same `HomeBrowserView` renders the selected tab or the current app sou
 browser's listing cancellation and generation guards. The sidebar's Open in New Tab command uses these tabs
 or asks the host to open a native window tab. The host owns the lifetime of the versioned
 `FileTabSession` snapshot and associates media opens with a tab ID when it wants to return to that tab.
+With tabs enabled, the browser’s grid viewport starts below the strip. Document coordinates exclude the strip
+and toolbar, while saved session anchors retain their existing offset convention.
 
 The sidebar keeps the complete logical tree for navigation and reuses row views within the visible range.
 Scroll geometry uses the uniform row height and does not depend on offscreen views. File URLs already in
