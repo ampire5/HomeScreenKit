@@ -1,4 +1,5 @@
 import AppKit
+import HomeChrome
 import HomeScreenModel
 
 final class FileTabStrip: NSView {
@@ -19,6 +20,9 @@ final class FileTabStrip: NSView {
     private var buttons: [UUID: TabButton] = [:]
     private let scroll = NSScrollView()
     private let tabs = NSStackView()
+    private var tabsWidth: CGFloat = 0
+    private lazy var add = NSButton(image: Self.symbol("plus", description: "New Tab"),
+                                    target: self, action: #selector(addTab))
 
     init() {
         super.init(frame: .zero)
@@ -28,11 +32,9 @@ final class FileTabStrip: NSView {
         scroll.scrollerStyle = .overlay
         tabs.orientation = .horizontal
         tabs.alignment = .centerY
-        tabs.spacing = 3
-        tabs.edgeInsets = NSEdgeInsets(top: 0, left: 5, bottom: 0, right: 5)
+        tabs.spacing = 4
         scroll.documentView = tabs
 
-        let add = NSButton(title: "+", target: self, action: #selector(addTab))
         add.bezelStyle = .accessoryBarAction
         add.controlSize = .small
         add.toolTip = "New Tab"
@@ -44,18 +46,7 @@ final class FileTabStrip: NSView {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
-        tabs.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            scroll.leadingAnchor.constraint(equalTo: leadingAnchor),
-            scroll.trailingAnchor.constraint(equalTo: add.leadingAnchor, constant: -3),
-            scroll.topAnchor.constraint(equalTo: topAnchor),
-            scroll.bottomAnchor.constraint(equalTo: bottomAnchor),
-            tabs.leadingAnchor.constraint(equalTo: scroll.contentView.leadingAnchor),
-            tabs.topAnchor.constraint(equalTo: scroll.contentView.topAnchor),
-            tabs.heightAnchor.constraint(equalTo: scroll.contentView.heightAnchor),
-            add.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
-            add.widthAnchor.constraint(equalToConstant: 25),
-            add.centerYAnchor.constraint(equalTo: centerYAnchor),
             line.leadingAnchor.constraint(equalTo: leadingAnchor),
             line.trailingAnchor.constraint(equalTo: trailingAnchor),
             line.bottomAnchor.constraint(equalTo: bottomAnchor),
@@ -64,6 +55,20 @@ final class FileTabStrip: NSView {
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
+
+    override func layout() {
+        super.layout()
+        let margin: CGFloat = 20
+        let gap: CGFloat = 4
+        let addWidth: CGFloat = 26
+        let controlHeight: CGFloat = 24
+        let availableWidth = max(0, bounds.width - 2 * margin - gap - addWidth)
+        // The scroll document can grow independently of this view and the window's minimum size.
+        scroll.frame = NSRect(x: margin, y: 0, width: min(tabsWidth, availableWidth), height: bounds.height)
+        tabs.setFrameSize(NSSize(width: tabsWidth, height: bounds.height))
+        add.frame = NSRect(x: scroll.frame.maxX + gap, y: (bounds.height - controlHeight) / 2,
+                           width: addWidth, height: controlHeight)
+    }
 
     override func draw(_ dirtyRect: NSRect) {
         NSColor.windowBackgroundColor.setFill()
@@ -74,6 +79,24 @@ final class FileTabStrip: NSView {
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
         needsDisplay = true
+        updateSelection()
+    }
+
+    private func updateSelection() {
+        let accent = NSColor.controlAccentColor.withAlphaComponent(0.18)
+        let inactive = NSColor.labelColor.withAlphaComponent(0.06)
+        for (id, button) in buttons {
+            button.state = id == selected ? .on : .off
+            let color = button.state == .on ? accent : inactive
+            if let pair = button.superview {
+                pair.layer?.backgroundColor = Chrome.resolve(color, in: pair)
+            }
+        }
+    }
+
+    private static func symbol(_ name: String, description: String) -> NSImage {
+        NSImage(systemSymbolName: name, accessibilityDescription: description)?
+            .withSymbolConfiguration(.init(pointSize: 10, weight: .semibold)) ?? NSImage()
     }
 
     func show(_ tabs: [HomeFileTab], selected: UUID?) {
@@ -88,10 +111,10 @@ final class FileTabStrip: NSView {
             rebuildTabs()
         }
         self.selected = selected
-        for (id, button) in buttons { button.state = id == selected ? .on : .off }
+        updateSelection()
         if let selected, let button = buttons[selected] {
             layoutSubtreeIfNeeded()
-            button.scrollToVisible(button.bounds)
+            if let pair = button.superview { pair.scrollToVisible(pair.bounds) }
         }
     }
 
@@ -105,20 +128,36 @@ final class FileTabStrip: NSView {
             button.setAccessibilityRole(.radioButton)
             button.toolTip = item.path ?? item.title
             button.menu = menu(for: id, index: index)
-            let close = TabButton(id: id, title: "×", target: self, action: #selector(closeTab(_:)))
-            close.setAccessibilityLabel("Close \(item.title) tab")
-            close.toolTip = "Close Tab"
-            close.isEnabled = items.count > 1
-            let pair = NSStackView(views: [button, close])
+            let pair = NSStackView(views: [button])
             pair.orientation = .horizontal
             pair.alignment = .centerY
-            pair.spacing = 0
+            pair.spacing = 4
+            pair.edgeInsets = NSEdgeInsets(top: 0, left: 8, bottom: 0, right: items.count > 1 ? 4 : 8)
+            pair.wantsLayer = true
+            pair.layer?.cornerRadius = 7
+            pair.layer?.cornerCurve = .continuous
             pair.setHuggingPriority(.required, for: .horizontal)
-            button.widthAnchor.constraint(lessThanOrEqualToConstant: 170).isActive = true
-            close.widthAnchor.constraint(equalToConstant: 23).isActive = true
+            if items.count > 1 {
+                let close = TabButton(id: id, title: "", target: self, action: #selector(closeTab(_:)))
+                close.image = Self.symbol("xmark", description: "Close Tab")
+                close.contentTintColor = .secondaryLabelColor
+                close.setAccessibilityLabel("Close \(item.title) tab")
+                close.toolTip = "Close Tab"
+                pair.addArrangedSubview(close)
+                close.widthAnchor.constraint(equalToConstant: 20).isActive = true
+                close.heightAnchor.constraint(equalTo: pair.heightAnchor).isActive = true
+            }
             tabs.addArrangedSubview(pair)
+            NSLayoutConstraint.activate([
+                button.widthAnchor.constraint(greaterThanOrEqualToConstant: 44),
+                button.widthAnchor.constraint(lessThanOrEqualToConstant: 160),
+                button.heightAnchor.constraint(equalTo: pair.heightAnchor),
+                pair.heightAnchor.constraint(equalToConstant: 24),
+            ])
             buttons[id] = button
         }
+        tabsWidth = tabs.fittingSize.width
+        needsLayout = true
     }
 
     private func menu(for id: UUID, index: Int) -> NSMenu {
@@ -159,7 +198,7 @@ private final class TabButton: NSButton {
         self.title = title
         self.target = target
         self.action = action
-        bezelStyle = .accessoryBar
+        isBordered = false
         controlSize = .small
         font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         lineBreakMode = .byTruncatingMiddle

@@ -31,6 +31,7 @@ extension HomeView {
         get { fileTabStrip != nil }
         set {
             guard newValue != fileTabsEnabled else { return }
+            needsLayout = true
             guard newValue else {
                 fileTabStrip?.removeFromSuperview()
                 fileTabStrip = nil
