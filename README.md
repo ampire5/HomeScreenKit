@@ -2,7 +2,7 @@
 
 Developer guide: [architecture and code map](docs/architecture.md).
 
-Home as Photos draws it, shared by Loupe (Home) and, later, FrameScrub: a sidebar of sources and places beside a browser
+Home as Photos draws it, shared by Loupe and FrameScrub: a sidebar of sources and places beside a browser
 of folders and the app's own lists. Only the view: each app keeps its own files, recent list and sessions and hands
 them over through `HomeSource`.
 
@@ -22,7 +22,6 @@ Three libraries:
   following the browser), `HomeBrowserView` (the glass toolbar over a virtualized grid of photo and collection cards,
   with history, sort, filters, footer, rename and Trash; an app source shows as a list of collection cards or as the
   app's page under the toolbar), `HomeSource` / `HomeSourceInfo` (what the app gives), and `HomeMosaic`.
-  `HomeScreenView` is FrameScrub's start screen until it moves to `HomeView`.
 
 `homescreen-demo` shows Home on made-up data: Recent, Sessions, a disk with a folder of 10 000 files, an unplugged
 place and a page for Stash. `HOMESCREEN_SNAPSHOT=<png>` writes it to a file without showing a window, with
@@ -157,6 +156,9 @@ slow listings in parts.
 
 ### What the browser does for you
 
+- **Folder Favorites** appear in an ordered sidebar section and on a page of cover cards. The host supplies and stores the favorite folders.
+- **Optional File View tabs** keep separate navigation state. Hosts can offer **Open in New Tab** from the sidebar.
+- **Include subfolders** lets a host show a recursive listing in the same grid. The host supplies the listing and the browser manages its lifetime.
 - **Type-to-select**: typing a name's first letters selects it, as in Finder (letters add up within a second; case is
   ignored, accents count) — `BrowserTypeSelect` in `HomeScreenModel`.
 - **Card size steps**: ⌘= / ⌘− / ⌘0, ⌘ + wheel, a pinch or a mouse's side wheel arrive as `onResize(HomeResize)`; the
