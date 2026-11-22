@@ -54,8 +54,8 @@ final class HomeSidebar: NSView {
 
     var tree = SidebarTree(sections: []) {
         didSet {
-            lines = tree.lines
-            let current = tree.currentLine
+            presentation = tree.presentation
+            let current = presentation.currentLine
             let currentID = current.flatMap(rowID)
             if currentID != followedID {
                 // The browser moved: the light follows it, into view after the layout.
@@ -86,20 +86,21 @@ final class HomeSidebar: NSView {
 
     private func rowID(at line: Int) -> RowIdentity? {
         guard lines.indices.contains(line), case .row(let row, _, _, _) = lines[line] else { return nil }
-        return RowIdentity(id: row.id, root: tree.root(at: line))
+        return RowIdentity(id: row.id, root: presentation.roots[line])
     }
 
     private func line(of id: RowIdentity) -> Int? {
         return lines.indices.first { index in
             guard case .row(let row, _, _, _) = lines[index], row.id == id.id else { return false }
-            return tree.root(at: index) == id.root
+            return presentation.roots[index] == id.root
         }
     }
     private var revealsSelected = false
 
     private let scroll = NSScrollView()
     private let document = FlippedView()
-    private var lines: [SidebarTree.Line] = []
+    private var presentation: (lines: [SidebarTree.Line], roots: [SidebarTree.Root?], currentLine: Int?) = ([], [], nil)
+    private var lines: [SidebarTree.Line] { presentation.lines }
     private var lineViews: [Int: SidebarLineView] = [:]
     private var laidOutRows: Range<Int> = 0..<0
     private static let favoriteDragType = NSPasteboard.PasteboardType("org.homescreenkit.favorite-folder")
@@ -302,7 +303,7 @@ final class HomeSidebar: NSView {
 
     private func favorite(at line: Int) -> URL? {
         guard lines.indices.contains(line), case .row(let row, 0, _, _) = lines[line],
-              tree.root(at: line)?.sectionID == HomeSidebarSection.favoritesID,
+              presentation.roots[line]?.sectionID == HomeSidebarSection.favoritesID,
               case .folder(let folder) = row.location else { return nil }
         return folder
     }
@@ -418,11 +419,12 @@ final class HomeSidebar: NSView {
             followsCurrent = false
             onToggleSection?(section)
         case .row(let row, _, _, _):
+            let root = presentation.roots[line]
             selected = line
             selectedID = rowID(at: line)
             rebuild()
-            guard !row.isDimmed || tree.root(at: line)?.sectionID != HomeSidebarSection.favoritesID else { return }
-            onChooseRoot?(tree.root(at: line))
+            guard !row.isDimmed || root?.sectionID != HomeSidebarSection.favoritesID else { return }
+            onChooseRoot?(root)
             onOpen?(row.location)
         }
     }
@@ -442,7 +444,7 @@ final class HomeSidebar: NSView {
 
     func handleKey(_ event: NSEvent) -> Bool {
         let flags = event.modifierFlags.intersection([.command, .shift, .option, .control])
-        if flags == .control, event.keyCode == 36, let line = selected ?? tree.currentLine {
+        if flags == .control, event.keyCode == 36, let line = selected ?? presentation.currentLine {
             return showMenu(at: line)
         }
         guard flags.isEmpty else { return false }
@@ -452,7 +454,7 @@ final class HomeSidebar: NSView {
         }
         let keys: [UInt16: SidebarTree.Key] = [126: .up, 125: .down, 123: .left, 124: .right, 36: .open, 76: .open]
         guard let key = keys[event.keyCode] else { return false }
-        guard let from = selected ?? tree.currentLine else {
+        guard let from = selected ?? presentation.currentLine else {
             // Nothing lit yet: the first row.
             if let first = lines.firstIndex(where: { if case .row = $0 { true } else { false } }) { light(first) }
             return true

@@ -232,6 +232,14 @@ public final class HomeBrowserView: NSView {
     /// scrolling. Cleared by a move and by the user's own scroll or selection.
     private var restoredScroll = false
     private(set) var selectedID: String?
+    private var selectedIDs: Set<String> = []
+    private var selectionAnchor: String?
+    /// Enables Shift ranges and Command-click toggling. Middle-click and the Return shortcuts still open tabs.
+    public var allowsMultipleSelection = false {
+        didSet {
+            if !allowsMultipleSelection, oldValue, let selectedID { select(id: selectedID, scrolls: false) }
+        }
+    }
     /// Photos whose picture the source cannot make (`setUnavailable`): their cards are faint and the arrow keys go past
     /// them. A place of its own, so it is forgotten with the place.
     private var unavailable: Set<String> = []
@@ -796,6 +804,8 @@ public final class HomeBrowserView: NSView {
         }
         dateSections = nil
         selectedID = nil
+        selectedIDs.removeAll()
+        selectionAnchor = nil
         endRename()
         hideMessage()
         setEntries([])
@@ -1001,7 +1011,9 @@ public final class HomeBrowserView: NSView {
             pendingSelection = nil
             select(id: wanted, scrolls: pendingScroll == nil && !restoredScroll)
         } else if let id = selectedID, indexByID[id] != nil {
-            select(id: id, scrolls: false)
+            let remaining = selectedIDs.filter { indexByID[$0] != nil }
+            if let selectionAnchor, indexByID[selectionAnchor] == nil { self.selectionAnchor = id }
+            applySelection(id, ids: remaining, scrolls: false)
         } else if !entries.isEmpty {
             select(id: entries[min(old ?? 0, entries.count - 1)].id, scrolls: false)
         }
@@ -1406,6 +1418,11 @@ public final class HomeBrowserView: NSView {
         return entry
     }
 
+    /// The current selection in the listing's displayed order.
+    public var selectedEntries: [BrowserEntry] {
+        selectedIDs.compactMap { indexByID[$0] }.sorted().map { entries[$0] }
+    }
+
     /// The name field over the selected card's title (F2, or the app's Rename… item).
     public func beginRename() {
         guard let entry = selectedEntry, entry.canRename, let i = indexByID[entry.id] else { return }
@@ -1656,9 +1673,39 @@ public final class HomeBrowserView: NSView {
     // MARK: Selection
 
     func select(id: String, scrolls: Bool = true) {
+        selectionAnchor = id
+        applySelection(id, ids: [id], scrolls: scrolls)
+    }
+
+    private func selectRange(to id: String, extending: Bool = false, scrolls: Bool = true) {
+        guard let anchor = selectionAnchor.flatMap({ indexByID[$0] }), let end = indexByID[id] else {
+            select(id: id, scrolls: scrolls)
+            return
+        }
+        let range = min(anchor, end)...max(anchor, end)
+        let ids = Set(entries[range].map(\.id))
+        applySelection(id, ids: extending ? selectedIDs.union(ids) : ids, scrolls: scrolls)
+    }
+
+    private func toggleSelection(_ id: String) {
+        var ids = selectedIDs
+        if ids.remove(id) != nil {
+            let last = ids.compactMap { indexByID[$0] }.max().map { entries[$0].id }
+            let primary = selectedID == id ? last : selectedID
+            selectionAnchor = primary
+            applySelection(primary, ids: ids, scrolls: false)
+        } else {
+            ids.insert(id)
+            selectionAnchor = id
+            applySelection(id, ids: ids, scrolls: false)
+        }
+    }
+
+    private func applySelection(_ id: String?, ids: Set<String>, scrolls: Bool) {
         selectedID = id
-        for card in live.values { card.isSelected = card.item.id == id }
-        if scrolls, let i = indexByID[id] {
+        selectedIDs = ids
+        for card in live.values { card.isSelected = ids.contains(card.item.id) }
+        if scrolls, let id, let i = indexByID[id] {
             let frame = grid.frame(of: i)
             let clearance = gridOverlayTop + (listHeader?.isHidden == false ? ListHeader.height : 0)
             document.scrollToVisible(CGRect(x: frame.minX, y: frame.minY - clearance - 8, width: frame.width,
@@ -1696,6 +1743,20 @@ public final class HomeBrowserView: NSView {
     }
 
     private func clicked(_ id: String, middle: Bool, flags: NSEvent.ModifierFlags, clickCount: Int) {
+        let modifiers = flags.intersection([.command, .shift, .option, .control])
+        if allowsMultipleSelection, !middle, clickCount == 1 {
+            switch modifiers {
+            case [.shift], [.shift, .command]:
+                dropRestore()
+                selectRange(to: id, extending: modifiers.contains(.command), scrolls: false)
+                return
+            case [.command]:
+                dropRestore()
+                toggleSelection(id)
+                return
+            default: break
+            }
+        }
         if middle || flags.contains(.shift) || flags.contains(.command) {
             activate(id, HomeClick.from(shift: flags.contains(.shift), command: flags.contains(.command), middle: middle,
                                         supportsTabs: true))
@@ -1803,7 +1864,12 @@ public final class HomeBrowserView: NSView {
             while let candidate = next, entries.indices.contains(candidate), isUnavailable(entries[candidate]) {
                 next = grid.neighbour(of: candidate, d)
             }
-            if let next { select(index: next) }
+            if let next {
+                if allowsMultipleSelection, flags == [.shift] {
+                    dropRestore()
+                    selectRange(to: entries[next].id)
+                } else { select(index: next) }
+            }
             return true
         }
         guard let text = event.charactersIgnoringModifiers, let scalar = text.unicodeScalars.first,
@@ -2054,7 +2120,7 @@ public final class HomeBrowserView: NSView {
     private func configure(_ card: GridCard, _ entry: BrowserEntry) {
         card.show(item(for: entry))
         card.image = nil
-        card.isSelected = entry.id == selectedID
+        card.isSelected = selectedIDs.contains(entry.id)
         card.isLastOpened = entry.id == lastOpenedID
         if let photo = card as? PhotoCard {
             photo.isUnseen = unseen.contains(entry.id)
@@ -2069,8 +2135,9 @@ public final class HomeBrowserView: NSView {
             self.select(id: id, scrolls: false)
         }
         card.onContextMenu = { [weak self] in
-            self?.dropRestore()
-            self?.select(id: id, scrolls: false)
+            guard let self else { return }
+            dropRestore()
+            if !selectedIDs.contains(id) { select(id: id, scrolls: false) }
         }
         card.menuItems = { [weak self] in
             guard let self, let index = self.indexByID[id] else { return [] }

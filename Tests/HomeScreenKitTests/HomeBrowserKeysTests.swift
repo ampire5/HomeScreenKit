@@ -178,6 +178,24 @@ import Testing
         #expect(source.opened.last?.1 == .openNewTab)
     }
 
+    @Test func enabledMultipleSelectionKeepsARangeForTheContextMenu() async throws {
+        let source = FakeHomeSource()
+        let view = await shown(source, BrowserFixtures.files(6))
+        view.allowsMultipleSelection = true
+        let ids = view.entries.map(\.id)
+        view.card(for: ids[2])?.onClick?(false, [.shift], 1)
+        view.card(for: ids[4])?.onClick?(false, [.command], 1)
+        let expected = Array(ids[0...2]) + [ids[4]]
+        #expect(view.selectedEntries.map(\.id) == expected)
+
+        let event = try #require(NSEvent.mouseEvent(with: .rightMouseDown, location: .zero, modifierFlags: [],
+            timestamp: 0, windowNumber: 0, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+        _ = view.card(for: ids[1])?.menu(for: event)
+        #expect(view.selectedEntries.map(\.id) == expected)
+        _ = view.card(for: ids[3])?.menu(for: event)
+        #expect(view.selectedEntries.map(\.id) == [ids[3]])
+    }
+
     @Test func resizeKeysCallOnResize() async {
         let source = FakeHomeSource()
         let view = await shown(source, BrowserFixtures.files(3))

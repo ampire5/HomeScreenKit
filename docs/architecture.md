@@ -42,6 +42,10 @@ current stream when the mode changes. It skips the direct listing cache and leav
 folder source. The hosts persist successful walks in their SQLite catalogs using relative-path snapshots.
 The mode starts off for new navigation and sessions. File View tabs retain it in memory.
 
+Apps can opt into multiple card selection through `HomeBrowserView.allowsMultipleSelection`.
+The browser owns Command-click toggling, Shift ranges and context-menu selection. The app reads
+`selectedEntries` in listing order. Existing card commands still receive the card they were opened on.
+
 With `HomeView.fileTabsEnabled`, `HomeFileTabs` keeps the navigation, selection and scroll for each folder tab
 while the same `HomeBrowserView` renders the selected tab or the current app source. A tab switch uses the
 browser's listing cancellation and generation guards. The sidebar's Open in New Tab command uses these tabs
@@ -51,6 +55,7 @@ With tabs enabled, the browser’s grid viewport starts below the strip. Documen
 and toolbar, while saved session anchors retain their existing offset convention.
 
 The sidebar keeps the complete logical tree for navigation and reuses row views within the visible range.
+It builds the rendered rows, their branch identities and the followed row together when the tree changes.
 Scroll geometry uses the uniform row height and does not depend on offscreen views. File URLs already in
 standard form bypass Foundation's reachability checks when comparing browser locations or looking up unreadable files.
 

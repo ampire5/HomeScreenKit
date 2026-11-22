@@ -125,8 +125,17 @@ public struct SidebarTree: Sendable {
 
     public var currentLine: Int? {
         guard let current else { return nil }
+        return line(for: current, in: build())
+    }
+
+    /// The view can resolve its selection and row identities from the same rendered tree.
+    package var presentation: (lines: [Line], roots: [Root?], currentLine: Int?) {
         let built = build()
-        return built.lines.indices.first { i in
+        return (built.lines, built.roots, current.flatMap { line(for: $0, in: built) })
+    }
+
+    private func line(for current: BrowserLocation, in built: (lines: [Line], roots: [Root?])) -> Int? {
+        built.lines.indices.first { i in
             guard case .row(let row, _, _, _) = built.lines[i], row.location == current else { return false }
             return currentRoot == nil || built.roots[i] == currentRoot
         }
