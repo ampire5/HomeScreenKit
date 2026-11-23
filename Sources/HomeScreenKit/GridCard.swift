@@ -11,7 +11,10 @@ class GridCard: NSView {
     var onContextMenu: (() -> Void)?
     var menuItems: (() -> [HomeMenuItem])?
     var onMenu: ((String) -> Void)?
-    var isSelected = false { didSet { selectionChanged() } }
+    var isSelected = false { didSet { if isSelected != oldValue { selectionChanged() } } }
+    var isHovered = false {
+        didSet { if isHovered != oldValue { hoverChanged() } }
+    }
     /// What the files are called in the card's facts (`FileStyle.noun`), set by the browser.
     var fileNoun = "photo" { didSet { if fileNoun != oldValue { itemChanged() } } }
     /// A persistent amber outer ring is independent of the blue selection ring.
@@ -65,6 +68,7 @@ class GridCard: NSView {
 
     /// New text, label or dimming for the same card; the picture stays.
     func show(_ item: HomeCardItem) {
+        if item.id != self.item.id { isHovered = false }
         self.item = item
         toolTip = item.tooltip
         alphaValue = item.isDimmed ? 0.45 : 1
@@ -82,6 +86,7 @@ class GridCard: NSView {
     /// Overridden to draw `item`, `isSelected` and `image`.
     func itemChanged() {}
     func selectionChanged() {}
+    func hoverChanged() {}
     /// Where the rename field goes over the name, in the card's coordinates; zero: the browser's own guess.
     var nameFrame: CGRect { .zero }
     func imageChanged() {}
@@ -94,7 +99,18 @@ class GridCard: NSView {
         !isHidden && frame.contains(point) ? self : nil
     }
 
-    override func mouseEntered(with event: NSEvent) { onHover?() }
+    override func mouseEntered(with event: NSEvent) {
+        isHovered = true
+        onHover?()
+    }
+
+    override func mouseExited(with event: NSEvent) { isHovered = false }
+
+    override func viewDidHide() {
+        super.viewDidHide()
+        isHovered = false
+    }
+
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     /// The press gives the grid the keys (from the filter or the sidebar); the click itself is on the release.
     override func mouseDown(with event: NSEvent) {

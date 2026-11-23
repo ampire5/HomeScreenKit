@@ -10,6 +10,8 @@ extension Chrome.Palette {
         public static let secondary = dynamic(light: 0x5A5A60, dark: 0xA8A8AE)
         /// The ring round a card, the list's separators, the border of a text chip (RTL).
         public static let separator = dynamic(light: (0x000000, 0.08), dark: (0xFFFFFF, 0.09))
+        /// Pointer feedback on a card plate in either appearance.
+        public static let hoverBorder = dynamic(light: (0x000000, 0.25), dark: (0xFFFFFF, 0.28))
         /// A progress track under its fill.
         public static let track = dynamic(light: (0x000000, 0.09), dark: (0xFFFFFF, 0.14))
         /// The bars of the dates' histogram.

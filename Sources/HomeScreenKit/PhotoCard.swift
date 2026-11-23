@@ -19,14 +19,6 @@ final class PhotoCard: GridCard {
     var isUnseen = false { didSet { if isUnseen != oldValue { marksChanged() } } }
     /// The photo is a page of a two-page pair.
     var isPaired = false { didSet { if isPaired != oldValue { marksChanged() } } }
-    /// The pointer is over the card; another photo shown in it takes it back.
-    var isHovered = false {
-        didSet {
-            guard isHovered != oldValue else { return }
-            marksChanged()
-            if names == .auto { needsLayout = true }   // the band with the name comes and goes
-        }
-    }
     var aspect: CGFloat = 1 { didSet { if aspect != oldValue { needsLayout = true } } }
     var showsFacts = false { didSet { if showsFacts != oldValue { itemChanged() } } }
     /// The facts line under the name in `.below` (`FileStyle.factsLine`, file-cards spec §2).
@@ -56,6 +48,8 @@ final class PhotoCard: GridCard {
 
     private static let aspectInset: CGFloat = 8
     private static let ringWidth: CGFloat = 2
+    private static let hoverBorder = NSColor(white: 1, alpha: 0.72).cgColor
+
     /// The dot: 8 pt in a 1.5 pt white ring, 6 pt in from the picture's top right (the chip: from its top left).
     private static let dot: CGFloat = 8, dotRing: CGFloat = 1.5, markInset: CGFloat = 6
     /// The chip: a 12 pt glyph, padding 2 × 3, radius 5.
@@ -70,6 +64,7 @@ final class PhotoCard: GridCard {
     override init(item: HomeCardItem) {
         super.init(item: item)
         picture.masksToBounds = true
+        picture.borderColor = Self.hoverBorder
         layer?.addSublayer(picture)
         layer?.addSublayer(shade)
         // This view is flipped: fade from clear above the caption to dark below it.
@@ -240,7 +235,6 @@ final class PhotoCard: GridCard {
     }
 
     override func show(_ item: HomeCardItem) {
-        if item.id != self.item.id { isHovered = false }
         super.show(item)
         // No tooltip with the file's path: it covered the strip, and the path bar and the name already say it (the
         // owner, 2026-10-27).
@@ -264,24 +258,19 @@ final class PhotoCard: GridCard {
     override func selectionChanged() {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        ring.isHidden = !isSelected
+        updateRing()
         CATransaction.commit()
     }
 
-    override func mouseEntered(with event: NSEvent) {
-        isHovered = true
-        super.mouseEntered(with: event)
+    override func hoverChanged() {
+        selectionChanged()
+        marksChanged()
+        if names == .auto { needsLayout = true }
     }
 
-    override func mouseExited(with event: NSEvent) {
-        isHovered = false
-        super.mouseExited(with: event)
-    }
-
-    /// Hidden (Home behind the viewer, or the card put aside in the pool): no `mouseExited` comes, so the hover ends here.
-    override func viewDidHide() {
-        super.viewDidHide()
-        isHovered = false
+    private func updateRing() {
+        ring.isHidden = !isSelected
+        picture.borderWidth = isHovered && !isSelected ? 1 : 0
     }
 
     private var showsStrip: Bool {

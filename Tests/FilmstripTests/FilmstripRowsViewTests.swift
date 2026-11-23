@@ -150,3 +150,12 @@ private final class CountingView: NSView {
     #expect(bar.target === view)
     #expect(browsed > 450, "browsed=\(browsed) value=\(bar.doubleValue) part=\(bar.hitPart.rawValue)")
 }
+
+@MainActor @Test func releaseOutsideFolderRowCancelsClick() {
+    let view = strip(20, current: 5)
+    var opened: Int?
+    view.onPress = { opened = $0 }
+    view.mouseDown(with: mouse(.leftMouseDown, at: NSPoint(x: 50, y: 300)))
+    view.mouseUp(with: mouse(.leftMouseUp, at: NSPoint(x: -4, y: 300)))
+    #expect(opened == nil)
+}

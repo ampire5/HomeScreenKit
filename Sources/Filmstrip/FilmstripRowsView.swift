@@ -35,6 +35,12 @@ import QuartzCore
     public static let currentCaptionHeight = Double(captionGap + currentTitleSize + 4 + detailSize + 8)
     private static let placeholderBorder = CGColor(gray: 1, alpha: 0.38)
     private static let barHeight: CGFloat = 3
+    private static let coverFill = Chrome.Palette.overMedia.glassTint.cgColor
+    private static let plateFill = CGColor(gray: 0.10, alpha: 0.88)
+    private static let selectedFill = CGColor(gray: 0.15, alpha: 0.88)
+    private static let plateBorder = Chrome.Palette.overMedia.separator.cgColor
+    private static let selectedBorder = CGColor(gray: 1, alpha: 0.30)
+    private static let hoverBorder = CGColor(gray: 1, alpha: 0.54)
 
     private final class Row {
         let layer = CALayer()
@@ -126,6 +132,8 @@ import QuartzCore
     private var shownRows: [FilmstripRow] = []
     /// The item the card was last placed under.
     private var cardItem: Int?
+    private var hoverPoint: NSPoint?
+    private var hoveredItem: Int?
     /// A press on the rows: the y of the last event (view coordinates), the item under it, whether it became a drag.
     private var press: (startY: CGFloat, lastY: CGFloat, item: Int?, dragging: Bool)?
 
@@ -201,6 +209,7 @@ import QuartzCore
         fade.place(bounds: bounds, start: fades.start, end: fades.end)
         CATransaction.commit()
         placeCard(animated: animated)
+        if let hoverPoint { updateHover(at: hoverPoint) }
         let order = shown.map(\.item).sorted { abs($0 - current) < abs($1 - current) }
         if order != visibleItems {
             visibleItems = order
@@ -316,6 +325,7 @@ import QuartzCore
         row.picture.masksToBounds = true
         row.picture.contentsGravity = .resizeAspectFill
         row.picture.borderColor = Self.placeholderBorder
+        row.picture.backgroundColor = Self.coverFill
         row.track.backgroundColor = CGColor(gray: 0, alpha: 0.55)
         row.bar.backgroundColor = Chrome.Palette.window.accent.cgColor
         row.track.addSublayer(row.bar)
@@ -340,13 +350,9 @@ import QuartzCore
         let image = pictures[item]
         row.picture.contents = image
         let isPlaying = item == playing
-        row.picture.borderColor = Self.placeholderBorder
         let text = texts[item]
         let selected = item == current
-        row.plate.backgroundColor = NSColor(white: selected ? 0.15 : 0.10, alpha: 0.88).cgColor
-        row.plate.borderWidth = isPlaying ? 1.5 : 1
-        row.plate.borderColor = isPlaying ? Chrome.Palette.window.accent.cgColor
-            : NSColor.white.withAlphaComponent(selected ? 0.30 : 0.12).cgColor
+        stylePlate(row, item: item)
         row.picture.borderWidth = image == nil ? 1 : 0
         row.title.string = (isPlaying ? activeMarker + " " : selected ? "› " : "") + (text?.title ?? "")
         let status = isPlaying ? activeLabel : selected ? selectionHint : ""
@@ -354,6 +360,19 @@ import QuartzCore
         row.track.isHidden = text?.progress == nil
         if let progress = text?.progress {
             row.bar.frame.size.width = row.picture.bounds.width * progress
+        }
+    }
+
+    private func stylePlate(_ row: Row, item: Int) {
+        let selected = item == current
+        row.plate.backgroundColor = selected ? Self.selectedFill : Self.plateFill
+        row.plate.borderWidth = item == playing ? 1.5 : 1
+        if item == playing {
+            row.plate.borderColor = Chrome.Palette.window.accent.cgColor
+        } else if item == hoveredItem {
+            row.plate.borderColor = Self.hoverBorder
+        } else {
+            row.plate.borderColor = selected ? Self.selectedBorder : Self.plateBorder
         }
     }
 
@@ -398,20 +417,63 @@ import QuartzCore
 
     public override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
-    private func item(at y: CGFloat) -> Int? {
-        shownRows.first { Double(y) >= $0.start && Double(y) < $0.start + $0.length }?.item
+    public override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        for area in trackingAreas where area.owner === self { removeTrackingArea(area) }
+        addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseMoved, .mouseEnteredAndExited,
+                                                              .activeInKeyWindow, .inVisibleRect],
+                                       owner: self, userInfo: nil))
+    }
+
+    public override func mouseEntered(with event: NSEvent) { mouseMoved(with: event) }
+
+    public override func mouseMoved(with event: NSEvent) {
+        guard press == nil else { return }
+        updateHover(at: convert(event.locationInWindow, from: nil))
+    }
+
+    public override func mouseExited(with event: NSEvent) { updateHover(at: nil) }
+
+    public override func viewDidHide() {
+        super.viewDidHide()
+        press = nil
+        updateHover(at: nil)
+    }
+
+    private func item(at point: NSPoint) -> Int? {
+        guard bounds.contains(point) else { return nil }
+        return shownRows.first { shown in
+            guard let row = rows[shown.item] else { return false }
+            let frame = row.layer.frame
+            return row.plate.frame.offsetBy(dx: frame.minX, dy: frame.minY).contains(point)
+        }?.item
+    }
+
+    private func updateHover(at point: NSPoint?) {
+        hoverPoint = point
+        let previous = hoveredItem
+        let item = point.flatMap { self.item(at: $0) }
+        guard item != previous else { return }
+        hoveredItem = item
+        withoutAnimation {
+            if let previous, let row = rows[previous] { stylePlate(row, item: previous) }
+            if let item, let row = rows[item] { stylePlate(row, item: item) }
+        }
     }
 
     public override func mouseDown(with event: NSEvent) {
-        let y = convert(event.locationInWindow, from: nil).y
-        press = (y, y, item(at: y), false)
+        let point = convert(event.locationInWindow, from: nil)
+        press = (point.y, point.y, item(at: point), false)
         onPressBegan?()
     }
 
     public override func mouseDragged(with event: NSEvent) {
         guard var press else { return }
         let y = convert(event.locationInWindow, from: nil).y
-        if !press.dragging, abs(y - press.startY) >= Self.clickSlop { press.dragging = true }
+        if !press.dragging, abs(y - press.startY) >= Self.clickSlop {
+            press.dragging = true
+            updateHover(at: nil)
+        }
         if press.dragging { onDrag?(y - press.lastY) }
         press.lastY = y
         self.press = press
@@ -420,11 +482,13 @@ import QuartzCore
     public override func mouseUp(with event: NSEvent) {
         guard let press else { return }
         self.press = nil
+        let point = convert(event.locationInWindow, from: nil)
         if press.dragging {
             onDragEnd?()
-        } else if let item = press.item {
-            onPress?(item)
+        } else if let pressed = press.item, item(at: point) == pressed {
+            onPress?(pressed)
         }
+        if !isHiddenOrHasHiddenAncestor { updateHover(at: point) }
     }
 
     public override func scrollWheel(with event: NSEvent) {

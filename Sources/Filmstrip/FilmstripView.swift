@@ -27,6 +27,10 @@ import QuartzCore
     private static let moveDuration: CFTimeInterval = 0.2
     private static let fadeDuration: CFTimeInterval = Chrome.Motion.show
     private static let placeholderBorder = CGColor(gray: 1, alpha: 0.38)
+    private static let hoverBorder = CGColor(gray: 1, alpha: 0.72)
+    private static let placeholderFill = Chrome.Palette.overMedia.glassTintLight.cgColor
+
+    private enum Outline { case none, placeholder, hovered, current }
     private static let unavailableColor = CGColor(gray: 0x1c / 255, alpha: 1)
 
     public var layout = FilmstripLayout(itemCount: 0, length: 0, thickness: 68, maxAspect: 1.5, aspects: []) {
@@ -101,6 +105,7 @@ import QuartzCore
         let layer = CALayer()
         let image = CALayer()
         let mark = CATextLayer()
+        var outline: Outline?
         /// The frame last given to `layer`, in the content layer.
         var shown = CGRect.null
     }
@@ -138,6 +143,7 @@ import QuartzCore
     /// The hover label's frame, in this view's coordinates.
     var labelFrame: CGRect { label.frame }
     private var hoverPoint: NSPoint?
+    private var hoveredItem: Int?
     /// A press on the cells: where it began in the window, the x of the last drag event, the item under it and
     /// whether it moved far enough to be a drag.
     private var press: (startX: CGFloat, lastX: CGFloat, item: Int?, dragging: Bool)?
@@ -269,6 +275,7 @@ import QuartzCore
 
     private func place(_ item: Int, _ frame: (x: Double, width: Double)) {
         guard let cell = cells[item] else { return }
+        updateOutline(cell, item: item)
         let height = layout.thickness
         let rect = CGRect(x: frame.x, y: 0, width: frame.width, height: height)
         guard rect != cell.shown else { return }
@@ -301,7 +308,6 @@ import QuartzCore
         // comes, clipped to the same radius.
         cell.layer.cornerCurve = .continuous
         cell.layer.cornerRadius = cornerRadius
-        cell.layer.borderColor = Self.placeholderBorder
         cell.image.masksToBounds = true
         cell.image.cornerCurve = .continuous
         cell.image.cornerRadius = cornerRadius
@@ -309,7 +315,7 @@ import QuartzCore
         cell.layer.addSublayer(cell.image)
         cell.mark.string = "×"
         cell.mark.fontSize = 16
-        cell.mark.foregroundColor = CGColor(gray: 0.55, alpha: 1)
+        cell.mark.foregroundColor = Chrome.Palette.overMedia.secondaryText.cgColor
         cell.mark.alignmentMode = .center
         cell.mark.contentsScale = window?.backingScaleFactor ?? 2
         cell.mark.isHidden = true
@@ -323,14 +329,51 @@ import QuartzCore
         let isUnavailable = image == nil && unavailable.contains(item)
         cell.image.contents = image
         cell.mark.isHidden = !isUnavailable
-        cell.layer.backgroundColor = isUnavailable ? Self.unavailableColor : nil
-        cell.layer.borderWidth = image == nil && !isUnavailable ? 1 : 0
+        cell.layer.backgroundColor = image == nil ? (isUnavailable ? Self.unavailableColor : Self.placeholderFill) : nil
+        updateOutline(cell, item: item)
         guard fade, image != nil else { return }
         let animation = CABasicAnimation(keyPath: "opacity")
         animation.fromValue = 0
         animation.toValue = 1
         animation.duration = Self.fadeDuration
         cell.image.add(animation, forKey: "fade")
+    }
+
+    /// A thin neutral rim follows the pointer. The accent marks the current photo or both pages of a spread.
+    private func updateOutline(_ cell: Cell, item: Int) {
+        let outline: Outline
+        if current.contains(item) {
+            outline = .current
+        } else if item == hoveredItem {
+            outline = .hovered
+        } else {
+            outline = pictures[item] == nil ? .placeholder : .none
+        }
+        guard outline != cell.outline else { return }
+        cell.outline = outline
+        withoutAnimation {
+            switch outline {
+            case .current:
+                cell.layer.borderColor = Chrome.resolve(Chrome.Palette.window.accent, in: self)
+                cell.layer.borderWidth = 2
+            case .hovered:
+                cell.layer.borderColor = Self.hoverBorder
+                cell.layer.borderWidth = 1
+            case .placeholder:
+                cell.layer.borderColor = Self.placeholderBorder
+                cell.layer.borderWidth = 1
+            case .none:
+                cell.layer.borderWidth = 0
+            }
+        }
+    }
+
+    public override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        for (item, cell) in cells where cell.outline == .current {
+            cell.outline = nil
+            updateOutline(cell, item: item)
+        }
     }
 
     // MARK: Pictures
@@ -379,6 +422,7 @@ import QuartzCore
         }
         cells = moved
         if let item = labelItem { labelItem = map[item] }
+        if let item = hoveredItem { hoveredItem = map[item] }
         placeCells(animated: false)
     }
 
@@ -403,6 +447,7 @@ import QuartzCore
         label.isHidden = true
         labelItem = nil
         hoverPoint = nil
+        setHoveredItem(nil)
     }
 
     /// Centred over the item's cell, inside the window: the view spans the window's width, and a tall strip can push
@@ -518,13 +563,25 @@ import QuartzCore
         guard press == nil, resizeStart == nil else { return }
         let p = convert(event.locationInWindow, from: nil)
         hoverPoint = inHoverZone(p) ? p : nil
-        onHover?(hoverPoint.flatMap { item(atX: $0.x) })
+        let item = hoverPoint.flatMap { item(atX: $0.x) }
+        setHoveredItem(item)
+        onHover?(item)
+    }
+
+    private func setHoveredItem(_ item: Int?) {
+        let previous = hoveredItem
+        guard item != previous else { return }
+        hoveredItem = item
+        if let previous, let cell = cells[previous] { updateOutline(cell, item: previous) }
+        if let item, let cell = cells[item] { updateOutline(cell, item: item) }
     }
 
     /// The cells moved under a cursor that did not (new aspects, the strip settled): the item under it again.
     public func refreshHover() {
         guard let p = hoverPoint, press == nil else { return }
-        onHover?(item(atX: p.x))
+        let item = item(atX: p.x)
+        setHoveredItem(item)
+        onHover?(item)
     }
 
     public override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
@@ -556,6 +613,7 @@ import QuartzCore
             guard abs(x - press.startX) >= Self.clickSlop else { return }
             press.dragging = true
             label.isHidden = true
+            setHoveredItem(nil)
         }
         let dx = x - press.lastX
         press.lastX = x
@@ -575,8 +633,9 @@ import QuartzCore
         self.press = nil
         if press.dragging {
             onDragEnd?()
-        } else if let item = press.item {
-            onPress?(item)
+        } else {
+            let point = convert(event.locationInWindow, from: nil)
+            if let pressed = press.item, inHoverZone(point), item(atX: point.x) == pressed { onPress?(pressed) }
         }
         hover(event)   // the drag may have left the strip
     }
