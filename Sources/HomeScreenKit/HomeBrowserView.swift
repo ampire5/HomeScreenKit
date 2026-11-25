@@ -264,7 +264,7 @@ public final class HomeBrowserView: NSView {
     static let defaultTopInset: CGFloat = 52
 
     /// What the toolbar and the title bar take at the view's top: the safe area's, once the window has a toolbar.
-    private var toolbarInset: CGFloat { window?.toolbar != nil ? safeAreaInsets.top : Self.defaultTopInset }
+    var toolbarInset: CGFloat { window?.toolbar != nil ? safeAreaInsets.top : Self.defaultTopInset }
     var topInset: CGFloat { toolbarInset + (fileTabStripTop == nil ? 0 : FileTabStrip.height) }
     private var fileTabStripTop: NSLayoutConstraint?
     private lazy var scrollTop = scroll.topAnchor.constraint(equalTo: topAnchor)
@@ -467,13 +467,13 @@ public final class HomeBrowserView: NSView {
             rows.bottomAnchor.constraint(equalTo: statusBar.bottomAnchor),
             pathRow.widthAnchor.constraint(equalTo: rows.widthAnchor),
             pathRow.heightAnchor.constraint(equalToConstant: 24),
-            pathControl.leadingAnchor.constraint(equalTo: pathRow.leadingAnchor, constant: 10),
-            pathControl.trailingAnchor.constraint(lessThanOrEqualTo: pathRow.trailingAnchor, constant: -8),
+            pathControl.leadingAnchor.constraint(equalTo: pathRow.leadingAnchor, constant: 16),
+            pathControl.trailingAnchor.constraint(lessThanOrEqualTo: pathRow.trailingAnchor, constant: -20),
             pathControl.centerYAnchor.constraint(equalTo: pathRow.centerYAnchor),
             statusRow.widthAnchor.constraint(equalTo: rows.widthAnchor),
             statusRow.heightAnchor.constraint(equalToConstant: 24),
-            statusLabel.leadingAnchor.constraint(equalTo: statusRow.leadingAnchor, constant: 14),
-            statusLabel.trailingAnchor.constraint(lessThanOrEqualTo: statusRow.trailingAnchor, constant: -14),
+            statusLabel.leadingAnchor.constraint(equalTo: statusRow.leadingAnchor, constant: 20),
+            statusLabel.trailingAnchor.constraint(lessThanOrEqualTo: statusRow.trailingAnchor, constant: -20),
             statusLabel.centerYAnchor.constraint(equalTo: statusRow.centerYAnchor),
             message.centerXAnchor.constraint(equalTo: centerXAnchor), message.centerYAnchor.constraint(equalTo: centerYAnchor),
             hint.centerXAnchor.constraint(equalTo: centerXAnchor), hint.centerYAnchor.constraint(equalTo: centerYAnchor),

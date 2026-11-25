@@ -168,7 +168,8 @@ public final class HomeView: NSView {
 
     public override func layout() {
         super.layout()
-        sidebarView.contentTopInset = max(browser.topInset, sidebarView.safeAreaInsets.top)
+        // The sidebar starts alongside the tabs. Only the file grid needs space below them.
+        sidebarView.contentTopInset = max(browser.toolbarInset, sidebarView.safeAreaInsets.top)
         applySidebarWidth()
         applyInspectorWidth()
     }

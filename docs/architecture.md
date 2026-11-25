@@ -52,12 +52,16 @@ browser's listing cancellation and generation guards. The sidebar's Open in New 
 or asks the host to open a native window tab. The host owns the lifetime of the versioned
 `FileTabSession` snapshot and associates media opens with a tab ID when it wants to return to that tab.
 With tabs enabled, the browser’s grid viewport starts below the strip. Document coordinates exclude the strip
-and toolbar, while saved session anchors retain their existing offset convention.
+and toolbar, while saved session anchors retain their existing offset convention. The sidebar starts below the
+toolbar alongside the tabs. Tab controls retain their identity across location and order changes. Overflow keeps
+the selected tab in view and offers all tabs through a native menu.
 
 The sidebar keeps the complete logical tree for navigation and reuses row views within the visible range.
 It builds the rendered rows, their branch identities and the followed row together when the tree changes.
-Scroll geometry uses the uniform row height and does not depend on offscreen views. File URLs already in
-standard form bypass Foundation's reachability checks when comparing browser locations or looking up unreadable files.
+Scroll geometry uses the uniform row height and does not depend on offscreen views. Visible rows expose opening,
+disclosure and context menu actions through AppKit accessibility. The current location remains marked while
+keyboard focus moves through the tree. The sidebar width limits the displayed indentation. File URLs already
+in standard form bypass Foundation's reachability checks when comparing locations or looking up unreadable files.
 
 Flow: source location → `list` stream → browser sorting/filtering/layout → visible cards → source image requests →
 `setImage` delivery. Card reuse and visibility determine picture demand, not the size of the whole collection.

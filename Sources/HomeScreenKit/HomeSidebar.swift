@@ -148,10 +148,6 @@ final class HomeSidebar: NSView {
 
     override func cursorUpdate(with event: NSEvent) { NSCursor.arrow.set() }
 
-    override func viewDidChangeEffectiveAppearance() {
-        super.viewDidChangeEffectiveAppearance()
-    }
-
     override func becomeFirstResponder() -> Bool {
         lineViews.values.forEach { $0.hasKeys = true }
         return true
@@ -207,6 +203,7 @@ final class HomeSidebar: NSView {
             if view.superview == nil { document.addSubview(view, positioned: .below, relativeTo: dropIndicator) }
             lineViews[line] = view
             view.tag = line
+            view.sidebar = self
             view.compactIndent = compactIndent
             view.hasKeys = keys
             let item = lines[line]
@@ -216,7 +213,7 @@ final class HomeSidebar: NSView {
             } else {
                 spinning = false
             }
-            view.show(item, lit: line == selected, spinning: spinning)
+            view.show(item, current: line == presentation.currentLine, lit: line == selected, spinning: spinning)
             let frame = frame(of: line)
             if view.frame.size != frame.size { view.needsLayout = true }
             if view.frame != frame { view.frame = frame }
@@ -284,8 +281,7 @@ final class HomeSidebar: NSView {
         guard let view = row(at: point) else { return }
         // As in Finder, a click leaves the keys with the browser (letters pick a name there); Tab brings them here.
         onClickKeys?()
-        let x = point.x - view.frame.minX
-        if view.disclosureFrame.insetBy(dx: -4, dy: -4).contains(CGPoint(x: x, y: view.bounds.midY)) {
+        if view.hitsDisclosure(at: view.convert(point, from: document)) {
             clickDisclosure(line: view.tag)
         } else if let folder = favorite(at: view.tag) {
             favoritePress = (event, folder, view.tag)
@@ -473,7 +469,7 @@ final class HomeSidebar: NSView {
         return true
     }
 
-    private func showMenu(at line: Int) -> Bool {
+    fileprivate func showMenu(at line: Int) -> Bool {
         guard let menu = menu(forLine: line) else { return false }
         document.scrollToVisible(frame(of: line))
         let frame = frame(of: line)
@@ -537,8 +533,7 @@ extension HomeSidebar: NSDraggingSource {
     }
 }
 
-/// One line of the sidebar: a heading (small, grey, with a fold chevron on hover) or a row (triangle, symbol, title,
-/// count or spinner), lit as a capsule when current.
+/// A section heading or a folder/source row. The current location and the keyboard cursor can occupy different rows.
 private final class SidebarLineView: NSView {
     let title = NSTextField(labelWithString: "")
     let count = NSTextField(labelWithString: "")
@@ -551,7 +546,8 @@ private final class SidebarLineView: NSView {
     private(set) var redraws = 0
     /// What the line draws now: the tree set again leaves an unchanged line as it is (a new symbol image is drawn
     /// again at the next commit, a title set again is laid out again).
-    private var shown: (line: SidebarTree.Line, lit: Bool, spinning: Bool)?
+    private var shown: (line: SidebarTree.Line, current: Bool, lit: Bool, spinning: Bool)?
+    weak var sidebar: HomeSidebar?
     private var depth = 0
     private var locationHint: String?
     var compactIndent = true {
@@ -559,10 +555,8 @@ private final class SidebarLineView: NSView {
     }
     /// Thin lines down the levels above the row (compact indent).
     private let guides = CAShapeLayer()
-    private var lit = false
     private var hovering = false
-    private var collapsed = false
-    var hasKeys = false { didSet { if hasKeys != oldValue { paint() } } }
+    var hasKeys = false { didSet { if hasKeys != oldValue, shown?.lit == true { paint() } } }
     private var tagValue = 0
     override var tag: Int {
         get { tagValue }
@@ -576,7 +570,7 @@ private final class SidebarLineView: NSView {
         guides.fillColor = nil
         layer?.addSublayer(guides)
         light.wantsLayer = true
-        light.layer?.cornerRadius = Chrome.Radius.photo
+        light.layer?.cornerRadius = Chrome.Radius.control
         light.layer?.cornerCurve = .continuous
         title.lineBreakMode = .byTruncatingTail
         count.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
@@ -599,8 +593,54 @@ private final class SidebarLineView: NSView {
     /// Clicks go to the sidebar, which knows the lines.
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
-    override func mouseEntered(with event: NSEvent) { hovering = true; paint() }
-    override func mouseExited(with event: NSEvent) { hovering = false; paint() }
+    override func mouseEntered(with event: NSEvent) {
+        hovering = true
+        paint()
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        hovering = false
+        paint()
+    }
+
+    override func isAccessibilityElement() -> Bool { shown != nil }
+    override func accessibilityRole() -> NSAccessibility.Role? { isHeading ? .disclosureTriangle : .button }
+    override func accessibilityLabel() -> String? { title.stringValue }
+    override func accessibilityChildren() -> [Any]? { [] }
+    override func accessibilityHelp() -> String? { locationHint }
+    override func isAccessibilitySelected() -> Bool { shown?.current == true }
+    override func accessibilityDisclosureLevel() -> Int { depth }
+
+    override func isAccessibilityExpanded() -> Bool {
+        switch shown?.line {
+        case .heading(_, _, let folded): !folded
+        case .row(_, _, let expanded, _): expanded
+        case nil: false
+        }
+    }
+
+    override func setAccessibilityExpanded(_ expanded: Bool) {
+        guard expanded != isAccessibilityExpanded(), let sidebar else { return }
+        if isHeading { sidebar.click(line: tag) }
+        else { sidebar.clickDisclosure(line: tag) }
+    }
+
+    override func isAccessibilitySelectorAllowed(_ selector: Selector) -> Bool {
+        if selector == #selector(isAccessibilityExpanded) || selector == #selector(setAccessibilityExpanded(_:)) {
+            return isHeading || isExpandableFolder
+        }
+        return super.isAccessibilitySelectorAllowed(selector)
+    }
+
+    override func accessibilityPerformPress() -> Bool {
+        guard let sidebar, shown != nil else { return false }
+        sidebar.click(line: tag)
+        return true
+    }
+
+    override func accessibilityPerformShowMenu() -> Bool {
+        sidebar?.showMenu(at: tag) ?? false
+    }
 
     override func prepareForReuse() {
         super.prepareForReuse()
@@ -609,41 +649,30 @@ private final class SidebarLineView: NSView {
         showSpinner(false)
     }
 
-    func show(_ line: SidebarTree.Line, lit: Bool, spinning: Bool) {
-        if let shown, shown.line == line, shown.lit == lit, shown.spinning == spinning { return }
-        shown = (line, lit, spinning)
+    func show(_ line: SidebarTree.Line, current: Bool, lit: Bool, spinning: Bool) {
+        let previous = shown
+        shown = (line, current, lit, spinning)
+        if let previous, previous.line == line, previous.spinning == spinning {
+            if previous.current != current || previous.lit != lit { paint() }
+            return
+        }
         redraws += 1
-        self.lit = lit
         switch line {
         case .heading(_, let text, let folded):
             isHeading = true
-            collapsed = folded
             depth = 0
             title.stringValue = text
             locationHint = nil
             toolTip = nil
             count.stringValue = ""
             symbol.image = nil
-            alphaValue = 1
+            triangle.image = Self.triangle(folded ? "chevron.right" : "chevron.down")
             showSpinner(false)
         case .row(let row, let d, let expanded, _):
             isHeading = false
             depth = d
             title.stringValue = row.title
-            let text = NSMutableAttributedString(attributedString: title.attributedStringValue)
-            let name = row.title as NSString
-            // A fraction slash extends over adjacent letters; some filenames use it in
-            // place of a path separator. Keep the original name, but space its glyph.
-            for (index, unit) in row.title.utf16.enumerated() where unit == 0x2F || unit == 0x2044 {
-                let spacing = unit == 0x2044 ? 3 : 1
-                if index > 0 {
-                    text.addAttribute(.kern, value: spacing, range: name.rangeOfComposedCharacterSequence(at: index - 1))
-                }
-                text.addAttribute(.kern, value: spacing, range: NSRange(location: index, length: 1))
-            }
-            title.attributedStringValue = text
             locationHint = row.locationHint
-            toolTip = row.locationHint.map { "\(row.title) — \($0)" }
             count.font = row.locationHint == nil
                 ? .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
                 : .systemFont(ofSize: 11)
@@ -651,7 +680,6 @@ private final class SidebarLineView: NSView {
             count.stringValue = row.locationHint ?? row.count.map(BrowserSummary.number) ?? ""
             symbol.image = Self.symbol(row.symbol)
             triangle.image = row.expandable ? Self.triangle(expanded ? "chevron.down" : "chevron.right") : nil
-            alphaValue = row.isDimmed ? 0.45 : 1
             showSpinner(spinning)
         }
         paint()
@@ -671,40 +699,88 @@ private final class SidebarLineView: NSView {
     }
 
     private func paint() {
+        let current = shown?.current == true
+        let keys = shown?.lit == true && hasKeys
+        let accent = Chrome.Palette.window.accent
+        let fill: NSColor = if current { accent.withAlphaComponent(hovering ? 0.18 : 0.13) }
+                            else if keys || hovering { NSColor.labelColor.withAlphaComponent(0.06) }
+                            else { .clear }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        light.isHidden = !current && !keys && !hovering
+        light.layer?.backgroundColor = Chrome.resolve(fill, in: self)
+        light.layer?.borderWidth = keys ? 1.5 : 0
+        light.layer?.borderColor = keys ? Chrome.resolve(.keyboardFocusIndicatorColor, in: self) : nil
+        CATransaction.commit()
+
         if isHeading {
-            title.font = .systemFont(ofSize: 12, weight: .medium)
-            title.textColor = .secondaryLabelColor
-            triangle.image = hovering ? Self.triangle(collapsed ? "chevron.right" : "chevron.down") : nil
-            light.isHidden = true
+            title.font = .systemFont(ofSize: 11, weight: .semibold)
+            title.textColor = hovering ? .labelColor : .secondaryLabelColor
+            triangle.contentTintColor = hovering ? .secondaryLabelColor : .tertiaryLabelColor
             return
         }
-        title.font = .systemFont(ofSize: 13, weight: lit ? .medium : .regular)
-        title.textColor = .labelColor
-        symbol.contentTintColor = lit ? .controlAccentColor : .secondaryLabelColor
-        light.isHidden = !lit
-        light.layer?.backgroundColor = Chrome.resolve(NSColor.labelColor.withAlphaComponent(hasKeys ? 0.12 : 0.08), in: self)
+        guard case .row(let row, _, _, _) = shown?.line else { return }
+        let dimmed = row.isDimmed
+        let font = NSFont.systemFont(ofSize: 13, weight: current ? .semibold : .regular)
+        let titleColor: NSColor = dimmed ? .secondaryLabelColor : .labelColor
+        title.font = font
+        title.textColor = titleColor
+        if row.title.contains("/") || row.title.contains("⁄") {
+            // Keep the original name, with space around a slash so the glyph clears its neighbors.
+            let text = NSMutableAttributedString(string: row.title, attributes: [.font: font, .foregroundColor: titleColor])
+            let name = row.title as NSString
+            for (index, unit) in row.title.utf16.enumerated() where unit == 0x2F || unit == 0x2044 {
+                let spacing = unit == 0x2044 ? 3 : 1
+                if index > 0 {
+                    text.addAttribute(.kern, value: spacing, range: name.rangeOfComposedCharacterSequence(at: index - 1))
+                }
+                text.addAttribute(.kern, value: spacing, range: NSRange(location: index, length: 1))
+            }
+            title.attributedStringValue = text
+        }
+        triangle.contentTintColor = current || hovering ? .secondaryLabelColor : .tertiaryLabelColor
+        symbol.contentTintColor = dimmed ? .tertiaryLabelColor : current ? accent : .secondaryLabelColor
     }
 
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
-        if lit, !isHeading { paint() }
+        paint()
         needsLayout = true   // the guides' stroke is resolved in `layout`
     }
 
-    /// The triangle's frame (rows that open; headings put their chevron at the right).
-    var disclosureFrame: CGRect {
-        isHeading ? .zero : CGRect(x: Self.lead + HomeSidebar.offset(depth: depth, compact: compactIndent), y: (bounds.height - 12) / 2,
-                                   width: 12, height: 12)
+    private var isExpandableFolder: Bool {
+        guard case .row(let row, _, _, _) = shown?.line, case .folder = row.location else { return false }
+        return row.expandable
     }
 
-    /// The disclosure, icon and name use fixed columns. A text field draws its text 2 pt inside its frame.
-    static let lead: CGFloat = 12
+    func hitsDisclosure(at point: CGPoint) -> Bool {
+        isExpandableFolder && triangle.frame.insetBy(dx: -4, dy: -8).contains(point)
+    }
+
+    private static let lead: CGFloat = 12
     private static let fieldInset: CGFloat = 2
+    private static let titleOffset: CGFloat = 38
+    private static let minimumTitleWidth: CGFloat = 64
+    // Reserve the spinner even when idle, so a deep row never moves sideways when it starts loading.
+    private static let spinnerWidth: CGFloat = 16
+    private static let accessoryGap: CGFloat = 6
+
+    private var trailing: CGFloat { bounds.width - HomeSidebar.inset - 6 }
+
+    private var displayedDepth: Int {
+        let room = max(0, trailing - Self.lead - Self.titleOffset - Self.minimumTitleWidth
+                          - Self.spinnerWidth - Self.accessoryGap)
+        let compactStart = 3 * HomeSidebar.indent
+        if compactIndent, room >= compactStart {
+            return min(depth, 3 + Int((room - compactStart) / HomeSidebar.deepIndent))
+        }
+        return min(depth, Int(room / HomeSidebar.indent))
+    }
 
     override func layout() {
         super.layout()
         let h = bounds.height, w = bounds.width
-        light.frame = CGRect(x: HomeSidebar.inset, y: 2, width: max(0, w - 2 * HomeSidebar.inset), height: max(0, h - 4))
+        light.frame = CGRect(x: HomeSidebar.inset - 2, y: 3, width: max(0, w - 2 * (HomeSidebar.inset - 2)), height: max(0, h - 6))
         if isHeading {
             guides.path = nil
             // Photos sets a heading low in its line, nearer the rows it heads.
@@ -712,24 +788,34 @@ private final class SidebarLineView: NSView {
             triangle.frame = CGRect(x: w - 30, y: h - 12 - 5, width: 12, height: 12)
             return
         }
-        let x = Self.lead + HomeSidebar.offset(depth: depth, compact: compactIndent)
-        layoutGuides()
+        let level = displayedDepth
+        let x = Self.lead + HomeSidebar.offset(depth: level, compact: compactIndent)
+        layoutGuides(upTo: level)
         triangle.frame = CGRect(x: x, y: (h - 12) / 2, width: 12, height: 12)
         symbol.frame = CGRect(x: x + 16, y: (h - 20) / 2, width: 20, height: 20)
-        let textX = x + 44 - Self.fieldInset
-        let right = w - HomeSidebar.inset - 8
-        let countWidth: CGFloat = if locationHint != nil {
-            min(count.intrinsicContentSize.width, max(0, (right - textX) / 2))
+        let textX = x + Self.titleOffset
+        let available = max(0, trailing - textX)
+        let countRoom = max(0, min(available * 0.36, available - Self.minimumTitleWidth - Self.accessoryGap))
+        let countWidth: CGFloat
+        if count.stringValue.isEmpty || countRoom < Self.spinnerWidth {
+            countWidth = 0
         } else {
-            count.stringValue.isEmpty ? 0 : 40
+            let ideal = ceil(count.intrinsicContentSize.width) + 2 * Self.fieldInset
+            countWidth = locationHint == nil && ideal > countRoom ? 0 : min(ideal, countRoom)
         }
-        count.frame = CGRect(x: right - countWidth, y: (h - 15) / 2, width: countWidth, height: 15)
-        spinner.frame = CGRect(x: right - 16, y: (h - 16) / 2, width: 16, height: 16)
-        title.frame = CGRect(x: textX, y: (h - 17) / 2, width: max(0, right - countWidth - textX - 4), height: 17)
+        count.frame = CGRect(x: trailing - countWidth, y: (h - 15) / 2, width: countWidth, height: 15)
+        spinner.frame = CGRect(x: trailing - Self.spinnerWidth, y: (h - Self.spinnerWidth) / 2,
+                               width: Self.spinnerWidth, height: Self.spinnerWidth)
+        let accessory = max(countWidth, Self.spinnerWidth)
+        title.frame = CGRect(x: textX, y: (h - 17) / 2,
+                             width: max(0, available - accessory - Self.accessoryGap), height: 17)
+        let tip = locationHint.map { "\(title.stringValue) — \($0)" }
+            ?? (title.intrinsicContentSize.width > title.frame.width ? title.stringValue : nil)
+        if toolTip != tip { toolTip = tip }
     }
 
     /// A line under each level's triangle, from the first level down to the row's own.
-    private func layoutGuides() {
+    private func layoutGuides(upTo depth: Int) {
         let path = CGMutablePath()
         if compactIndent, !isHeading {
             for level in 0..<depth {

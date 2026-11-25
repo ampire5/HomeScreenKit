@@ -46,6 +46,42 @@ import Testing
         #expect(document.subviews.contains { $0.tag == 2_401 && visible.intersects($0.frame) })
     }
 
+    @Test func deepFolderKeepsRoomForItsNameInTheNarrowestSidebar() {
+        var t = tree
+        t.options.compactChains = false
+        t.options.rerootDepth = 0
+        let suffix = (1...18).map { "level-\($0)" }.joined(separator: "/")
+        _ = t.follow(.folder(url("/Volumes/T/a/" + suffix)))
+        let view = sidebar(t)
+        for compact in [true, false] {
+            view.compactIndent = compact
+            view.frame.size.width = HomeSidebar.widthRange.lowerBound
+            view.needsLayout = true
+            view.layoutSubtreeIfNeeded()
+            #expect(view.rowTitleWidths.min() ?? 0 >= 64)
+        }
+    }
+
+    @Test func accessibilityCanOpenAVisibleFolderAndExpandItsParent() throws {
+        let view = sidebar(tree)
+        let scroll = try #require(view.subviews.first as? NSScrollView)
+        let document = try #require(scroll.documentView)
+        let parent = try #require(document.subviews.first { $0.tag == 2 })
+        let child = try #require(document.subviews.first { $0.tag == 3 })
+        var opened: BrowserLocation?
+        var collapsed: URL?
+        view.onOpen = { opened = $0 }
+        view.onCollapse = { collapsed = $0 }
+
+        #expect(child.isAccessibilityElement())
+        #expect(child.accessibilityLabel() == "a")
+        #expect(child.accessibilityPerformPress())
+        #expect(opened == .folder(url("/Volumes/T/a")))
+        #expect(parent.isAccessibilityExpanded())
+        parent.setAccessibilityExpanded(false)
+        #expect(collapsed == url("/Volumes/T"))
+    }
+
     /// Compact indent: the levels past the third step 6 pt, with a guide per level above the row; even: 14 pt, none.
     @Test func compactIndentStepsLessDeepDown() {
         var t = tree

@@ -56,6 +56,42 @@ import Testing
         #expect(home.fileTabSession() == nil)
     }
 
+    @Test func navigatingInATabPreservesItsControl() throws {
+        let strip = FileTabStrip()
+        var tab = HomeFileTab(navigation: FileTabNavigation(at: .places))
+        strip.show([tab], selected: tab.id)
+        let scroll = try #require(strip.subviews.compactMap { $0 as? NSScrollView }.first)
+        let stack = try #require(scroll.documentView as? NSStackView)
+        let original = try #require((stack.arrangedSubviews.first as? NSStackView)?.arrangedSubviews.first as? NSButton)
+
+        tab.navigation = FileTabNavigation(at: .folder(URL(fileURLWithPath: "/Movies/Edited")))
+        strip.show([tab], selected: tab.id)
+        let current = (stack.arrangedSubviews.first as? NSStackView)?.arrangedSubviews.first as? NSButton
+        #expect(current === original)
+        #expect(current?.title == "Edited")
+        #expect(current?.state == .on)
+    }
+
+    @Test func tabStripKeepsNewTabAndTheOverflowMenuVisibleAtNarrowWidths() throws {
+        let strip = FileTabStrip()
+        let tabs = (1...8).map { index in
+            HomeFileTab(navigation: FileTabNavigation(at: .folder(URL(fileURLWithPath: "/Movies/Folder \(index)"))))
+        }
+        strip.frame.size = NSSize(width: 300, height: FileTabStrip.height)
+        strip.show(tabs, selected: tabs.last?.id)
+        strip.layoutSubtreeIfNeeded()
+
+        let buttons = strip.subviews.compactMap { $0 as? NSButton }
+        let add = try #require(buttons.first { $0.accessibilityLabel() == "New Tab" })
+        let overflow = try #require(buttons.first { $0.accessibilityLabel() == "Show All Tabs" })
+        #expect(!add.isHidden && strip.bounds.contains(add.frame))
+        #expect(!overflow.isHidden && strip.bounds.contains(overflow.frame))
+        let scroll = try #require(strip.subviews.compactMap { $0 as? NSScrollView }.first)
+        let stack = try #require(scroll.documentView as? NSStackView)
+        let selected = try #require(stack.arrangedSubviews.last)
+        #expect(scroll.documentVisibleRect.contains(selected.frame))
+    }
+
     @Test func sessionDecodingRejectsAnUnknownSelectedTab() throws {
         let tab = FileTabSession.Tab(id: UUID(), folder: nil, selection: nil, anchor: nil)
         let session = FileTabSession(tabs: [tab], selectedID: UUID())

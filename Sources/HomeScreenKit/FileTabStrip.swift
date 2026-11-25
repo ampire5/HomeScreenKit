@@ -17,12 +17,16 @@ final class FileTabStrip: NSView {
 
     private var items: [Item] = []
     private var selected: UUID?
-    private var buttons: [UUID: TabButton] = [:]
+    private var groups: [UUID: TabGroup] = [:]
     private let scroll = NSScrollView()
     private let tabs = NSStackView()
+    private let scrollFade = CAGradientLayer()
     private var tabsWidth: CGFloat = 0
+    private var revealsSelection = false
     private lazy var add = NSButton(image: Self.symbol("plus", description: "New Tab"),
                                     target: self, action: #selector(addTab))
+    private lazy var overflow = NSButton(image: Self.symbol("chevron.down", description: "Show All Tabs"),
+                                         target: self, action: #selector(showAllTabs(_:)))
 
     init() {
         super.init(frame: .zero)
@@ -30,19 +34,29 @@ final class FileTabStrip: NSView {
         scroll.hasHorizontalScroller = true
         scroll.autohidesScrollers = true
         scroll.scrollerStyle = .overlay
+        scroll.contentView.wantsLayer = true
+        scroll.contentView.postsBoundsChangedNotifications = true
+        scrollFade.startPoint = CGPoint(x: 0, y: 0.5)
+        scrollFade.endPoint = CGPoint(x: 1, y: 0.5)
+        scrollFade.colors = [NSColor.clear.cgColor, NSColor.black.cgColor, NSColor.black.cgColor, NSColor.clear.cgColor]
+        NotificationCenter.default.addObserver(self, selector: #selector(updateScrollFade),
+                                               name: NSView.boundsDidChangeNotification, object: scroll.contentView)
         tabs.orientation = .horizontal
         tabs.alignment = .centerY
         tabs.spacing = 4
         scroll.documentView = tabs
 
-        add.bezelStyle = .accessoryBarAction
-        add.controlSize = .small
-        add.toolTip = "New Tab"
-        add.setAccessibilityLabel("New Tab")
+        for (button, title) in [(add, "New Tab"), (overflow, "Show All Tabs")] {
+            button.bezelStyle = .accessoryBarAction
+            button.controlSize = .small
+            button.toolTip = title
+            button.setAccessibilityLabel(title)
+        }
+        overflow.isHidden = true
         let line = NSBox()
         line.boxType = .separator
 
-        for view in [scroll, add, line] {
+        for view in [scroll, add, overflow, line] {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
@@ -60,14 +74,48 @@ final class FileTabStrip: NSView {
         super.layout()
         let margin: CGFloat = 20
         let gap: CGFloat = 4
-        let addWidth: CGFloat = 26
+        let buttonWidth: CGFloat = 26
         let controlHeight: CGFloat = 24
-        let availableWidth = max(0, bounds.width - 2 * margin - gap - addWidth)
+        let available = max(0, bounds.width - 2 * margin - gap - buttonWidth)
+        let overflowing = tabsWidth > available
+        let viewport = max(0, available - (overflowing ? buttonWidth + gap : 0))
+        let oldWidth = scroll.frame.width
         // The scroll document can grow independently of this view and the window's minimum size.
-        scroll.frame = NSRect(x: margin, y: 0, width: min(tabsWidth, availableWidth), height: bounds.height)
+        scroll.frame = NSRect(x: margin, y: 0, width: min(tabsWidth, viewport), height: bounds.height)
         tabs.setFrameSize(NSSize(width: tabsWidth, height: bounds.height))
-        add.frame = NSRect(x: scroll.frame.maxX + gap, y: (bounds.height - controlHeight) / 2,
-                           width: addWidth, height: controlHeight)
+        let y = (bounds.height - controlHeight) / 2
+        add.frame = NSRect(x: scroll.frame.maxX + gap, y: y, width: buttonWidth, height: controlHeight)
+        overflow.frame = NSRect(x: add.frame.maxX + gap, y: y, width: buttonWidth, height: controlHeight)
+        overflow.isHidden = !overflowing || viewport == 0
+        if scroll.frame.width > 0, revealsSelection || oldWidth != scroll.frame.width {
+            revealsSelection = false
+            tabs.layoutSubtreeIfNeeded()
+            if let selected, let group = groups[selected] {
+                var visibleTab = group.bounds
+                visibleTab.size.width = min(visibleTab.width, scroll.frame.width)
+                group.scrollToVisible(visibleTab)
+            }
+        }
+        updateScrollFade()
+    }
+
+    @objc private func updateScrollFade() {
+        guard let clip = scroll.contentView.layer else { return }
+        let visible = scroll.documentVisibleRect
+        let fadeLeft = visible.minX > 1
+        let fadeRight = visible.maxX < tabsWidth - 1
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        if visible.width > 0, fadeLeft || fadeRight {
+            let edge = min(0.2, 12 / visible.width)
+            scrollFade.frame = clip.bounds
+            scrollFade.locations = [0, NSNumber(value: fadeLeft ? edge : 0),
+                                    NSNumber(value: fadeRight ? 1 - edge : 1), 1]
+            if clip.mask == nil { clip.mask = scrollFade }
+        } else if clip.mask === scrollFade {
+            clip.mask = nil
+        }
+        CATransaction.commit()
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -76,27 +124,8 @@ final class FileTabStrip: NSView {
         dirtyRect.intersection(bounds).fill()
     }
 
-    override func viewDidChangeEffectiveAppearance() {
-        super.viewDidChangeEffectiveAppearance()
-        needsDisplay = true
-        updateSelection()
-    }
-
-    private func updateSelection() {
-        let accent = NSColor.controlAccentColor.withAlphaComponent(0.18)
-        let inactive = NSColor.labelColor.withAlphaComponent(0.06)
-        for (id, button) in buttons {
-            button.state = id == selected ? .on : .off
-            let color = button.state == .on ? accent : inactive
-            if let pair = button.superview {
-                pair.layer?.backgroundColor = Chrome.resolve(color, in: pair)
-            }
-        }
-    }
-
     private static func symbol(_ name: String, description: String) -> NSImage {
-        NSImage(systemSymbolName: name, accessibilityDescription: description)?
-            .withSymbolConfiguration(.init(pointSize: 10, weight: .semibold)) ?? NSImage()
+        Icons.symbol(name, pointSize: 10, weight: .semibold, description: description) ?? NSImage()
     }
 
     func show(_ tabs: [HomeFileTab], selected: UUID?) {
@@ -107,60 +136,52 @@ final class FileTabStrip: NSView {
         }
         guard next != items || selected != self.selected else { return }
         if next != items {
+            updateTabs(next)
             items = next
-            rebuildTabs()
         }
+        if let old = self.selected, old != selected { groups[old]?.isSelected = false }
         self.selected = selected
-        updateSelection()
-        if let selected, let button = buttons[selected] {
-            layoutSubtreeIfNeeded()
-            if let pair = button.superview { pair.scrollToVisible(pair.bounds) }
-        }
+        if let selected { groups[selected]?.isSelected = true }
+        revealsSelection = true
+        needsLayout = true
+        if bounds.width > 0 { layoutSubtreeIfNeeded() }
     }
 
-    private func rebuildTabs() {
-        for view in tabs.arrangedSubviews { view.removeFromSuperview() }
-        buttons.removeAll(keepingCapacity: true)
-        for (index, item) in items.enumerated() {
-            let id = item.id
-            let button = TabButton(id: id, title: item.title, target: self, action: #selector(selectTab(_:)))
-            button.setButtonType(.onOff)
-            button.setAccessibilityRole(.radioButton)
-            button.toolTip = item.path ?? item.title
-            button.menu = menu(for: id, index: index)
-            let pair = NSStackView(views: [button])
-            pair.orientation = .horizontal
-            pair.alignment = .centerY
-            pair.spacing = 4
-            pair.edgeInsets = NSEdgeInsets(top: 0, left: 8, bottom: 0, right: items.count > 1 ? 4 : 8)
-            pair.wantsLayer = true
-            pair.layer?.cornerRadius = 7
-            pair.layer?.cornerCurve = .continuous
-            pair.setHuggingPriority(.required, for: .horizontal)
-            if items.count > 1 {
-                let close = TabButton(id: id, title: "", target: self, action: #selector(closeTab(_:)))
-                close.image = Self.symbol("xmark", description: "Close Tab")
-                close.contentTintColor = .secondaryLabelColor
-                close.setAccessibilityLabel("Close \(item.title) tab")
-                close.toolTip = "Close Tab"
-                pair.addArrangedSubview(close)
-                close.widthAnchor.constraint(equalToConstant: 20).isActive = true
-                close.heightAnchor.constraint(equalTo: pair.heightAnchor).isActive = true
+    private func updateTabs(_ next: [Item]) {
+        let nextIDs = next.map(\.id)
+        let orderChanged = nextIDs != items.map(\.id)
+        let previous = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
+        let canClose = next.count > 1
+        let closeControlsChanged = canClose != (items.count > 1)
+        if orderChanged {
+            let retained = Set(nextIDs)
+            for id in groups.keys.filter({ !retained.contains($0) }) {
+                groups.removeValue(forKey: id)?.removeFromSuperview()
             }
-            tabs.addArrangedSubview(pair)
-            NSLayoutConstraint.activate([
-                button.widthAnchor.constraint(greaterThanOrEqualToConstant: 44),
-                button.widthAnchor.constraint(lessThanOrEqualToConstant: 160),
-                button.heightAnchor.constraint(equalTo: pair.heightAnchor),
-                pair.heightAnchor.constraint(equalToConstant: 24),
-            ])
-            buttons[id] = button
+        }
+        for (index, item) in next.enumerated() {
+            let group: TabGroup
+            if let existing = groups[item.id] {
+                group = existing
+            } else {
+                let tab = TabButton(id: item.id, title: item.title, target: self, action: #selector(selectTab(_:)))
+                let close = TabButton(id: item.id, title: "", target: self, action: #selector(closeTab(_:)))
+                close.image = Self.symbol("xmark", description: "Close Tab")
+                group = TabGroup(tab: tab, close: close)
+                groups[item.id] = group
+            }
+            if previous[item.id] != item || closeControlsChanged {
+                group.show(title: item.title, path: item.path, canClose: canClose)
+            }
+            if orderChanged {
+                tabs.insertArrangedSubview(group, at: index)
+                group.tab.menu = menu(for: item.id, index: index, count: next.count)
+            }
         }
         tabsWidth = tabs.fittingSize.width
-        needsLayout = true
     }
 
-    private func menu(for id: UUID, index: Int) -> NSMenu {
+    private func menu(for id: UUID, index: Int, count: Int) -> NSMenu {
         let menu = NSMenu()
         menu.autoenablesItems = false
         func item(_ title: String, action: Selector, enabled: Bool) {
@@ -171,14 +192,30 @@ final class FileTabStrip: NSView {
             menu.addItem(item)
         }
         item("Move Tab Left", action: #selector(moveTabLeft(_:)), enabled: index > 0)
-        item("Move Tab Right", action: #selector(moveTabRight(_:)), enabled: index + 1 < items.count)
+        item("Move Tab Right", action: #selector(moveTabRight(_:)), enabled: index + 1 < count)
         return menu
     }
 
     @objc private func addTab() { onAdd?() }
     @objc private func selectTab(_ sender: TabButton) {
-        sender.state = .on
+        sender.state = sender.id == selected ? .on : .off
         onSelect?(sender.id)
+    }
+    @objc private func showAllTabs(_ sender: NSButton) {
+        let menu = NSMenu()
+        let titleCounts = Dictionary(grouping: items, by: \.title)
+        for item in items {
+            let othersHaveSameTitle = (titleCounts[item.title]?.count ?? 0) > 1
+            let title = othersHaveSameTitle ? item.path ?? item.title : item.title
+            let entry = menu.addItem(withTitle: title, action: #selector(chooseTab(_:)), keyEquivalent: "")
+            entry.target = self
+            entry.representedObject = item.id
+            entry.state = item.id == selected ? .on : .off
+        }
+        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: sender.isFlipped ? sender.bounds.maxY : 0), in: sender)
+    }
+    @objc private func chooseTab(_ sender: NSMenuItem) {
+        if let id = sender.representedObject as? UUID { onSelect?(id) }
     }
     @objc private func closeTab(_ sender: TabButton) { onClose?(sender.id) }
     @objc private func moveTabLeft(_ sender: NSMenuItem) {
@@ -186,6 +223,81 @@ final class FileTabStrip: NSView {
     }
     @objc private func moveTabRight(_ sender: NSMenuItem) {
         if let id = sender.representedObject as? UUID { onMove?(id, 1) }
+    }
+}
+
+private final class TabGroup: NSStackView {
+    let tab: TabButton
+    private let close: TabButton
+    private var hovering = false
+    var isSelected = false {
+        didSet {
+            guard isSelected != oldValue else { return }
+            tab.state = isSelected ? .on : .off
+            paint()
+        }
+    }
+
+    init(tab: TabButton, close: TabButton) {
+        self.tab = tab
+        self.close = close
+        super.init(frame: .zero)
+        orientation = .horizontal
+        alignment = .centerY
+        spacing = 4
+        wantsLayer = true
+        layer?.cornerRadius = 7
+        layer?.cornerCurve = .continuous
+        setHuggingPriority(.required, for: .horizontal)
+        tab.setButtonType(.onOff)
+        tab.setAccessibilityRole(.radioButton)
+        close.contentTintColor = .secondaryLabelColor
+        close.toolTip = "Close Tab"
+        addArrangedSubview(tab)
+        addArrangedSubview(close)
+        close.isHidden = true
+        NSLayoutConstraint.activate([
+            close.widthAnchor.constraint(equalToConstant: 22),
+            close.heightAnchor.constraint(equalTo: heightAnchor),
+            tab.widthAnchor.constraint(greaterThanOrEqualToConstant: 44),
+            tab.widthAnchor.constraint(lessThanOrEqualToConstant: 160),
+            tab.heightAnchor.constraint(equalTo: heightAnchor),
+            heightAnchor.constraint(equalToConstant: 24),
+        ])
+        addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect],
+                                       owner: self))
+        paint()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    func show(title: String, path: String?, canClose: Bool) {
+        tab.title = title
+        tab.toolTip = path ?? title
+        tab.setAccessibilityHelp(path)
+        close.isHidden = !canClose
+        close.setAccessibilityLabel("Close \(title) tab")
+        edgeInsets = NSEdgeInsets(top: 0, left: 8, bottom: 0, right: canClose ? 4 : 8)
+    }
+
+    override func mouseEntered(with event: NSEvent) { hovering = true; paint() }
+    override func mouseExited(with event: NSEvent) { hovering = false; paint() }
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        paint()
+    }
+
+    private func paint() {
+        let accent = Chrome.Palette.window.accent
+        let color = isSelected ? accent.withAlphaComponent(hovering ? 0.21 : 0.15)
+            : NSColor.labelColor.withAlphaComponent(hovering ? 0.08 : 0.035)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        layer?.backgroundColor = Chrome.resolve(color, in: self)
+        layer?.borderWidth = isSelected ? 1 : 0
+        layer?.borderColor = isSelected ? Chrome.resolve(accent.withAlphaComponent(0.3), in: self) : nil
+        CATransaction.commit()
     }
 }
 

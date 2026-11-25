@@ -128,14 +128,24 @@ final class FileCard: GridCard {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         ring.isHidden = !isSelected
+        updateEdge()
         CATransaction.commit()
+    }
+
+    override func hoverChanged() { selectionChanged() }
+
+    private func updateEdge() {
+        let highlighted = isHovered && !isSelected
+        let palette = Chrome.Palette.card.self
+        edge.borderColor = Chrome.resolve(highlighted ? palette.hoverBorder : palette.separator, in: self)
+        edge.borderWidth = highlighted ? 1 : 0.5
     }
 
     override func appearanceChanged() {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         plate.backgroundColor = Chrome.resolve(Chrome.Palette.card.background, in: self)
-        edge.borderColor = Chrome.resolve(Chrome.Palette.card.separator, in: self)
+        updateEdge()
         picture.backgroundColor = Chrome.resolve(Chrome.Palette.window.fill, in: self)
         track.backgroundColor = Chrome.resolve(Chrome.Palette.card.track, in: self)
         bar.backgroundColor = Chrome.resolve(Chrome.Palette.card.accent, in: self)
