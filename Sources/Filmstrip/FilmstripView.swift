@@ -563,9 +563,9 @@ import QuartzCore
         guard press == nil, resizeStart == nil else { return }
         let p = convert(event.locationInWindow, from: nil)
         hoverPoint = inHoverZone(p) ? p : nil
-        let item = hoverPoint.flatMap { item(atX: $0.x) }
-        setHoveredItem(item)
-        onHover?(item)
+        let hovered = hoverPoint.flatMap { self.item(atX: $0.x) }
+        setHoveredItem(hovered)
+        onHover?(hovered)
     }
 
     private func setHoveredItem(_ item: Int?) {
